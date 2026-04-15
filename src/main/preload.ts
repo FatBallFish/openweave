@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts';
 import type {
+  CanvasLoadInput,
+  CanvasSaveInput,
   WorkspaceCreateInput,
   WorkspaceDeleteInput,
   WorkspaceOpenInput
@@ -16,6 +18,10 @@ const shellBridge: OpenWeaveShellBridge = {
     openWorkspace: (input: WorkspaceOpenInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpen, input),
     deleteWorkspace: (input: WorkspaceDeleteInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceDelete, input)
+  },
+  canvas: {
+    loadCanvasState: (input: CanvasLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasLoad, input),
+    saveCanvasState: (input: CanvasSaveInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasSave, input)
   }
 };
 
