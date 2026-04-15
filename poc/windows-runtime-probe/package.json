@@ -1,0 +1,17 @@
+{
+  "name": "@openweave/windows-runtime-probe",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Isolated Electron + utilityProcess + node-pty probe for Windows runtime validation",
+  "main": "src/main.cjs",
+  "scripts": {
+    "test": "node --test",
+    "smoke": "electron ./src/main.cjs",
+    "postinstall": "electron-rebuild -f -w node-pty"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "electron": "^41.2.0",
+    "node-pty": "^1.1.0"
+  }
+}
