@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assertPortalUrlAllowed } from '../portal/types';
 
 export const workspaceCreateSchema = z.object({
   name: z.string().trim().min(1),
@@ -39,10 +40,19 @@ export const fileTreeNodeSchema = z.object({
   rootDir: z.string().trim().min(1)
 });
 
+export const portalNodeSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.literal('portal'),
+  x: z.number().finite(),
+  y: z.number().finite(),
+  url: z.string().trim().min(1)
+});
+
 export const canvasNodeSchema = z.discriminatedUnion('type', [
   noteNodeSchema,
   terminalNodeSchema,
-  fileTreeNodeSchema
+  fileTreeNodeSchema,
+  portalNodeSchema
 ]);
 
 export const canvasEdgeSchema = z.object({
@@ -97,12 +107,49 @@ export const fileTreeLoadSchema = z.object({
     })
 });
 
+export const portalLoadSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  url: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => {
+      try {
+        assertPortalUrlAllowed(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'URL scheme not allowed')
+});
+
+export const portalCaptureSchema = z.object({
+  portalId: z.string().trim().min(1)
+});
+
+export const portalStructureSchema = z.object({
+  portalId: z.string().trim().min(1)
+});
+
+export const portalClickSchema = z.object({
+  portalId: z.string().trim().min(1),
+  selector: z.string().trim().min(1)
+});
+
+export const portalInputSchema = z.object({
+  portalId: z.string().trim().min(1),
+  selector: z.string().trim().min(1),
+  value: z.string()
+});
+
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
 export type NoteNodeInput = z.infer<typeof noteNodeSchema>;
 export type TerminalNodeInput = z.infer<typeof terminalNodeSchema>;
 export type FileTreeNodeInput = z.infer<typeof fileTreeNodeSchema>;
+export type PortalNodeInput = z.infer<typeof portalNodeSchema>;
 export type CanvasNodeInput = z.infer<typeof canvasNodeSchema>;
 export type CanvasEdgeInput = z.infer<typeof canvasEdgeSchema>;
 export type CanvasStateInput = z.infer<typeof canvasStateSchema>;
@@ -114,3 +161,8 @@ export type RunStartInput = z.infer<typeof runStartSchema>;
 export type RunGetInput = z.infer<typeof runGetSchema>;
 export type RunListInput = z.infer<typeof runListSchema>;
 export type FileTreeLoadInput = z.infer<typeof fileTreeLoadSchema>;
+export type PortalLoadInput = z.infer<typeof portalLoadSchema>;
+export type PortalCaptureInput = z.infer<typeof portalCaptureSchema>;
+export type PortalStructureInput = z.infer<typeof portalStructureSchema>;
+export type PortalClickInput = z.infer<typeof portalClickSchema>;
+export type PortalInputInput = z.infer<typeof portalInputSchema>;

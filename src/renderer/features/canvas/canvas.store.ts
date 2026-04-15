@@ -5,6 +5,7 @@ import type {
   CanvasStateInput,
   FileTreeNodeInput,
   NoteNodeInput,
+  PortalNodeInput,
   TerminalNodeInput
 } from '../../../shared/ipc/schemas';
 
@@ -88,6 +89,21 @@ const createFileTreeNode = (rootDir: string): FileTreeNodeInput => {
     x: 240,
     y: 120,
     rootDir
+  };
+};
+
+const createPortalNode = (): PortalNodeInput => {
+  const fallbackId = `portal-${Date.now()}`;
+  const generatedId =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : fallbackId;
+  return {
+    id: `portal-${generatedId}`,
+    type: 'portal',
+    x: 320,
+    y: 140,
+    url: 'https://example.com'
   };
 };
 
@@ -202,6 +218,24 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
+  addPortalNode: async (): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = [...state.nodes, createPortalNode()];
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save portal node';
+      setState({ errorMessage });
+    }
+  },
   updateNoteNode: async (
     nodeId: string,
     patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'>>
@@ -292,6 +326,37 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to update file tree node';
+      setState({ errorMessage });
+    }
+  },
+  updatePortalNode: async (
+    nodeId: string,
+    patch: Partial<Pick<PortalNodeInput, 'x' | 'y' | 'url'>>
+  ): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = state.nodes.map((node) => {
+      if (node.id !== nodeId || node.type !== 'portal') {
+        return node;
+      }
+
+      return {
+        ...node,
+        ...patch
+      };
+    });
+
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update portal node';
       setState({ errorMessage });
     }
   }

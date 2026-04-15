@@ -8,6 +8,11 @@ import {
 } from './ipc/canvas';
 import { disposeFilesIpcHandlers, registerFilesIpcHandlers } from './ipc/files';
 import {
+  disposePortalIpcHandlers,
+  disposePortalWorkspaceSessions,
+  registerPortalIpcHandlers
+} from './ipc/portal';
+import {
   disposeRunsForWorkspace,
   disposeRunsIpcHandlers,
   recoverRunsForWorkspace,
@@ -67,6 +72,7 @@ void app.whenReady().then(() => {
     onWorkspaceDeleted: (workspaceId: string) => {
       disposeCanvasWorkspaceRepository(workspaceId);
       disposeRunsForWorkspace(workspaceId);
+      disposePortalWorkspaceSessions(workspaceId);
     }
   });
   registerCanvasIpcHandlers({
@@ -80,6 +86,10 @@ void app.whenReady().then(() => {
   });
   registerFilesIpcHandlers({
     dbFilePath: registryDbFilePath
+  });
+  registerPortalIpcHandlers({
+    dbFilePath: registryDbFilePath,
+    artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal')
   });
   createMainWindow();
 
@@ -105,6 +115,7 @@ app.on('will-quit', () => {
     }
   }
   disposeFilesIpcHandlers();
+  disposePortalIpcHandlers();
   disposeRunsIpcHandlers();
   disposeCanvasIpcHandlers();
   disposeWorkspaceIpcHandlers();

@@ -11,6 +11,7 @@ import {
   type CanvasStateInput,
   type FileTreeNodeInput,
   type NoteNodeInput,
+  type PortalNodeInput,
   type RunRuntimeInput,
   type RunStatusInput,
   type TerminalNodeInput
@@ -360,9 +361,21 @@ const parseFileTreePayload = (payloadJson: string): { rootDir: string } => {
   }
 };
 
+const parsePortalPayload = (payloadJson: string): { url: string } => {
+  try {
+    const parsed = JSON.parse(payloadJson) as { url?: unknown };
+    return {
+      url: typeof parsed.url === 'string' ? parsed.url : ''
+    };
+  } catch {
+    return { url: '' };
+  }
+};
+
 export interface NoteNodeDraft extends NoteNodeInput {}
 export interface TerminalNodeDraft extends TerminalNodeInput {}
 export interface FileTreeNodeDraft extends FileTreeNodeInput {}
+export interface PortalNodeDraft extends PortalNodeInput {}
 
 export const serializeNoteNode = (node: NoteNodeDraft): {
   id: string;
@@ -412,6 +425,22 @@ export const serializeFileTreeNode = (node: FileTreeNodeDraft): {
   };
 };
 
+export const serializePortalNode = (node: PortalNodeDraft): {
+  id: string;
+  node_type: 'portal';
+  x: number;
+  y: number;
+  payload_json: string;
+} => {
+  return {
+    id: node.id,
+    node_type: 'portal',
+    x: node.x,
+    y: node.y,
+    payload_json: JSON.stringify({ url: node.url })
+  };
+};
+
 const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
   if (row.node_type === 'note') {
     const payload = parseNotePayload(row.payload_json);
@@ -446,24 +475,44 @@ const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
     };
   }
 
+  if (row.node_type === 'portal') {
+    const payload = parsePortalPayload(row.payload_json);
+    return {
+      id: row.id,
+      type: 'portal',
+      x: row.x,
+      y: row.y,
+      url: payload.url
+    };
+  }
+
   throw new Error(`Unsupported canvas node type: ${row.node_type}`);
 };
 
 const serializeCanvasNode = (node: CanvasNodeInput):
   | ReturnType<typeof serializeNoteNode>
   | ReturnType<typeof serializeTerminalNode>
-  | ReturnType<typeof serializeFileTreeNode> => {
+  | ReturnType<typeof serializeFileTreeNode>
+  | ReturnType<typeof serializePortalNode> => {
   if (node.type === 'note') {
     return serializeNoteNode(node);
+  }
+  if (node.type === 'terminal') {
+    return {
+      ...serializeTerminalNode(node)
+    };
   }
   if (node.type === 'file-tree') {
     return {
       ...serializeFileTreeNode(node)
     };
   }
-  return {
-    ...serializeTerminalNode(node)
-  };
+  if (node.type === 'portal') {
+    return {
+      ...serializePortalNode(node)
+    };
+  }
+  throw new Error(`Unsupported canvas node type: ${(node as { type?: string }).type ?? 'unknown'}`);
 };
 
 const mapEdgeRow = (row: CanvasEdgeRow): CanvasStateInput['edges'][number] => {

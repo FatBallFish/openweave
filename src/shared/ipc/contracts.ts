@@ -3,6 +3,11 @@ import type {
   CanvasSaveInput,
   CanvasStateInput,
   FileTreeLoadInput,
+  PortalCaptureInput,
+  PortalClickInput,
+  PortalInputInput,
+  PortalLoadInput,
+  PortalStructureInput,
   RunGetInput,
   RunListInput,
   RunRuntimeInput,
@@ -12,6 +17,11 @@ import type {
   WorkspaceDeleteInput,
   WorkspaceOpenInput
 } from './schemas';
+import type {
+  PortalScreenshotResult,
+  PortalSessionRecord,
+  PortalStructureResult
+} from '../portal/types';
 
 export const IPC_CHANNELS = {
   workspaceCreate: 'workspace:create',
@@ -23,7 +33,12 @@ export const IPC_CHANNELS = {
   runStart: 'run:start',
   runGet: 'run:get',
   runList: 'run:list',
-  fileTreeLoad: 'file-tree:load'
+  fileTreeLoad: 'file-tree:load',
+  portalLoad: 'portal:load',
+  portalCapture: 'portal:capture',
+  portalReadStructure: 'portal:read-structure',
+  portalClick: 'portal:click',
+  portalInput: 'portal:input'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -110,6 +125,26 @@ export interface FileTreeLoadResponse {
   entries: FileTreeEntryRecord[];
 }
 
+export interface PortalLoadResponse {
+  portal: PortalSessionRecord;
+}
+
+export interface PortalCaptureResponse {
+  screenshot: PortalScreenshotResult;
+}
+
+export interface PortalStructureResponse {
+  structure: PortalStructureResult;
+}
+
+export interface PortalClickResponse {
+  ok: true;
+}
+
+export interface PortalInputResponse {
+  ok: true;
+}
+
 export interface WorkspaceBridgeApi {
   createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceMutationResponse>;
   listWorkspaces: () => Promise<WorkspaceListResponse>;
@@ -132,6 +167,14 @@ export interface FilesBridgeApi {
   loadFileTree: (input: FileTreeLoadInput) => Promise<FileTreeLoadResponse>;
 }
 
+export interface PortalBridgeApi {
+  loadPortal: (input: PortalLoadInput) => Promise<PortalLoadResponse>;
+  capturePortalScreenshot: (input: PortalCaptureInput) => Promise<PortalCaptureResponse>;
+  readPortalStructure: (input: PortalStructureInput) => Promise<PortalStructureResponse>;
+  clickPortalElement: (input: PortalClickInput) => Promise<PortalClickResponse>;
+  inputPortalText: (input: PortalInputInput) => Promise<PortalInputResponse>;
+}
+
 export interface OpenWeaveShellBridge {
   platform: string;
   ipcChannels: typeof IPC_CHANNELS;
@@ -139,4 +182,5 @@ export interface OpenWeaveShellBridge {
   canvas: CanvasBridgeApi;
   runs: RunsBridgeApi;
   files: FilesBridgeApi;
+  portal: PortalBridgeApi;
 }

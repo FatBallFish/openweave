@@ -3,6 +3,7 @@ import { useCanvasStore, canvasStore } from './canvas.store';
 import { FileTreeNode } from './nodes/FileTreeNode';
 import { NoteNode } from './nodes/NoteNode';
 import { NodeToolbar } from './nodes/NodeToolbar';
+import { PortalNode } from './nodes/PortalNode';
 import { TerminalNode } from './nodes/TerminalNode';
 import { RunDrawer } from '../runs/RunDrawer';
 
@@ -39,6 +40,7 @@ export const WorkspaceCanvasPage = ({
         onAddNote={() => void canvasStore.addNoteNode()}
         onAddTerminal={() => void canvasStore.addTerminalNode()}
         onAddFileTree={() => void canvasStore.addFileTreeNode(workspaceRootDir)}
+        onAddPortal={() => void canvasStore.addPortalNode()}
       />
 
       {errorMessage ? (
@@ -68,12 +70,19 @@ export const WorkspaceCanvasPage = ({
                 onChange={(patch) => void canvasStore.updateTerminalNode(node.id, patch)}
                 onOpenRun={(runId) => setActiveRunId(runId)}
               />
-            ) : (
+            ) : node.type === 'file-tree' ? (
               <FileTreeNode
                 key={node.id}
                 workspaceId={workspaceId}
                 node={node}
                 onChange={(patch) => void canvasStore.updateFileTreeNode(node.id, patch)}
+              />
+            ) : (
+              <PortalNode
+                key={node.id}
+                workspaceId={workspaceId}
+                node={node}
+                onChange={(patch) => void canvasStore.updatePortalNode(node.id, patch)}
               />
             )
           )}

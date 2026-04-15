@@ -3,13 +3,15 @@ interface NodeToolbarProps {
   onAddNote: () => void;
   onAddTerminal: () => void;
   onAddFileTree: () => void;
+  onAddPortal: () => void;
 }
 
 export const NodeToolbar = ({
   disabled,
   onAddNote,
   onAddTerminal,
-  onAddFileTree
+  onAddFileTree,
+  onAddPortal
 }: NodeToolbarProps): JSX.Element => {
   return (
     <div
@@ -34,6 +36,9 @@ export const NodeToolbar = ({
         type="button"
       >
         Add file tree
+      </button>
+      <button data-testid="canvas-add-portal" disabled={disabled} onClick={onAddPortal} type="button">
+        Add portal
       </button>
     </div>
   );
