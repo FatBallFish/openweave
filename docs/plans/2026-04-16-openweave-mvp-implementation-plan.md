@@ -15,6 +15,8 @@
 - Execute tasks in order unless a task is explicitly marked parallel-safe.
 - Gate 0 in `docs/plans/2026-04-16-openweave-decision-checklist.md` is already closed; if DC-02, DC-06, DC-10, or DC-11 changes later, re-baseline Tasks 2, 4, 10, and 12 before coding.
 - Do not start Task 8 until the standalone Portal PoC has passed its acceptance criteria.
+- Windows Runtime PoC findings apply to future preview work: keep the runtime boundary as `main -> utilityProcess -> worker -> node-pty`, and never let renderer import `node-pty`.
+- Task 12 is for macOS Alpha packaging only; Windows/Linux preview packaging stays on a separate post-MVP validation track until a native preview smoke gate passes.
 - Commands below assume `npm`; if the repo standard changes later, translate commands 1:1.
 - Keep commits small and aligned to the task commit messages below.
 
@@ -364,6 +366,11 @@ git commit -m "feat: add canvas persistence and note nodes"
 - Create: `tests/integration/main/runs-ipc.test.ts`
 - Test: `tests/e2e/terminal-run.spec.ts`
 
+**Implementation constraint:**
+- Preserve the runtime split as `main -> utilityProcess/runtime bridge -> worker adapters`.
+- Keep `node-pty` confined to the worker boundary; renderer and shared UI layers must not import it.
+- Keep runtime launch environment pass-through explicit so a later Windows preview track can preserve `SystemRoot` and other required variables.
+
 **Step 1: Write the failing test**
 
 ```ts
@@ -384,6 +391,10 @@ Expected: FAIL because the worker bridge and run state machine are not implement
 **Step 3: Write the minimal implementation**
 
 ```ts
+runtimeBridge.start({
+  runtime: 'shell',
+  env: process.env,
+});
 runtimeBridge.on('stdout', (event) => appendRunEvent(event.runId, 'stdout', event.chunk));
 runtimeBridge.on('exit', (event) => markRunCompleted(event.runId, buildSummary(event.tail)));
 ```
@@ -611,6 +622,11 @@ git commit -m "feat: add branch workspace isolation"
 - Create: `docs/release/2026-04-16-openweave-alpha-checklist.md`
 - Create: `tests/e2e/smoke-alpha.spec.ts`
 - Modify: `README.md`
+
+**Packaging boundary:**
+- This task only covers macOS Alpha packaging and verification.
+- Do not add Windows/Linux packaging automation in this branch.
+- Future Windows preview packaging requires a separate native Windows CI gate for `utilityProcess + node-pty + PowerShell` smoke before installer work starts.
 
 **Step 1: Write the failing smoke test**
 

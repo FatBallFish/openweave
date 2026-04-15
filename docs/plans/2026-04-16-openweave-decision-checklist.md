@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- | --- |
 | DC-01 | 模块 owner 与评审参与人 | 阻塞执行启动 | 为 Shell、Canvas、Runtime、Persistence、Portal、QA/Release 明确指定 owner | Approved | 见详细决策记录 |
 | DC-02 | 是否接受 Electron 作为 MVP 壳层 | 阻塞架构启动 | 接受 Electron 作为 MVP 壳层；仅在 Portal PoC 或内存基线失败时再重评 | Approved | 见详细决策记录 |
-| DC-03 | Windows/Linux 预览包开放时机 | 对 Phase A-C 非阻塞，但阻塞发布范围定义 | Alpha 仅支持 macOS；Windows/Linux 在 PTY 验证后再推进 | Approved | 见详细决策记录 |
+| DC-03 | Windows/Linux 预览包开放时机 | 对 Phase A-C 非阻塞，但阻塞发布范围定义 | Alpha 仅支持 macOS；Windows/Linux 在 native preview smoke gate 后再推进 | Approved | 见详细决策记录 |
 | DC-04 | SQLite 时间戳命名规范 | 阻塞 schema 实现 | 所有持久化毫秒级时间戳统一使用 `*_at_ms` | Approved | 见详细决策记录 |
 | DC-05 | 更新通道策略 | 对核心开发非阻塞，但阻塞发布准备 | Alpha 阶段仅采用手动分发安装包 | Approved | 见详细决策记录 |
 | DC-06 | Portal 协议白名单 | 阻塞 Portal PoC 与安全基线 | 允许 `http://`、`https://`、`http://localhost`、`http://127.0.0.1`；MVP 拒绝 `file://` | Approved | 见详细决策记录 |
@@ -97,7 +97,7 @@
 **为什么重要：** 不同平台的 PTY 行为和安装包策略差异较大，过早承诺多平台会放大风险。
 
 **选项**
-1. Alpha 仅支持 macOS；Windows/Linux 在 PTY 验证后再开始。**（推荐）**
+1. Alpha 仅支持 macOS；Windows/Linux 在 native preview smoke gate 后再开始。**（推荐）**
 2. 在 Phase B 之后，同时开始 macOS 与 Windows 预览。
 3. 现在就承诺完整的多平台 Alpha。
 
@@ -105,10 +105,10 @@
 
 **请填写**
 - 状态：Approved
-- 最终决策：Alpha 仅支持 macOS；Windows/Linux 在 PTY 验证后再开始。
+- 最终决策：Alpha 仅支持 macOS；Windows/Linux 在 native preview smoke gate 后再开始。
 - 决策负责人：王凌超
 - 决策日期：2026年04月16日00:40:08
-- 备注：
+- 备注：Windows 预览前需在 native Windows runner 上验证 `utilityProcess + node-pty + PowerShell` smoke、环境透传（尤其 `SystemRoot`）和干净退出。
 
 ### DC-04 SQLite 时间戳命名规范
 
