@@ -330,6 +330,8 @@ const resolveIpcMain = (): RunsIpcMain => {
 interface RegisteredRunsContext {
   dbFilePath: string;
   workspaceDbDir: string;
+  enableCrashRecoveryOnOpen: boolean;
+  recoveredWorkspaceIds: Set<string>;
   registry: RegistryRepository;
   service: InMemoryRunsService;
 }
@@ -339,6 +341,7 @@ let registeredRunsContext: RegisteredRunsContext | null = null;
 export interface RegisterRunsIpcHandlersOptions {
   dbFilePath: string;
   workspaceDbDir?: string;
+  enableCrashRecoveryOnOpen?: boolean;
   ipcMain?: RunsIpcMain;
   runtimeBridge?: RuntimeBridge;
 }
@@ -373,11 +376,13 @@ const assertRegisteredWorkspaceExists = (context: RegisteredRunsContext, workspa
 export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const workspaceDbDir = options.workspaceDbDir ?? path.join(path.dirname(options.dbFilePath), 'workspaces');
+  const enableCrashRecoveryOnOpen = options.enableCrashRecoveryOnOpen === true;
 
   if (
     !registeredRunsContext ||
     registeredRunsContext.dbFilePath !== options.dbFilePath ||
-    registeredRunsContext.workspaceDbDir !== workspaceDbDir
+    registeredRunsContext.workspaceDbDir !== workspaceDbDir ||
+    registeredRunsContext.enableCrashRecoveryOnOpen !== enableCrashRecoveryOnOpen
   ) {
     if (registeredRunsContext) {
       registeredRunsContext.service.dispose();
@@ -388,6 +393,8 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     registeredRunsContext = {
       dbFilePath: options.dbFilePath,
       workspaceDbDir,
+      enableCrashRecoveryOnOpen,
+      recoveredWorkspaceIds: new Set<string>(),
       registry,
       service: new InMemoryRunsService({
         assertWorkspaceExists: (workspaceId: string) => {
@@ -463,8 +470,10 @@ export const disposeRunsForWorkspace = (workspaceId: string): void => {
 
   const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
   registeredRunsContext.service.disposeWorkspaceRuns(parsedWorkspaceId);
+  registeredRunsContext.recoveredWorkspaceIds.delete(parsedWorkspaceId);
   withWorkspaceRepository(registeredRunsContext.workspaceDbDir, parsedWorkspaceId, (repository) => {
     repository.deleteWorkspaceRuns(parsedWorkspaceId);
+    repository.deleteWorkspaceAuditLogs(parsedWorkspaceId);
   });
 };
 
@@ -472,8 +481,15 @@ export const recoverRunsForWorkspace = (workspaceId: string): void => {
   if (!registeredRunsContext) {
     return;
   }
+  if (!registeredRunsContext.enableCrashRecoveryOnOpen) {
+    return;
+  }
 
   const parsedWorkspaceId = assertRegisteredWorkspaceExists(registeredRunsContext, workspaceId);
+  if (registeredRunsContext.recoveredWorkspaceIds.has(parsedWorkspaceId)) {
+    return;
+  }
+
   withWorkspaceRepository(registeredRunsContext.workspaceDbDir, parsedWorkspaceId, (repository) => {
     const recovery = createRecoveryService({
       workspaceId: parsedWorkspaceId,
@@ -485,6 +501,7 @@ export const recoverRunsForWorkspace = (workspaceId: string): void => {
     });
     recovery.recoverWorkspace();
   });
+  registeredRunsContext.recoveredWorkspaceIds.add(parsedWorkspaceId);
 };
 
 export const disposeRunsIpcHandlers = (): void => {

@@ -22,9 +22,23 @@ afterEach(() => {
 });
 
 describe('recovery service', () => {
-  it('marks running runs as failed after an unclean shutdown and preserves the tail log', async () => {
+  it('marks queued and running runs as failed after an unclean shutdown and preserves tail logs', async () => {
     repository.saveRun({
-      id: 'run-1',
+      id: 'run-queued-1',
+      workspaceId: 'ws-1',
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'echo queued',
+      status: 'queued',
+      summary: null,
+      tailLog: 'queued tail last 4kb\n',
+      createdAtMs: 1,
+      startedAtMs: null,
+      completedAtMs: null
+    });
+
+    repository.saveRun({
+      id: 'run-running-1',
       workspaceId: 'ws-1',
       nodeId: 'terminal-1',
       runtime: 'shell',
@@ -46,11 +60,53 @@ describe('recovery service', () => {
       })
     }).recoverWorkspace();
 
-    expect(recovered.runs[0].status).toBe('failed');
-    expect(recovered.runs[0].tailLog).toContain('last 4kb');
-    expect(recovered.runs[0].summary).toContain('Recovered after unclean shutdown');
+    const queuedRun = recovered.runs.find((run) => run.id === 'run-queued-1');
+    const runningRun = recovered.runs.find((run) => run.id === 'run-running-1');
+    expect(queuedRun?.status).toBe('failed');
+    expect(runningRun?.status).toBe('failed');
+    expect(queuedRun?.tailLog).toContain('last 4kb');
+    expect(runningRun?.tailLog).toContain('last 4kb');
+    expect(queuedRun?.summary).toContain('Recovered after unclean shutdown');
+    expect(runningRun?.summary).toContain('Recovered after unclean shutdown');
 
-    expect(recovered.audits[0].eventType).toBe('run.recovered');
-    expect(recovered.audits[0].runId).toBe('run-1');
+    const recoveryAudits = recovered.audits.filter((audit) => audit.eventType === 'run.recovered');
+    expect(recoveryAudits).toHaveLength(2);
+    expect(recoveryAudits.map((audit) => audit.runId)).toEqual(
+      expect.arrayContaining(['run-queued-1', 'run-running-1'])
+    );
+  });
+
+  it('is idempotent and does not append duplicate recovery audits', async () => {
+    repository.saveRun({
+      id: 'run-1',
+      workspaceId: 'ws-1',
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'echo hello',
+      status: 'running',
+      summary: null,
+      tailLog: 'hello\n',
+      createdAtMs: 1,
+      startedAtMs: 2,
+      completedAtMs: null
+    });
+
+    const recoveryService = createRecoveryService({
+      workspaceId: 'ws-1',
+      repository,
+      auditLog: createAuditLog({
+        workspaceId: 'ws-1',
+        repository
+      })
+    });
+
+    const firstRecovery = recoveryService.recoverWorkspace();
+    const secondRecovery = recoveryService.recoverWorkspace();
+
+    const firstAudits = firstRecovery.audits.filter((audit) => audit.eventType === 'run.recovered');
+    const secondAudits = secondRecovery.audits.filter((audit) => audit.eventType === 'run.recovered');
+    expect(firstAudits).toHaveLength(1);
+    expect(secondAudits).toHaveLength(1);
+    expect(secondAudits[0].runId).toBe('run-1');
   });
 });

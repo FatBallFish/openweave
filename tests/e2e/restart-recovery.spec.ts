@@ -34,7 +34,81 @@ const countRunRecoveredAudits = (workspaceDbPath: string): number => {
   }
 };
 
-test('recovers running runs after unclean shutdown and keeps canvas state', async () => {
+const getFirstTerminalNodeId = (workspaceDbPath: string): string => {
+  const workspaceDb = new DatabaseSync(workspaceDbPath);
+  try {
+    const row = workspaceDb
+      .prepare("SELECT id FROM canvas_nodes WHERE node_type = 'terminal' ORDER BY updated_at_ms ASC LIMIT 1")
+      .get() as { id?: unknown } | undefined;
+    if (!row || typeof row.id !== 'string') {
+      throw new Error('Terminal node not found');
+    }
+    return row.id;
+  } finally {
+    workspaceDb.close();
+  }
+};
+
+const seedQueuedRunForRecovery = (
+  workspaceDbPath: string,
+  workspaceId: string,
+  nodeId: string,
+  createdAtMs: number
+): void => {
+  const workspaceDb = new DatabaseSync(workspaceDbPath);
+  try {
+    workspaceDb
+      .prepare(
+        `
+INSERT INTO runs (
+  id,
+  workspace_id,
+  node_id,
+  runtime,
+  command,
+  status,
+  summary,
+  tail_log,
+  created_at_ms,
+  started_at_ms,
+  completed_at_ms,
+  updated_at_ms
+)
+VALUES (
+  @id,
+  @workspace_id,
+  @node_id,
+  @runtime,
+  @command,
+  @status,
+  @summary,
+  @tail_log,
+  @created_at_ms,
+  @started_at_ms,
+  @completed_at_ms,
+  @updated_at_ms
+)`
+      )
+      .run({
+        id: 'run-queued-recovery-seed',
+        workspace_id: workspaceId,
+        node_id: nodeId,
+        runtime: 'shell',
+        command: 'echo queued',
+        status: 'queued',
+        summary: null,
+        tail_log: 'queued-tail last 4kb\n',
+        created_at_ms: createdAtMs,
+        started_at_ms: null,
+        completed_at_ms: null,
+        updated_at_ms: createdAtMs
+      });
+  } finally {
+    workspaceDb.close();
+  }
+};
+
+test('recovers queued/running runs after unclean shutdown, keeps canvas state, and avoids duplicate recovery', async () => {
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-recovery-${uniqueSuffix}`);
   const workspaceName = `Recovery-${uniqueSuffix}`;
@@ -78,6 +152,15 @@ test('recovers running runs after unclean shutdown and keeps canvas state', asyn
     });
   }
 
+  const workspaceId = getWorkspaceIdByName(path.join(userDataDir, 'registry.db'), workspaceName);
+  const workspaceDbPath = path.join(
+    userDataDir,
+    'workspaces',
+    `${toWorkspaceDbFileName(workspaceId)}.db`
+  );
+  const terminalNodeId = getFirstTerminalNodeId(workspaceDbPath);
+  seedQueuedRunForRecovery(workspaceDbPath, workspaceId, terminalNodeId, Date.now() + 1);
+
   const restarted = await electron.launch({
     args: [path.resolve(__dirname, '../../dist/main/main.js')],
     env: {
@@ -100,16 +183,22 @@ test('recovers running runs after unclean shutdown and keeps canvas state', asyn
     const firstRun = page.locator('[data-testid^="terminal-run-"]').first();
     await firstRun.click();
     await expect(page.getByTestId('run-drawer-status')).toContainText('failed');
-    await expect(page.getByTestId('run-drawer-tail-log')).toContainText('before-crash');
+    await expect(page.getByTestId('run-drawer-tail-log')).toContainText(/before-crash|queued-tail/);
+
+    const queuedSeedRun = page.getByTestId('terminal-run-run-queued-recovery-seed');
+    await expect(queuedSeedRun).toBeVisible();
+    await queuedSeedRun.click();
+    await expect(page.getByTestId('run-drawer-status')).toContainText('failed');
+    await expect(page.getByTestId('run-drawer-tail-log')).toContainText('queued-tail');
+
+    const auditsAfterFirstOpen = countRunRecoveredAudits(workspaceDbPath);
+    await page.getByRole('button', { name: `Open ${workspaceName}` }).click();
+    await expect(page.getByTestId('active-workspace-name')).toContainText(workspaceName);
+    const auditsAfterSecondOpen = countRunRecoveredAudits(workspaceDbPath);
+    expect(auditsAfterSecondOpen).toBe(auditsAfterFirstOpen);
   } finally {
     await restarted.close();
   }
 
-  const workspaceId = getWorkspaceIdByName(path.join(userDataDir, 'registry.db'), workspaceName);
-  const workspaceDbPath = path.join(
-    userDataDir,
-    'workspaces',
-    `${toWorkspaceDbFileName(workspaceId)}.db`
-  );
-  expect(countRunRecoveredAudits(workspaceDbPath)).toBeGreaterThan(0);
+  expect(countRunRecoveredAudits(workspaceDbPath)).toBeGreaterThan(1);
 });

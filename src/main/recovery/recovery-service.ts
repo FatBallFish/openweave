@@ -3,6 +3,11 @@ import type { AuditLog } from '../audit/audit-log';
 import type { AuditLogRecord, WorkspaceRepository } from '../db/workspace';
 
 const RECOVERY_FAILURE_SUMMARY = 'Recovered after unclean shutdown';
+const RECOVERY_EVENT_TYPE = 'run.recovered';
+
+const isRecoverableRunStatus = (status: RunRecord['status']): boolean => {
+  return status === 'queued' || status === 'running';
+};
 
 export interface RecoveryServiceOptions {
   workspaceId: string;
@@ -25,21 +30,33 @@ export const createRecoveryService = (options: RecoveryServiceOptions): Recovery
 
   return {
     recoverWorkspace: (): RecoveryWorkspaceState => {
-      const runningRuns = options.repository.listRunsByStatus('running');
+      const recoverableRuns = options.repository
+        .listRuns()
+        .filter((run) => isRecoverableRunStatus(run.status));
+      const existingRecoveryAuditRunIds = new Set(
+        options.repository
+          .listAuditLogs(1000)
+          .filter((audit) => audit.eventType === RECOVERY_EVENT_TYPE && typeof audit.runId === 'string')
+          .map((audit) => audit.runId as string)
+      );
 
-      for (const run of runningRuns) {
+      for (const run of recoverableRuns) {
         options.repository.saveRun({
           ...run,
           status: 'failed',
           summary: RECOVERY_FAILURE_SUMMARY,
           completedAtMs: run.completedAtMs ?? now()
         });
-        options.auditLog.persist({
-          eventType: 'run.recovered',
-          runId: run.id,
-          status: 'success',
-          message: RECOVERY_FAILURE_SUMMARY
-        });
+
+        if (!existingRecoveryAuditRunIds.has(run.id)) {
+          options.auditLog.persist({
+            eventType: RECOVERY_EVENT_TYPE,
+            runId: run.id,
+            status: 'success',
+            message: RECOVERY_FAILURE_SUMMARY
+          });
+          existingRecoveryAuditRunIds.add(run.id);
+        }
       }
 
       return {

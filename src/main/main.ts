@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import {
@@ -18,6 +19,19 @@ const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
 if (configuredUserDataDir) {
   app.setPath('userData', path.resolve(configuredUserDataDir));
 }
+
+const CRASH_RECOVERY_MARKER_FILE = 'unclean-shutdown.marker';
+let crashRecoveryMarkerPath: string | null = null;
+
+const initializeCrashRecoveryMarker = (): boolean => {
+  const markerPath = path.join(app.getPath('userData'), CRASH_RECOVERY_MARKER_FILE);
+  crashRecoveryMarkerPath = markerPath;
+
+  const shouldRecoverRuns = fs.existsSync(markerPath);
+  fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+  fs.writeFileSync(markerPath, String(Date.now()));
+  return shouldRecoverRuns;
+};
 
 const createMainWindow = (): BrowserWindow => {
   const mainWindow = new BrowserWindow({
@@ -43,6 +57,8 @@ const createMainWindow = (): BrowserWindow => {
 
 void app.whenReady().then(() => {
   const registryDbFilePath = path.join(app.getPath('userData'), 'registry.db');
+  const enableCrashRecoveryOnOpen = initializeCrashRecoveryMarker();
+
   registerWorkspaceIpcHandlers({
     dbFilePath: registryDbFilePath,
     onWorkspaceOpened: (workspaceId: string) => {
@@ -59,7 +75,8 @@ void app.whenReady().then(() => {
   });
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
-    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces')
+    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
+    enableCrashRecoveryOnOpen
   });
   registerFilesIpcHandlers({
     dbFilePath: registryDbFilePath
@@ -80,6 +97,13 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  if (crashRecoveryMarkerPath) {
+    try {
+      fs.rmSync(crashRecoveryMarkerPath, { force: true });
+    } catch {
+      // Keep shutdown best-effort; marker cleanup failure should not block exit.
+    }
+  }
   disposeFilesIpcHandlers();
   disposeRunsIpcHandlers();
   disposeCanvasIpcHandlers();

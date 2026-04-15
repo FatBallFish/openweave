@@ -272,6 +272,11 @@ DELETE FROM runs
 WHERE workspace_id = @workspace_id
 `;
 
+const deleteAuditLogsByWorkspaceSql = `
+DELETE FROM audit_logs
+WHERE workspace_id = @workspace_id
+`;
+
 const insertAuditLogSql = `
 INSERT INTO audit_logs (
   id,
@@ -515,6 +520,7 @@ export interface WorkspaceRepository {
   listRunsByNode: (nodeId: string) => RunRecord[];
   listRunsByStatus: (status: RunStatusInput) => RunRecord[];
   deleteWorkspaceRuns: (workspaceId: string) => void;
+  deleteWorkspaceAuditLogs: (workspaceId: string) => void;
   appendAuditLog: (input: CreateAuditLogInput) => AuditLogRecord;
   listAuditLogs: (limit?: number) => AuditLogRecord[];
   close: () => void;
@@ -686,6 +692,12 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
     deleteWorkspaceRuns: (workspaceId: string): void => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
       db.prepare(deleteRunsByWorkspaceSql).run({
+        workspace_id: parsedWorkspaceId
+      });
+    },
+    deleteWorkspaceAuditLogs: (workspaceId: string): void => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      db.prepare(deleteAuditLogsByWorkspaceSql).run({
         workspace_id: parsedWorkspaceId
       });
     },
