@@ -1,0 +1,15 @@
+appId: com.openweave.alpha
+productName: OpenWeave
+asar: false
+directories:
+  output: release/alpha
+files:
+  - dist/**/*
+  - package.json
+mac:
+  identity: null
+  category: public.app-category.developer-tools
+  artifactName: "${productName}-${version}-alpha-${arch}.${ext}"
+  target:
+    - target: dir
+    - target: zip
