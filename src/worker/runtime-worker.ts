@@ -4,6 +4,7 @@ import { launchCodexRuntime } from './adapters/codex-runtime';
 import { launchShellRuntime } from './adapters/shell-runtime';
 
 type RuntimeKind = 'shell' | 'codex' | 'claude';
+const RUNTIME_KINDS = new Set<RuntimeKind>(['shell', 'codex', 'claude']);
 
 interface StartRunMessage {
   type: 'start';
@@ -81,13 +82,20 @@ const toRuntimeEnv = (input: Record<string, string | undefined>): NodeJS.Process
 const resolveRuntimeLauncher = (
   runtime: RuntimeKind
 ): ((input: RuntimeAdapterInput) => RuntimeAdapterProcess) => {
-  if (runtime === 'shell') {
-    return launchShellRuntime;
+  switch (runtime) {
+    case 'shell':
+      return launchShellRuntime;
+    case 'codex':
+      return launchCodexRuntime;
+    case 'claude':
+      return launchClaudeRuntime;
+    default:
+      throw new Error(`Unsupported runtime: ${String(runtime)}`);
   }
-  if (runtime === 'codex') {
-    return launchCodexRuntime;
-  }
-  return launchClaudeRuntime;
+};
+
+const isRuntimeKind = (value: string): value is RuntimeKind => {
+  return RUNTIME_KINDS.has(value as RuntimeKind);
 };
 
 let hasStartedRun = false;
@@ -193,7 +201,30 @@ const handleMessage = (message: unknown): void => {
     return;
   }
 
-  handleStartMessage(maybeStartMessage as StartRunMessage);
+  if (!isRuntimeKind(maybeStartMessage.runtime)) {
+    const chunk = `Unsupported runtime: ${maybeStartMessage.runtime}\n`;
+    sendMessage({
+      type: 'stderr',
+      runId: maybeStartMessage.runId,
+      chunk
+    });
+    sendMessage({
+      type: 'exit',
+      runId: maybeStartMessage.runId,
+      code: 1,
+      signal: null,
+      tail: chunk
+    });
+    setTimeout(() => {
+      process.exit(1);
+    }, 0);
+    return;
+  }
+
+  handleStartMessage({
+    ...maybeStartMessage,
+    runtime: maybeStartMessage.runtime
+  } as StartRunMessage);
 };
 
 if (parentPort) {

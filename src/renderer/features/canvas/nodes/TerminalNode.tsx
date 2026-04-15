@@ -61,7 +61,7 @@ export const TerminalNode = ({
     void loadRuns();
     const timer = setInterval(() => {
       void loadRuns();
-    }, 250);
+    }, 500);
 
     return () => {
       cancelled = true;

@@ -69,7 +69,7 @@ export const WorkspaceCanvasPage = ({
         </div>
       )}
 
-      <RunDrawer runId={activeRunId} onClose={() => setActiveRunId(null)} />
+      <RunDrawer workspaceId={workspaceId} runId={activeRunId} onClose={() => setActiveRunId(null)} />
     </section>
   );
 };

@@ -34,6 +34,7 @@ export interface RunsIpcHandlers {
   startRun: (_event: IpcMainInvokeEvent, input: RunStartInput) => Promise<RunMutationResponse>;
   getRun: (_event: IpcMainInvokeEvent, input: RunGetInput) => Promise<RunGetResponse>;
   listRuns: (_event: IpcMainInvokeEvent, input: RunListInput) => Promise<RunListResponse>;
+  disposeWorkspaceRuns: (workspaceId: string) => void;
 }
 
 export interface RunsIpcDependencies {
@@ -53,6 +54,12 @@ interface RunsServiceOptions {
 }
 
 const MAX_TAIL_LOG_LENGTH = 4096;
+const MAX_STORED_RUNS = 200;
+const MAX_LISTED_RUNS = 100;
+
+const isTerminalRunStatus = (status: RunStatusInput): boolean => {
+  return status === 'completed' || status === 'failed';
+};
 
 const appendTailLog = (tail: string, chunk: string): string => {
   const nextTail = `${tail}${chunk}`;
@@ -73,6 +80,13 @@ const buildSummary = (tailLog: string): string => {
   }
 
   return nonEmptyLines[nonEmptyLines.length - 1];
+};
+
+const toErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Runtime launch failed';
 };
 
 class InMemoryRunsService {
@@ -97,7 +111,7 @@ class InMemoryRunsService {
 
     this.runtimeBridge.on('started', (event) => {
       const run = this.runs.get(event.runId);
-      if (!run) {
+      if (!run || isTerminalRunStatus(run.status)) {
         return;
       }
 
@@ -140,19 +154,38 @@ class InMemoryRunsService {
     };
 
     this.runs.set(run.id, run);
-    this.runtimeBridge.start({
-      runId: run.id,
-      runtime: run.runtime,
-      command: run.command,
-      env: this.launchEnv
-    });
+
+    try {
+      this.runtimeBridge.start({
+        runId: run.id,
+        runtime: run.runtime,
+        command: run.command,
+        env: this.launchEnv
+      });
+    } catch (error) {
+      const errorMessage = toErrorMessage(error);
+      const failedRun: RunRecord = {
+        ...run,
+        status: 'failed',
+        summary: errorMessage,
+        tailLog: appendTailLog('', `${errorMessage}\n`),
+        completedAtMs: this.now()
+      };
+      this.runs.set(run.id, failedRun);
+      this.pruneStoredRuns();
+      return failedRun;
+    }
+
+    this.pruneStoredRuns();
     return run;
   }
 
   public getRun(input: RunGetInput): RunRecord {
     const parsed = runGetSchema.parse(input);
+    this.assertWorkspaceExists(parsed.workspaceId);
+
     const run = this.runs.get(parsed.runId);
-    if (!run) {
+    if (!run || run.workspaceId !== parsed.workspaceId) {
       throw new Error(`Run not found: ${parsed.runId}`);
     }
     return run;
@@ -164,7 +197,27 @@ class InMemoryRunsService {
 
     return [...this.runs.values()]
       .filter((run) => run.workspaceId === parsed.workspaceId && run.nodeId === parsed.nodeId)
-      .sort((left, right) => right.createdAtMs - left.createdAtMs);
+      .sort((left, right) => right.createdAtMs - left.createdAtMs)
+      .slice(0, MAX_LISTED_RUNS);
+  }
+
+  public disposeWorkspaceRuns(workspaceId: string): void {
+    const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+    const runIds: string[] = [];
+
+    for (const run of this.runs.values()) {
+      if (run.workspaceId !== parsedWorkspaceId) {
+        continue;
+      }
+      if (!isTerminalRunStatus(run.status)) {
+        this.runtimeBridge.stop(run.id);
+      }
+      runIds.push(run.id);
+    }
+
+    for (const runId of runIds) {
+      this.runs.delete(runId);
+    }
   }
 
   public dispose(): void {
@@ -174,7 +227,7 @@ class InMemoryRunsService {
 
   private appendOutput(event: RuntimeStreamEvent): void {
     const run = this.runs.get(event.runId);
-    if (!run) {
+    if (!run || isTerminalRunStatus(run.status)) {
       return;
     }
 
@@ -186,7 +239,7 @@ class InMemoryRunsService {
 
   private completeRun(event: RuntimeExitEvent): void {
     const run = this.runs.get(event.runId);
-    if (!run) {
+    if (!run || isTerminalRunStatus(run.status)) {
       return;
     }
 
@@ -200,6 +253,28 @@ class InMemoryRunsService {
       summary,
       completedAtMs: this.now()
     });
+    this.pruneStoredRuns();
+  }
+
+  private pruneStoredRuns(): void {
+    if (this.runs.size <= MAX_STORED_RUNS) {
+      return;
+    }
+
+    const terminalRuns = [...this.runs.values()]
+      .filter((run) => isTerminalRunStatus(run.status))
+      .sort((left, right) => {
+        const leftTimestamp = left.completedAtMs ?? left.createdAtMs;
+        const rightTimestamp = right.completedAtMs ?? right.createdAtMs;
+        return leftTimestamp - rightTimestamp;
+      });
+
+    for (const run of terminalRuns) {
+      if (this.runs.size <= MAX_STORED_RUNS) {
+        break;
+      }
+      this.runs.delete(run.id);
+    }
   }
 }
 
@@ -227,6 +302,9 @@ export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandler
       return {
         runs: service.listRuns(input)
       };
+    },
+    disposeWorkspaceRuns: (workspaceId: string): void => {
+      service.disposeWorkspaceRuns(workspaceId);
     }
   };
 };
@@ -283,7 +361,7 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     throw new Error('Runs IPC context is unavailable');
   }
 
-  const handlers: RunsIpcHandlers = {
+  const handlers = {
     startRun: async (_event: IpcMainInvokeEvent, input: RunStartInput) => {
       return {
         run: context.service.startRun(input)
@@ -307,6 +385,13 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
   ipcMain.handle(IPC_CHANNELS.runStart, handlers.startRun);
   ipcMain.handle(IPC_CHANNELS.runGet, handlers.getRun);
   ipcMain.handle(IPC_CHANNELS.runList, handlers.listRuns);
+};
+
+export const disposeRunsForWorkspace = (workspaceId: string): void => {
+  if (!registeredRunsContext) {
+    return;
+  }
+  registeredRunsContext.service.disposeWorkspaceRuns(workspaceId);
 };
 
 export const disposeRunsIpcHandlers = (): void => {

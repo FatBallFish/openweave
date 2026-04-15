@@ -69,6 +69,7 @@ interface RuntimeWorkerHandle {
 
 export interface RuntimeBridge {
   start: (request: RuntimeStartRequest) => void;
+  stop: (runId: string) => boolean;
   dispose: () => void;
   on: {
     (event: 'started', listener: (event: RuntimeStartedEvent) => void): RuntimeBridge;
@@ -306,6 +307,17 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
       cwd: request.cwd,
       env
     });
+  }
+
+  public stop(runId: string): boolean {
+    const worker = this.workers.get(runId);
+    if (!worker) {
+      return false;
+    }
+
+    worker.kill();
+    this.workers.delete(runId);
+    return true;
   }
 
   public dispose(): void {

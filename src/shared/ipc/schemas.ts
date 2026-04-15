@@ -65,6 +65,7 @@ export const runStartSchema = z.object({
 });
 
 export const runGetSchema = z.object({
+  workspaceId: workspaceIdSchema,
   runId: z.string().trim().min(1)
 });
 

@@ -5,7 +5,7 @@ import {
   disposeCanvasWorkspaceRepository,
   registerCanvasIpcHandlers
 } from './ipc/canvas';
-import { disposeRunsIpcHandlers, registerRunsIpcHandlers } from './ipc/runs';
+import { disposeRunsForWorkspace, disposeRunsIpcHandlers, registerRunsIpcHandlers } from './ipc/runs';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
@@ -39,7 +39,10 @@ void app.whenReady().then(() => {
   const registryDbFilePath = path.join(app.getPath('userData'), 'registry.db');
   registerWorkspaceIpcHandlers({
     dbFilePath: registryDbFilePath,
-    onWorkspaceDeleted: disposeCanvasWorkspaceRepository
+    onWorkspaceDeleted: (workspaceId: string) => {
+      disposeCanvasWorkspaceRepository(workspaceId);
+      disposeRunsForWorkspace(workspaceId);
+    }
   });
   registerCanvasIpcHandlers({
     workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),

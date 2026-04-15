@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { OpenWeaveShellBridge, RunRecord } from '../../../shared/ipc/contracts';
 
 interface RunDrawerProps {
+  workspaceId: string;
   runId: string | null;
   onClose: () => void;
 }
@@ -18,7 +19,7 @@ const isTerminalState = (status: RunRecord['status']): boolean => {
   return status === 'completed' || status === 'failed';
 };
 
-export const RunDrawer = ({ runId, onClose }: RunDrawerProps): JSX.Element | null => {
+export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.Element | null => {
   const [run, setRun] = useState<RunRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -32,7 +33,7 @@ export const RunDrawer = ({ runId, onClose }: RunDrawerProps): JSX.Element | nul
     let cancelled = false;
     const loadRun = async (): Promise<void> => {
       try {
-        const result = await getRunsBridge().getRun({ runId });
+        const result = await getRunsBridge().getRun({ workspaceId, runId });
         if (cancelled) {
           return;
         }
@@ -50,13 +51,13 @@ export const RunDrawer = ({ runId, onClose }: RunDrawerProps): JSX.Element | nul
     void loadRun();
     const timer = setInterval(() => {
       void loadRun();
-    }, 250);
+    }, 500);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [runId]);
+  }, [runId, workspaceId]);
 
   if (!runId) {
     return null;
