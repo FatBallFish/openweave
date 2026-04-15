@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
@@ -17,7 +18,10 @@ import {
   type RunStartInput,
   type RunStatusInput
 } from '../../shared/ipc/schemas';
+import { createAuditLog } from '../audit/audit-log';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
+import { createWorkspaceRepository } from '../db/workspace';
+import { createRecoveryService } from '../recovery/recovery-service';
 import {
   createRuntimeBridge,
   type RuntimeBridge,
@@ -51,6 +55,7 @@ interface RunsServiceOptions {
   now: () => number;
   randomId: () => string;
   launchEnv: NodeJS.ProcessEnv;
+  onRunUpdated?: (run: RunRecord) => void;
 }
 
 const MAX_TAIL_LOG_LENGTH = 4096;
@@ -102,12 +107,15 @@ class InMemoryRunsService {
 
   private readonly launchEnv: NodeJS.ProcessEnv;
 
+  private readonly onRunUpdated?: (run: RunRecord) => void;
+
   constructor(options: RunsServiceOptions) {
     this.assertWorkspaceExists = options.assertWorkspaceExists;
     this.runtimeBridge = options.runtimeBridge;
     this.now = options.now;
     this.randomId = options.randomId;
     this.launchEnv = options.launchEnv;
+    this.onRunUpdated = options.onRunUpdated;
 
     this.runtimeBridge.on('started', (event) => {
       const run = this.runs.get(event.runId);
@@ -115,7 +123,7 @@ class InMemoryRunsService {
         return;
       }
 
-      this.runs.set(event.runId, {
+      this.storeRun({
         ...run,
         status: 'running',
         startedAtMs: run.startedAtMs ?? this.now()
@@ -153,7 +161,7 @@ class InMemoryRunsService {
       completedAtMs: null
     };
 
-    this.runs.set(run.id, run);
+    this.storeRun(run);
 
     try {
       this.runtimeBridge.start({
@@ -171,7 +179,7 @@ class InMemoryRunsService {
         tailLog: appendTailLog('', `${errorMessage}\n`),
         completedAtMs: this.now()
       };
-      this.runs.set(run.id, failedRun);
+      this.storeRun(failedRun);
       this.pruneStoredRuns();
       return failedRun;
     }
@@ -231,7 +239,7 @@ class InMemoryRunsService {
       return;
     }
 
-    this.runs.set(event.runId, {
+    this.storeRun({
       ...run,
       tailLog: appendTailLog(run.tailLog, event.chunk)
     });
@@ -246,7 +254,7 @@ class InMemoryRunsService {
     const status: RunStatusInput = event.code === 0 ? 'completed' : 'failed';
     const tailLog = appendTailLog(run.tailLog, event.tail);
     const summary = buildSummary(tailLog);
-    this.runs.set(event.runId, {
+    this.storeRun({
       ...run,
       status,
       tailLog,
@@ -275,6 +283,11 @@ class InMemoryRunsService {
       }
       this.runs.delete(run.id);
     }
+  }
+
+  private storeRun(run: RunRecord): void {
+    this.runs.set(run.id, run);
+    this.onRunUpdated?.(run);
   }
 }
 
@@ -316,6 +329,7 @@ const resolveIpcMain = (): RunsIpcMain => {
 
 interface RegisteredRunsContext {
   dbFilePath: string;
+  workspaceDbDir: string;
   registry: RegistryRepository;
   service: InMemoryRunsService;
 }
@@ -324,14 +338,47 @@ let registeredRunsContext: RegisteredRunsContext | null = null;
 
 export interface RegisterRunsIpcHandlersOptions {
   dbFilePath: string;
+  workspaceDbDir?: string;
   ipcMain?: RunsIpcMain;
   runtimeBridge?: RuntimeBridge;
 }
 
+const toWorkspaceDbFileName = (workspaceId: string): string => {
+  return workspaceId.replace(/[^a-zA-Z0-9_-]/g, '_');
+};
+
+const withWorkspaceRepository = <T,>(
+  workspaceDbDir: string,
+  workspaceId: string,
+  action: (repository: ReturnType<typeof createWorkspaceRepository>) => T
+): T => {
+  const repository = createWorkspaceRepository({
+    dbFilePath: path.join(workspaceDbDir, `${toWorkspaceDbFileName(workspaceId)}.db`)
+  });
+  try {
+    return action(repository);
+  } finally {
+    repository.close();
+  }
+};
+
+const assertRegisteredWorkspaceExists = (context: RegisteredRunsContext, workspaceId: string): string => {
+  const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+  if (!context.registry.hasWorkspace(parsedWorkspaceId)) {
+    throw new Error(`Workspace not found: ${parsedWorkspaceId}`);
+  }
+  return parsedWorkspaceId;
+};
+
 export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
+  const workspaceDbDir = options.workspaceDbDir ?? path.join(path.dirname(options.dbFilePath), 'workspaces');
 
-  if (!registeredRunsContext || registeredRunsContext.dbFilePath !== options.dbFilePath) {
+  if (
+    !registeredRunsContext ||
+    registeredRunsContext.dbFilePath !== options.dbFilePath ||
+    registeredRunsContext.workspaceDbDir !== workspaceDbDir
+  ) {
     if (registeredRunsContext) {
       registeredRunsContext.service.dispose();
       registeredRunsContext.registry.close();
@@ -340,6 +387,7 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     const registry = createRegistryRepository({ dbFilePath: options.dbFilePath });
     registeredRunsContext = {
       dbFilePath: options.dbFilePath,
+      workspaceDbDir,
       registry,
       service: new InMemoryRunsService({
         assertWorkspaceExists: (workspaceId: string) => {
@@ -351,7 +399,12 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
         runtimeBridge: options.runtimeBridge ?? createRuntimeBridge(),
         now: () => Date.now(),
         randomId: () => crypto.randomUUID(),
-        launchEnv: process.env
+        launchEnv: process.env,
+        onRunUpdated: (run: RunRecord) => {
+          withWorkspaceRepository(workspaceDbDir, run.workspaceId, (repository) => {
+            repository.saveRun(run);
+          });
+        }
       })
     };
   }
@@ -368,13 +421,29 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       };
     },
     getRun: async (_event: IpcMainInvokeEvent, input: RunGetInput) => {
+      const parsed = runGetSchema.parse(input);
+      const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      const persistedRun = withWorkspaceRepository(
+        context.workspaceDbDir,
+        parsedWorkspaceId,
+        (repository) => repository.getRun(parsed.runId)
+      );
+      if (persistedRun && persistedRun.workspaceId === parsedWorkspaceId) {
+        return {
+          run: persistedRun
+        };
+      }
       return {
         run: context.service.getRun(input)
       };
     },
     listRuns: async (_event: IpcMainInvokeEvent, input: RunListInput) => {
+      const parsed = runListSchema.parse(input);
+      const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
       return {
-        runs: context.service.listRuns(input)
+        runs: withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) =>
+          repository.listRunsByNode(parsed.nodeId).slice(0, MAX_LISTED_RUNS)
+        )
       };
     }
   };
@@ -391,7 +460,31 @@ export const disposeRunsForWorkspace = (workspaceId: string): void => {
   if (!registeredRunsContext) {
     return;
   }
-  registeredRunsContext.service.disposeWorkspaceRuns(workspaceId);
+
+  const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+  registeredRunsContext.service.disposeWorkspaceRuns(parsedWorkspaceId);
+  withWorkspaceRepository(registeredRunsContext.workspaceDbDir, parsedWorkspaceId, (repository) => {
+    repository.deleteWorkspaceRuns(parsedWorkspaceId);
+  });
+};
+
+export const recoverRunsForWorkspace = (workspaceId: string): void => {
+  if (!registeredRunsContext) {
+    return;
+  }
+
+  const parsedWorkspaceId = assertRegisteredWorkspaceExists(registeredRunsContext, workspaceId);
+  withWorkspaceRepository(registeredRunsContext.workspaceDbDir, parsedWorkspaceId, (repository) => {
+    const recovery = createRecoveryService({
+      workspaceId: parsedWorkspaceId,
+      repository,
+      auditLog: createAuditLog({
+        workspaceId: parsedWorkspaceId,
+        repository
+      })
+    });
+    recovery.recoverWorkspace();
+  });
 };
 
 export const disposeRunsIpcHandlers = (): void => {
