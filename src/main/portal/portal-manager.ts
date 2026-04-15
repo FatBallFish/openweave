@@ -20,10 +20,11 @@ const sanitizeSegment = (value: string): string => {
 
 export interface PortalManager {
   loadUrl: (portalId: string, url: string) => Promise<void>;
-  capture: (portalId: string, nodeId: string) => Promise<PortalScreenshotResult>;
+  capture: (portalId: string, workspaceId: string, nodeId: string) => Promise<PortalScreenshotResult>;
   readStructure: (portalId: string) => Promise<PortalStructureResult>;
   click: (portalId: string, selector: string) => Promise<void>;
   input: (portalId: string, selector: string, value: string) => Promise<void>;
+  disposePortal: (portalId: string) => void;
   dispose: () => void;
 }
 
@@ -82,16 +83,48 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
     return entry;
   };
 
+  const disposePortalEntry = (portalId: string): void => {
+    const entry = entries.get(portalId);
+    if (!entry) {
+      return;
+    }
+    try {
+      if (!entry.view.webContents.isDestroyed()) {
+        entry.view.webContents.close();
+      }
+    } catch {
+      // Keep disposal best-effort.
+    }
+    entries.delete(portalId);
+  };
+
   return {
     loadUrl: async (portalId: string, url: string): Promise<void> => {
       const entry = resolveEntry(portalId);
-      await entry.view.webContents.loadURL(url);
-      entry.loadedUrl = url;
+      try {
+        await entry.view.webContents.loadURL(url);
+        entry.loadedUrl = url;
+      } catch (error) {
+        // loadURL failed; remove transient runtime state for this portal ID.
+        if (!entry.view.webContents.isDestroyed()) {
+          entry.view.webContents.close();
+        }
+        entries.delete(portalId);
+        throw error;
+      }
     },
-    capture: async (portalId: string, nodeId: string): Promise<PortalScreenshotResult> => {
+    capture: async (
+      portalId: string,
+      workspaceId: string,
+      nodeId: string
+    ): Promise<PortalScreenshotResult> => {
       const entry = resolveLoadedEntry(portalId);
       const timestamp = now();
-      const nodeDir = path.join(options.artifactsRootDir, sanitizeSegment(nodeId));
+      const nodeDir = path.join(
+        options.artifactsRootDir,
+        sanitizeSegment(workspaceId),
+        sanitizeSegment(nodeId)
+      );
       fs.mkdirSync(nodeDir, { recursive: true });
       const screenshotPath = path.join(
         nodeDir,
@@ -206,17 +239,13 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
         true
       );
     },
+    disposePortal: (portalId: string): void => {
+      disposePortalEntry(portalId);
+    },
     dispose: (): void => {
-      for (const entry of entries.values()) {
-        try {
-          if (!entry.view.webContents.isDestroyed()) {
-            entry.view.webContents.close();
-          }
-        } catch {
-          // Keep disposal best-effort.
-        }
+      for (const portalId of [...entries.keys()]) {
+        disposePortalEntry(portalId);
       }
-      entries.clear();
     }
   };
 };

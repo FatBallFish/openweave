@@ -12,11 +12,12 @@ export interface PortalSessionCreateInput {
 export interface PortalSessionService {
   upsertSession: (input: PortalSessionCreateInput) => PortalSessionRecord;
   getSession: (portalId: string) => PortalSessionRecord | null;
+  listWorkspaceSessions: (workspaceId: string) => PortalSessionRecord[];
   deleteWorkspaceSessions: (workspaceId: string) => void;
   clear: () => void;
 }
 
-const toPortalSessionId = (workspaceId: string, nodeId: string): string => {
+export const toPortalSessionId = (workspaceId: string, nodeId: string): string => {
   return `${workspaceId}:${nodeId}`;
 };
 
@@ -55,6 +56,15 @@ export const createPortalSessionService = (
     },
     getSession: (portalId: string): PortalSessionRecord | null => {
       return sessions.get(portalId) ?? null;
+    },
+    listWorkspaceSessions: (workspaceId: string): PortalSessionRecord[] => {
+      const matching: PortalSessionRecord[] = [];
+      for (const session of sessions.values()) {
+        if (session.workspaceId === workspaceId) {
+          matching.push(session);
+        }
+      }
+      return matching;
     },
     deleteWorkspaceSessions: (workspaceId: string): void => {
       for (const [portalId, session] of sessions) {

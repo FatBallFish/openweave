@@ -41,6 +41,7 @@ export const assertPortalUrlAllowed = (inputUrl: string): string => {
   if (!ALLOWED_PROTOCOLS.has(parsedUrl.protocol)) {
     throw new Error('URL scheme not allowed');
   }
+  // MVP allowlist intentionally keeps remote http/https reachable; file:// stays blocked.
 
   if (parsedUrl.hostname.length === 0) {
     throw new Error('Portal URL host is required');

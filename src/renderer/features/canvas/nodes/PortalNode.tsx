@@ -200,6 +200,7 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
           void runPortalAction(
             async (resolvedPortalId) => {
               const response = await getPortalBridge().capturePortalScreenshot({
+                workspaceId,
                 portalId: resolvedPortalId
               });
               setScreenshotPath(response.screenshot.path);
@@ -212,6 +213,7 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
           void runPortalAction(
             async (resolvedPortalId) => {
               await getPortalBridge().clickPortalElement({
+                workspaceId,
                 portalId: resolvedPortalId,
                 selector: clickSelector
               });
@@ -226,6 +228,7 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
           void runPortalAction(
             async (resolvedPortalId) => {
               await getPortalBridge().inputPortalText({
+                workspaceId,
                 portalId: resolvedPortalId,
                 selector: inputSelector,
                 value: inputValue
@@ -244,6 +247,7 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
           void runPortalAction(
             async (resolvedPortalId) => {
               const response = await getPortalBridge().readPortalStructure({
+                workspaceId,
                 portalId: resolvedPortalId
               });
               setStructureElements(response.structure.elements);

@@ -9,7 +9,7 @@ import {
 import { disposeFilesIpcHandlers, registerFilesIpcHandlers } from './ipc/files';
 import {
   disposePortalIpcHandlers,
-  disposePortalWorkspaceSessions,
+  disposePortalWorkspaceState,
   registerPortalIpcHandlers
 } from './ipc/portal';
 import {
@@ -72,7 +72,7 @@ void app.whenReady().then(() => {
     onWorkspaceDeleted: (workspaceId: string) => {
       disposeCanvasWorkspaceRepository(workspaceId);
       disposeRunsForWorkspace(workspaceId);
-      disposePortalWorkspaceSessions(workspaceId);
+      disposePortalWorkspaceState(workspaceId);
     }
   });
   registerCanvasIpcHandlers({

@@ -125,19 +125,23 @@ export const portalLoadSchema = z.object({
 });
 
 export const portalCaptureSchema = z.object({
+  workspaceId: workspaceIdSchema,
   portalId: z.string().trim().min(1)
 });
 
 export const portalStructureSchema = z.object({
+  workspaceId: workspaceIdSchema,
   portalId: z.string().trim().min(1)
 });
 
 export const portalClickSchema = z.object({
+  workspaceId: workspaceIdSchema,
   portalId: z.string().trim().min(1),
   selector: z.string().trim().min(1)
 });
 
 export const portalInputSchema = z.object({
+  workspaceId: workspaceIdSchema,
   portalId: z.string().trim().min(1),
   selector: z.string().trim().min(1),
   value: z.string()

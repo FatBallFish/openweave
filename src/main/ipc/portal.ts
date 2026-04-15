@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
@@ -12,6 +13,7 @@ import {
   portalCaptureSchema,
   portalClickSchema,
   portalInputSchema,
+  workspaceIdSchema,
   portalLoadSchema,
   portalStructureSchema,
   type PortalCaptureInput,
@@ -25,6 +27,7 @@ import { createRegistryRepository, type RegistryRepository } from '../db/registr
 import { createPortalManager, type PortalManager } from '../portal/portal-manager';
 import {
   createPortalSessionService,
+  toPortalSessionId,
   type PortalSessionService
 } from '../portal/portal-session-service';
 
@@ -48,17 +51,23 @@ export interface PortalIpcHandlers {
     input: PortalClickInput
   ) => Promise<PortalClickResponse>;
   inputPortalText: (_event: IpcMainInvokeEvent, input: PortalInputInput) => Promise<PortalInputResponse>;
+  disposeWorkspaceState: (workspaceId: string) => void;
 }
 
 export interface PortalIpcDependencies {
   assertWorkspaceExists: (workspaceId: string) => void;
   portalManager: PortalManager;
   sessionService: PortalSessionService;
+  cleanupWorkspaceArtifacts: (workspaceId: string) => void;
 }
 
-const getSessionOrThrow = (sessionService: PortalSessionService, portalId: string) => {
+const getOwnedSessionOrThrow = (
+  sessionService: PortalSessionService,
+  workspaceId: string,
+  portalId: string
+) => {
   const session = sessionService.getSession(portalId);
-  if (!session) {
+  if (!session || session.workspaceId !== workspaceId) {
     throw new Error(`Portal session not found: ${portalId}`);
   }
   return session;
@@ -70,37 +79,55 @@ export const createPortalIpcHandlers = (deps: PortalIpcDependencies): PortalIpcH
       const parsed = portalLoadSchema.parse(input);
       deps.assertWorkspaceExists(parsed.workspaceId);
       const normalizedUrl = assertPortalUrlAllowed(parsed.url);
+      const portalId = toPortalSessionId(parsed.workspaceId, parsed.nodeId);
+      await deps.portalManager.loadUrl(portalId, normalizedUrl);
       const portal = deps.sessionService.upsertSession({
         workspaceId: parsed.workspaceId,
         nodeId: parsed.nodeId,
         url: normalizedUrl
       });
-      await deps.portalManager.loadUrl(portal.id, normalizedUrl);
       return { portal };
     },
     capturePortalScreenshot: async (_event: IpcMainInvokeEvent, input: PortalCaptureInput) => {
       const parsed = portalCaptureSchema.parse(input);
-      const session = getSessionOrThrow(deps.sessionService, parsed.portalId);
-      const screenshot = await deps.portalManager.capture(session.id, session.nodeId);
+      deps.assertWorkspaceExists(parsed.workspaceId);
+      const session = getOwnedSessionOrThrow(deps.sessionService, parsed.workspaceId, parsed.portalId);
+      const screenshot = await deps.portalManager.capture(
+        session.id,
+        session.workspaceId,
+        session.nodeId
+      );
       return { screenshot };
     },
     readPortalStructure: async (_event: IpcMainInvokeEvent, input: PortalStructureInput) => {
       const parsed = portalStructureSchema.parse(input);
-      const session = getSessionOrThrow(deps.sessionService, parsed.portalId);
+      deps.assertWorkspaceExists(parsed.workspaceId);
+      const session = getOwnedSessionOrThrow(deps.sessionService, parsed.workspaceId, parsed.portalId);
       const structure = await deps.portalManager.readStructure(session.id);
       return { structure };
     },
     clickPortalElement: async (_event: IpcMainInvokeEvent, input: PortalClickInput) => {
       const parsed = portalClickSchema.parse(input);
-      getSessionOrThrow(deps.sessionService, parsed.portalId);
+      deps.assertWorkspaceExists(parsed.workspaceId);
+      getOwnedSessionOrThrow(deps.sessionService, parsed.workspaceId, parsed.portalId);
       await deps.portalManager.click(parsed.portalId, parsed.selector);
       return { ok: true };
     },
     inputPortalText: async (_event: IpcMainInvokeEvent, input: PortalInputInput) => {
       const parsed = portalInputSchema.parse(input);
-      getSessionOrThrow(deps.sessionService, parsed.portalId);
+      deps.assertWorkspaceExists(parsed.workspaceId);
+      getOwnedSessionOrThrow(deps.sessionService, parsed.workspaceId, parsed.portalId);
       await deps.portalManager.input(parsed.portalId, parsed.selector, parsed.value);
       return { ok: true };
+    },
+    disposeWorkspaceState: (workspaceId: string): void => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      const sessions = deps.sessionService.listWorkspaceSessions(parsedWorkspaceId);
+      for (const session of sessions) {
+        deps.portalManager.disposePortal(session.id);
+      }
+      deps.sessionService.deleteWorkspaceSessions(parsedWorkspaceId);
+      deps.cleanupWorkspaceArtifacts(parsedWorkspaceId);
     }
   };
 };
@@ -159,6 +186,15 @@ export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOpti
     throw new Error('Portal IPC context is unavailable');
   }
 
+  const cleanupWorkspaceArtifacts = (workspaceId: string): void => {
+    const normalizedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+    const workspaceArtifactsDir = path.join(
+      context.artifactsRootDir,
+      normalizedWorkspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')
+    );
+    fs.rmSync(workspaceArtifactsDir, { recursive: true, force: true });
+  };
+
   const handlers = createPortalIpcHandlers({
     assertWorkspaceExists: (workspaceId: string) => {
       if (!context.registry.hasWorkspace(workspaceId)) {
@@ -166,7 +202,8 @@ export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOpti
       }
     },
     portalManager: context.portalManager,
-    sessionService: context.sessionService
+    sessionService: context.sessionService,
+    cleanupWorkspaceArtifacts
   });
 
   ipcMain.removeHandler(IPC_CHANNELS.portalLoad);
@@ -182,11 +219,25 @@ export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOpti
   ipcMain.handle(IPC_CHANNELS.portalInput, handlers.inputPortalText);
 };
 
-export const disposePortalWorkspaceSessions = (workspaceId: string): void => {
+export const disposePortalWorkspaceState = (workspaceId: string): void => {
   if (!registeredPortalContext) {
     return;
   }
-  registeredPortalContext.sessionService.deleteWorkspaceSessions(workspaceId);
+  const handlers = createPortalIpcHandlers({
+    assertWorkspaceExists: () => {
+      // Workspace may already be deleted; cleanup still needs to run.
+    },
+    portalManager: registeredPortalContext.portalManager,
+    sessionService: registeredPortalContext.sessionService,
+    cleanupWorkspaceArtifacts: (normalizedWorkspaceId: string) => {
+      const workspaceArtifactsDir = path.join(
+        registeredPortalContext!.artifactsRootDir,
+        normalizedWorkspaceId.replace(/[^a-zA-Z0-9_-]/g, '-')
+      );
+      fs.rmSync(workspaceArtifactsDir, { recursive: true, force: true });
+    }
+  });
+  handlers.disposeWorkspaceState(workspaceId);
 };
 
 export const disposePortalIpcHandlers = (): void => {
