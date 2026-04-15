@@ -9,6 +9,16 @@ export interface GitStatusResult {
   statuses: Map<string, GitFileStatusCode>;
 }
 
+export interface GitCommandResult {
+  stdout: string;
+  stderr: string;
+}
+
+export interface RunGitCommandOptions {
+  rootDir: string;
+  args: string[];
+}
+
 const normalizeStatusPath = (input: string): string => {
   const trimmed = input.trim();
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
@@ -77,19 +87,27 @@ const isNotGitRepositoryError = (error: unknown): boolean => {
   return content.includes('not a git repository');
 };
 
+export const runGitCommand = async (options: RunGitCommandOptions): Promise<GitCommandResult> => {
+  const result = await execFileAsync('git', ['-C', options.rootDir, ...options.args], {
+    env: {
+      ...process.env,
+      LC_ALL: 'C'
+    },
+    windowsHide: true
+  });
+
+  return {
+    stdout: result.stdout,
+    stderr: result.stderr
+  };
+};
+
 export const gitStatus = async (rootDir: string): Promise<GitStatusResult> => {
   try {
-    const result = await execFileAsync(
-      'git',
-      ['-C', rootDir, 'status', '--porcelain', '--untracked-files=all'],
-      {
-        env: {
-          ...process.env,
-          LC_ALL: 'C'
-        },
-        windowsHide: true
-      }
-    );
+    const result = await runGitCommand({
+      rootDir,
+      args: ['status', '--porcelain', '--untracked-files=all']
+    });
 
     return {
       isGitRepo: true,

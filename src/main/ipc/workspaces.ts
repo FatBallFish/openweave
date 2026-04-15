@@ -22,6 +22,7 @@ export interface WorkspaceIpcHandlers {
 
 export interface WorkspaceIpcDependencies {
   registry: RegistryRepository;
+  onWorkspaceCreated?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceOpened?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceDeleted?: (workspaceId: string) => void;
 }
@@ -35,8 +36,10 @@ export const createWorkspaceIpcHandlers = (deps: WorkspaceIpcDependencies): Work
   return {
     create: async (_event: IpcMainInvokeEvent, input: WorkspaceCreateInput) => {
       const parsed = workspaceCreateSchema.parse(input);
+      const createdWorkspace = deps.registry.createWorkspace(parsed);
+      await deps.onWorkspaceCreated?.(createdWorkspace.id);
       return {
-        workspace: deps.registry.createWorkspace(parsed)
+        workspace: createdWorkspace
       };
     },
     list: (_event: IpcMainInvokeEvent) => {
@@ -99,6 +102,7 @@ const resolveIpcMain = (): WorkspaceIpcMain => {
 export interface RegisterWorkspaceIpcHandlersOptions {
   dbFilePath: string;
   ipcMain?: WorkspaceIpcMain;
+  onWorkspaceCreated?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceOpened?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceDeleted?: (workspaceId: string) => void;
 }
@@ -109,6 +113,7 @@ export const registerWorkspaceIpcHandlers = (
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const handlers = createWorkspaceIpcHandlers({
     registry: getOrCreateRegistryForPath(options.dbFilePath),
+    onWorkspaceCreated: options.onWorkspaceCreated,
     onWorkspaceOpened: options.onWorkspaceOpened,
     onWorkspaceDeleted: options.onWorkspaceDeleted
   });

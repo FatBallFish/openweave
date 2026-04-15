@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import {
+  disposeBranchWorkspaceIpcHandlers,
+  registerBranchWorkspaceIpcHandlers
+} from './ipc/branch-workspaces';
+import {
   disposeCanvasIpcHandlers,
   disposeCanvasWorkspaceRepository,
   registerCanvasIpcHandlers
@@ -79,6 +83,10 @@ void app.whenReady().then(() => {
     workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
     registryDbFilePath
   });
+  registerBranchWorkspaceIpcHandlers({
+    dbFilePath: registryDbFilePath,
+    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces')
+  });
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
     workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
@@ -117,6 +125,7 @@ app.on('will-quit', () => {
   disposeFilesIpcHandlers();
   disposePortalIpcHandlers();
   disposeRunsIpcHandlers();
+  disposeBranchWorkspaceIpcHandlers();
   disposeCanvasIpcHandlers();
   disposeWorkspaceIpcHandlers();
 });

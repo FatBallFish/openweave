@@ -6,6 +6,7 @@ import { NodeToolbar } from './nodes/NodeToolbar';
 import { PortalNode } from './nodes/PortalNode';
 import { TerminalNode } from './nodes/TerminalNode';
 import { RunDrawer } from '../runs/RunDrawer';
+import { workspacesStore } from '../workspaces/workspaces.store';
 
 interface WorkspaceCanvasPageProps {
   workspaceId: string;
@@ -76,6 +77,7 @@ export const WorkspaceCanvasPage = ({
                 workspaceId={workspaceId}
                 node={node}
                 onChange={(patch) => void canvasStore.updateFileTreeNode(node.id, patch)}
+                onCreateBranchWorkspace={() => workspacesStore.openBranchDialog(workspaceId)}
               />
             ) : (
               <PortalNode

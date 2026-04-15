@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { BranchWorkspaceDialog } from './BranchWorkspaceDialog';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 import { useWorkspacesStore, workspacesStore } from './workspaces.store';
 
@@ -7,6 +8,8 @@ export const WorkspaceListPage = (): JSX.Element => {
   const activeWorkspaceId = useWorkspacesStore((storeState) => storeState.activeWorkspaceId);
   const loading = useWorkspacesStore((storeState) => storeState.loading);
   const isCreateDialogOpen = useWorkspacesStore((storeState) => storeState.isCreateDialogOpen);
+  const isBranchDialogOpen = useWorkspacesStore((storeState) => storeState.isBranchDialogOpen);
+  const branchSourceWorkspaceId = useWorkspacesStore((storeState) => storeState.branchSourceWorkspaceId);
   const errorMessage = useWorkspacesStore((storeState) => storeState.errorMessage);
 
   useEffect(() => {
@@ -14,6 +17,8 @@ export const WorkspaceListPage = (): JSX.Element => {
   }, []);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const branchSourceWorkspace =
+    workspaces.find((workspace) => workspace.id === branchSourceWorkspaceId) ?? null;
 
   return (
     <section data-testid="workspace-list-page">
@@ -38,6 +43,13 @@ export const WorkspaceListPage = (): JSX.Element => {
         loading={loading}
         onCancel={() => workspacesStore.closeCreateDialog()}
         onCreate={(input) => workspacesStore.createWorkspace(input)}
+      />
+      <BranchWorkspaceDialog
+        open={isBranchDialogOpen}
+        loading={loading}
+        sourceWorkspace={branchSourceWorkspace}
+        onCancel={() => workspacesStore.closeBranchDialog()}
+        onCreate={(input) => workspacesStore.createBranchWorkspace(input)}
       />
 
       {errorMessage ? (
@@ -78,6 +90,14 @@ export const WorkspaceListPage = (): JSX.Element => {
                     type="button"
                   >
                     Open {workspace.name}
+                  </button>
+                  <button
+                    data-testid={`workspace-branch-${workspace.id}`}
+                    disabled={loading}
+                    onClick={() => workspacesStore.openBranchDialog(workspace.id)}
+                    type="button"
+                  >
+                    Branch {workspace.name}
                   </button>
                   <button
                     data-testid={`workspace-delete-${workspace.id}`}

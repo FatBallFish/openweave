@@ -5,6 +5,8 @@ interface GitPanelProps {
   isGitRepo: boolean;
   readOnly: boolean;
   summary: GitStatusSummaryRecord;
+  onCreateBranchWorkspace?: () => void;
+  canCreateBranchWorkspace?: boolean;
 }
 
 const renderSummary = (summary: GitStatusSummaryRecord): string[] => {
@@ -36,7 +38,14 @@ const renderSummary = (summary: GitStatusSummaryRecord): string[] => {
   return result;
 };
 
-export const GitPanel = ({ nodeId, isGitRepo, readOnly, summary }: GitPanelProps): JSX.Element => {
+export const GitPanel = ({
+  nodeId,
+  isGitRepo,
+  readOnly,
+  summary,
+  onCreateBranchWorkspace,
+  canCreateBranchWorkspace = true
+}: GitPanelProps): JSX.Element => {
   const summaryLines = renderSummary(summary);
 
   return (
@@ -60,8 +69,19 @@ export const GitPanel = ({ nodeId, isGitRepo, readOnly, summary }: GitPanelProps
       )}
       {readOnly ? (
         <p data-testid={`git-panel-readonly-${nodeId}`} style={{ margin: '8px 0 0', color: '#344054' }}>
-          Read-only mode: Git write actions are disabled in this task.
+          Read-only mode: status and branch workspace creation are available.
         </p>
+      ) : null}
+      {isGitRepo && onCreateBranchWorkspace ? (
+        <button
+          data-testid={`git-panel-branch-workspace-${nodeId}`}
+          disabled={!canCreateBranchWorkspace}
+          onClick={onCreateBranchWorkspace}
+          style={{ marginTop: '8px' }}
+          type="button"
+        >
+          Create branch workspace
+        </button>
       ) : null}
     </section>
   );

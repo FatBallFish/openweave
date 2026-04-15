@@ -14,6 +14,7 @@ import type {
   RunStartInput,
   RunStatusInput,
   WorkspaceCreateInput,
+  WorkspaceBranchCreateInput,
   WorkspaceDeleteInput,
   WorkspaceOpenInput
 } from './schemas';
@@ -28,6 +29,7 @@ export const IPC_CHANNELS = {
   workspaceList: 'workspace:list',
   workspaceOpen: 'workspace:open',
   workspaceDelete: 'workspace:delete',
+  workspaceCreateBranch: 'workspace:create-branch',
   canvasLoad: 'canvas:load',
   canvasSave: 'canvas:save',
   runStart: 'run:start',
@@ -147,6 +149,7 @@ export interface PortalInputResponse {
 
 export interface WorkspaceBridgeApi {
   createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceMutationResponse>;
+  createBranchWorkspace: (input: WorkspaceBranchCreateInput) => Promise<WorkspaceMutationResponse>;
   listWorkspaces: () => Promise<WorkspaceListResponse>;
   openWorkspace: (input: WorkspaceOpenInput) => Promise<WorkspaceMutationResponse>;
   deleteWorkspace: (input: WorkspaceDeleteInput) => Promise<WorkspaceDeleteResponse>;

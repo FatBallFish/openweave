@@ -11,6 +11,7 @@ interface FileTreeNodeProps {
   workspaceId: string;
   node: FileTreeNodeInput;
   onChange: (patch: Partial<Pick<FileTreeNodeInput, 'x' | 'y'>>) => void;
+  onCreateBranchWorkspace?: () => void;
 }
 
 const parseNumberOrUndefined = (value: string): number | undefined => {
@@ -54,7 +55,12 @@ const emptyTreeState = (): FileTreeLoadResponse => ({
 
 const MAX_RENDERED_ENTRIES = 120;
 
-export const FileTreeNode = ({ workspaceId, node, onChange }: FileTreeNodeProps): JSX.Element => {
+export const FileTreeNode = ({
+  workspaceId,
+  node,
+  onChange,
+  onCreateBranchWorkspace
+}: FileTreeNodeProps): JSX.Element => {
   const [tree, setTree] = useState<FileTreeLoadResponse>(emptyTreeState);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -155,7 +161,14 @@ export const FileTreeNode = ({ workspaceId, node, onChange }: FileTreeNodeProps)
         </button>
       </div>
 
-      <GitPanel nodeId={node.id} isGitRepo={tree.isGitRepo} readOnly={tree.readOnly} summary={tree.gitSummary} />
+      <GitPanel
+        nodeId={node.id}
+        isGitRepo={tree.isGitRepo}
+        readOnly={tree.readOnly}
+        summary={tree.gitSummary}
+        onCreateBranchWorkspace={onCreateBranchWorkspace}
+        canCreateBranchWorkspace={!loading}
+      />
 
       {errorMessage ? (
         <p data-testid={`file-tree-error-${node.id}`} style={{ color: '#b42318', margin: 0 }}>

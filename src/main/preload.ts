@@ -12,6 +12,7 @@ import type {
   RunGetInput,
   RunListInput,
   RunStartInput,
+  WorkspaceBranchCreateInput,
   WorkspaceCreateInput,
   WorkspaceDeleteInput,
   WorkspaceOpenInput
@@ -23,6 +24,8 @@ const shellBridge: OpenWeaveShellBridge = {
   workspaces: {
     createWorkspace: (input: WorkspaceCreateInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceCreate, input),
+    createBranchWorkspace: (input: WorkspaceBranchCreateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreateBranch, input),
     listWorkspaces: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceList),
     openWorkspace: (input: WorkspaceOpenInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpen, input),
     deleteWorkspace: (input: WorkspaceDeleteInput) =>

@@ -1,12 +1,14 @@
 import { useSyncExternalStore } from 'react';
 import type { OpenWeaveShellBridge, WorkspaceRecord } from '../../../shared/ipc/contracts';
-import type { WorkspaceCreateInput } from '../../../shared/ipc/schemas';
+import type { WorkspaceBranchCreateInput, WorkspaceCreateInput } from '../../../shared/ipc/schemas';
 
 interface WorkspacesState {
   workspaces: WorkspaceRecord[];
   activeWorkspaceId: string | null;
   loading: boolean;
   isCreateDialogOpen: boolean;
+  isBranchDialogOpen: boolean;
+  branchSourceWorkspaceId: string | null;
   errorMessage: string | null;
 }
 
@@ -15,6 +17,8 @@ const initialState: WorkspacesState = {
   activeWorkspaceId: null,
   loading: false,
   isCreateDialogOpen: false,
+  isBranchDialogOpen: false,
+  branchSourceWorkspaceId: null,
   errorMessage: null
 };
 
@@ -57,6 +61,19 @@ export const workspacesStore = {
   closeCreateDialog: (): void => {
     setState({ isCreateDialogOpen: false });
   },
+  openBranchDialog: (sourceWorkspaceId: string): void => {
+    setState({
+      isBranchDialogOpen: true,
+      branchSourceWorkspaceId: sourceWorkspaceId,
+      errorMessage: null
+    });
+  },
+  closeBranchDialog: (): void => {
+    setState({
+      isBranchDialogOpen: false,
+      branchSourceWorkspaceId: null
+    });
+  },
   loadWorkspaces: async (): Promise<void> => {
     setState({ loading: true, errorMessage: null });
     try {
@@ -90,6 +107,23 @@ export const workspacesStore = {
       setState({ loading: false, errorMessage });
     }
   },
+  createBranchWorkspace: async (input: WorkspaceBranchCreateInput): Promise<void> => {
+    setState({ loading: true, errorMessage: null });
+    try {
+      const result = await getBridge().createBranchWorkspace(input);
+      setState({
+        loading: false,
+        workspaces: upsertWorkspace(result.workspace),
+        activeWorkspaceId: result.workspace.id,
+        isBranchDialogOpen: false,
+        branchSourceWorkspaceId: null
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to create branch workspace';
+      setState({ loading: false, errorMessage });
+    }
+  },
   openWorkspace: async (workspaceId: string): Promise<void> => {
     setState({ loading: true, errorMessage: null });
     try {
@@ -118,7 +152,9 @@ export const workspacesStore = {
       setState({
         loading: false,
         workspaces: state.workspaces.filter((workspace) => workspace.id !== workspaceId),
-        activeWorkspaceId: nextActiveWorkspaceId
+        activeWorkspaceId: nextActiveWorkspaceId,
+        branchSourceWorkspaceId:
+          state.branchSourceWorkspaceId === workspaceId ? null : state.branchSourceWorkspaceId
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete workspace';

@@ -16,6 +16,28 @@ export const workspaceDeleteSchema = z.object({
   workspaceId: workspaceIdSchema
 });
 
+export const workspaceBranchCreateSchema = z.object({
+  sourceWorkspaceId: workspaceIdSchema,
+  branchName: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[A-Za-z0-9._/-]+$/, 'Branch name contains unsupported characters')
+    .refine((value) => !value.startsWith('/') && !value.endsWith('/'), {
+      message: 'Branch name cannot start or end with /'
+    })
+    .refine(
+      (value) =>
+        value
+          .split('/')
+          .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+      {
+        message: 'Branch name contains unsupported path segments'
+      }
+    ),
+  copyCanvas: z.boolean()
+});
+
 export const noteNodeSchema = z.object({
   id: z.string().trim().min(1),
   type: z.literal('note'),
@@ -150,6 +172,7 @@ export const portalInputSchema = z.object({
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
+export type WorkspaceBranchCreateInput = z.infer<typeof workspaceBranchCreateSchema>;
 export type NoteNodeInput = z.infer<typeof noteNodeSchema>;
 export type TerminalNodeInput = z.infer<typeof terminalNodeSchema>;
 export type FileTreeNodeInput = z.infer<typeof fileTreeNodeSchema>;
