@@ -1,3 +1,5 @@
+import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
+
 export const App = (): JSX.Element => {
   return (
     <main
@@ -10,6 +12,7 @@ export const App = (): JSX.Element => {
     >
       <h1 data-testid="app-shell-title">OpenWeave</h1>
       <p data-testid="app-shell-subtitle">Electron shell ready for MVP tasks.</p>
+      <WorkspaceListPage />
     </main>
   );
 };

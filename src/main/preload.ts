@@ -1,5 +1,10 @@
-import { contextBridge } from 'electron';
-import { IPC_CHANNELS } from '../shared/ipc/contracts';
+import { contextBridge, ipcRenderer } from 'electron';
+import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts';
+import type {
+  WorkspaceCreateInput,
+  WorkspaceDeleteInput,
+  WorkspaceOpenInput
+} from '../shared/ipc/schemas';
 
 const detectPlatform = (): string => {
   if (typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string') {
@@ -17,7 +22,17 @@ const detectPlatform = (): string => {
   return 'unknown';
 };
 
-contextBridge.exposeInMainWorld('openweaveShell', {
+const shellBridge: OpenWeaveShellBridge = {
   platform: detectPlatform(),
-  ipcChannels: IPC_CHANNELS
-});
+  ipcChannels: IPC_CHANNELS,
+  workspaces: {
+    createWorkspace: (input: WorkspaceCreateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceCreate, input),
+    listWorkspaces: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceList),
+    openWorkspace: (input: WorkspaceOpenInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpen, input),
+    deleteWorkspace: (input: WorkspaceDeleteInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceDelete, input)
+  }
+};
+
+contextBridge.exposeInMainWorld('openweaveShell', shellBridge);

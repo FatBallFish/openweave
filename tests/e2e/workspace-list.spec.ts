@@ -1,0 +1,34 @@
+import path from 'node:path';
+import { _electron as electron, expect, test } from '@playwright/test';
+
+test('supports create/open/delete from the workspace list page', async () => {
+  const app = await electron.launch({
+    args: [path.resolve(__dirname, '../../dist/main/main.js')]
+  });
+
+  const uniqueSuffix = Date.now().toString();
+  const workspaceName = `Workspace-${uniqueSuffix}`;
+  const workspaceRoot = `/tmp/openweave-${uniqueSuffix}`;
+
+  try {
+    const page = await app.firstWindow();
+
+    await expect(page.getByTestId('workspace-list-page')).toBeVisible();
+
+    await page.getByTestId('workspace-create-button').click();
+    await page.getByTestId('create-workspace-name-input').fill(workspaceName);
+    await page.getByTestId('create-workspace-root-input').fill(workspaceRoot);
+    await page.getByTestId('create-workspace-submit').click();
+
+    await expect(page.getByText(workspaceName, { exact: true })).toBeVisible();
+    await expect(page.getByText(workspaceRoot)).toBeVisible();
+
+    await page.getByRole('button', { name: `Open ${workspaceName}` }).click();
+    await expect(page.getByTestId('active-workspace-name')).toContainText(workspaceName);
+
+    await page.getByRole('button', { name: `Delete ${workspaceName}` }).click();
+    await expect(page.getByText(workspaceName, { exact: true })).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});

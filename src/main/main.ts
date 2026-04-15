@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
+import { registerWorkspaceIpcHandlers } from './ipc/workspaces';
 
 const createMainWindow = (): BrowserWindow => {
   const mainWindow = new BrowserWindow({
@@ -24,6 +25,7 @@ const createMainWindow = (): BrowserWindow => {
 };
 
 void app.whenReady().then(() => {
+  registerWorkspaceIpcHandlers(path.join(app.getPath('userData'), 'registry.db'));
   createMainWindow();
 
   app.on('activate', () => {
