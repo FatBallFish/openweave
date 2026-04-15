@@ -1,0 +1,8 @@
+.DS_Store
+.worktrees/
+worktrees/
+/docs/*
+!/docs/plans/
+!/docs/plans/**
+!/docs/decisions/
+!/docs/decisions/**
