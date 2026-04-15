@@ -8,11 +8,13 @@ import {
 import {
   canvasLoadSchema,
   canvasSaveSchema,
+  type CanvasStateInput,
   type CanvasLoadInput,
   type CanvasSaveInput
 } from '../../shared/ipc/schemas';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository, type WorkspaceRepository } from '../db/workspace';
+import { sanitizePathWithinRoot } from '../workspace/path-boundary';
 
 export interface CanvasIpcHandlers {
   load: (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
@@ -21,6 +23,7 @@ export interface CanvasIpcHandlers {
 
 export interface CanvasIpcDependencies {
   assertWorkspaceExists: (workspaceId: string) => void;
+  resolveWorkspaceRootDir: (workspaceId: string) => string;
   getWorkspaceRepository: (workspaceId: string) => WorkspaceRepository;
 }
 
@@ -29,20 +32,42 @@ interface CanvasIpcMain {
   removeHandler: (channel: string) => void;
 }
 
+const sanitizeCanvasStateForWorkspace = (
+  state: CanvasStateInput,
+  workspaceRootDir: string
+): CanvasStateInput => {
+  return {
+    ...state,
+    nodes: state.nodes.map((node) => {
+      if (node.type !== 'file-tree') {
+        return node;
+      }
+      return {
+        ...node,
+        rootDir: sanitizePathWithinRoot(workspaceRootDir, node.rootDir)
+      };
+    })
+  };
+};
+
 export const createCanvasIpcHandlers = (deps: CanvasIpcDependencies): CanvasIpcHandlers => {
   return {
     load: async (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => {
       const parsed = canvasLoadSchema.parse(input);
       deps.assertWorkspaceExists(parsed.workspaceId);
+      const workspaceRootDir = deps.resolveWorkspaceRootDir(parsed.workspaceId);
+      const loadedState = deps.getWorkspaceRepository(parsed.workspaceId).loadCanvasState();
       return {
-        state: deps.getWorkspaceRepository(parsed.workspaceId).loadCanvasState()
+        state: sanitizeCanvasStateForWorkspace(loadedState, workspaceRootDir)
       };
     },
     save: async (_event: IpcMainInvokeEvent, input: CanvasSaveInput) => {
       const parsed = canvasSaveSchema.parse(input);
       deps.assertWorkspaceExists(parsed.workspaceId);
+      const workspaceRootDir = deps.resolveWorkspaceRootDir(parsed.workspaceId);
+      const sanitizedState = sanitizeCanvasStateForWorkspace(parsed.state, workspaceRootDir);
       return {
-        state: deps.getWorkspaceRepository(parsed.workspaceId).saveCanvasState(parsed.state)
+        state: deps.getWorkspaceRepository(parsed.workspaceId).saveCanvasState(sanitizedState)
       };
     }
   };
@@ -147,6 +172,10 @@ export const registerCanvasIpcHandlers = (options: RegisterCanvasIpcHandlersOpti
   const handlers = createCanvasIpcHandlers({
     assertWorkspaceExists: (workspaceId: string) =>
       assertWorkspaceExists(workspaceId, options.workspaceDbDir, options.registryDbFilePath),
+    resolveWorkspaceRootDir: (workspaceId: string) =>
+      resetCanvasContext(options.workspaceDbDir, options.registryDbFilePath).registry.getWorkspace(
+        workspaceId
+      ).rootDir,
     getWorkspaceRepository: (workspaceId: string) =>
       resolveWorkspaceRepository(workspaceId, options.workspaceDbDir, options.registryDbFilePath)
   });

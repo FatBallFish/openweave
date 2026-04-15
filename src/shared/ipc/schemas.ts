@@ -87,6 +87,7 @@ export const runListSchema = z.object({
 });
 
 export const fileTreeLoadSchema = z.object({
+  workspaceId: workspaceIdSchema,
   rootDir: z
     .string()
     .trim()

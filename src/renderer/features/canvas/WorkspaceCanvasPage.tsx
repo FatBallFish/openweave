@@ -71,6 +71,7 @@ export const WorkspaceCanvasPage = ({
             ) : (
               <FileTreeNode
                 key={node.id}
+                workspaceId={workspaceId}
                 node={node}
                 onChange={(patch) => void canvasStore.updateFileTreeNode(node.id, patch)}
               />

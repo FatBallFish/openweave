@@ -6,11 +6,15 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createFilesIpcHandlers,
+  loadFileTreeForTestsOnly,
   type FilesIpcHandlers
 } from '../../../src/main/ipc/files';
+import { createRegistryRepository, type RegistryRepository } from '../../../src/main/db/registry';
 
 let testDir = '';
 let handlers: FilesIpcHandlers;
+let registry: RegistryRepository;
+let workspaceId = '';
 
 const runGit = (cwd: string, args: string[]): void => {
   execFileSync('git', args, {
@@ -45,20 +49,36 @@ const createFixtureRepo = (rootDir: string): void => {
 
 beforeEach(() => {
   testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-file-tree-ipc-'));
-  handlers = createFilesIpcHandlers();
+  registry = createRegistryRepository({
+    dbFilePath: path.join(testDir, 'registry.sqlite')
+  });
+  const workspaceRootDir = path.join(testDir, 'workspace-root');
+  fs.mkdirSync(workspaceRootDir, { recursive: true });
+  const created = registry.createWorkspace({
+    name: 'Workspace',
+    rootDir: workspaceRootDir
+  });
+  workspaceId = created.id;
+  handlers = createFilesIpcHandlers({
+    resolveWorkspaceRootDir: (requestedWorkspaceId: string) =>
+      registry.getWorkspace(requestedWorkspaceId).rootDir,
+    loadTreeForRootDir: loadFileTreeForTestsOnly
+  });
 });
 
 afterEach(() => {
+  registry.close();
   fs.rmSync(testDir, { recursive: true, force: true });
 });
 
 describe('file tree IPC flow', () => {
   it('ignores large generated directories and reports git status for changed files', async () => {
-    const fixtureRepo = path.join(testDir, 'repo');
+    const fixtureRepo = path.join(testDir, 'workspace-root', 'repo');
     fs.mkdirSync(fixtureRepo, { recursive: true });
     createFixtureRepo(fixtureRepo);
 
     const tree = await handlers.loadFileTree({} as IpcMainInvokeEvent, {
+      workspaceId,
       rootDir: fixtureRepo
     });
 
@@ -68,15 +88,27 @@ describe('file tree IPC flow', () => {
   });
 
   it('loads non-git directories without enabling write operations', async () => {
-    const rootDir = path.join(testDir, 'plain');
+    const rootDir = path.join(testDir, 'workspace-root', 'plain');
     writeFile(path.join(rootDir, 'src/plain.txt'), 'plain file\n');
     writeFile(path.join(rootDir, 'node_modules/ignored.js'), 'ignored\n');
 
-    const tree = await handlers.loadFileTree({} as IpcMainInvokeEvent, { rootDir });
+    const tree = await handlers.loadFileTree({} as IpcMainInvokeEvent, { workspaceId, rootDir });
 
     expect(tree.isGitRepo).toBe(false);
     expect(tree.readOnly).toBe(true);
     expect(tree.entries.find((entry) => entry.path === 'src/plain.txt')?.gitStatus).toBeNull();
     expect(tree.entries.some((entry) => entry.path.includes('node_modules'))).toBe(false);
+  });
+
+  it('rejects rootDir requests outside workspace root boundary', async () => {
+    const outsideDir = path.join(testDir, 'outside');
+    writeFile(path.join(outsideDir, 'src/outside.txt'), 'outside file\n');
+
+    await expect(
+      handlers.loadFileTree({} as IpcMainInvokeEvent, {
+        workspaceId,
+        rootDir: outsideDir
+      })
+    ).rejects.toThrow('Root directory must stay within workspace root');
   });
 });

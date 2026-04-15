@@ -35,6 +35,7 @@ beforeEach(() => {
         throw new Error(`Workspace not found: ${workspaceId}`);
       }
     },
+    resolveWorkspaceRootDir: (_workspaceId: string) => path.join(testDbDir, 'workspace-1-root'),
     getWorkspaceRepository: getRepositoryForWorkspace
   });
 });
@@ -86,5 +87,31 @@ describe('canvas IPC flow', () => {
 
     const restored = await handlers.load({} as IpcMainInvokeEvent, { workspaceId });
     expect(restored.state.edges).toEqual([]);
+  });
+
+  it('sanitizes file-tree node roots that drift outside workspace root', async () => {
+    const workspaceId = 'workspace-1';
+    await handlers.save({} as IpcMainInvokeEvent, {
+      workspaceId,
+      state: {
+        nodes: [
+          {
+            id: 'tree-1',
+            type: 'file-tree',
+            x: 0,
+            y: 0,
+            rootDir: '/tmp/outside-workspace-root'
+          }
+        ],
+        edges: []
+      }
+    });
+
+    const restored = await handlers.load({} as IpcMainInvokeEvent, { workspaceId });
+    const node = restored.state.nodes.find((item) => item.id === 'tree-1');
+    expect(node?.type).toBe('file-tree');
+    if (node?.type === 'file-tree') {
+      expect(node.rootDir).toContain('workspace-1-root');
+    }
   });
 });

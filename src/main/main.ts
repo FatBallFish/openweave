@@ -5,7 +5,7 @@ import {
   disposeCanvasWorkspaceRepository,
   registerCanvasIpcHandlers
 } from './ipc/canvas';
-import { registerFilesIpcHandlers } from './ipc/files';
+import { disposeFilesIpcHandlers, registerFilesIpcHandlers } from './ipc/files';
 import { disposeRunsForWorkspace, disposeRunsIpcHandlers, registerRunsIpcHandlers } from './ipc/runs';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
 
@@ -52,7 +52,9 @@ void app.whenReady().then(() => {
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath
   });
-  registerFilesIpcHandlers();
+  registerFilesIpcHandlers({
+    dbFilePath: registryDbFilePath
+  });
   createMainWindow();
 
   app.on('activate', () => {
@@ -69,6 +71,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  disposeFilesIpcHandlers();
   disposeRunsIpcHandlers();
   disposeCanvasIpcHandlers();
   disposeWorkspaceIpcHandlers();

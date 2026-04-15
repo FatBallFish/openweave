@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GitPanel } from '../../git/GitPanel';
 import type {
   FileTreeEntryRecord,
@@ -8,6 +8,7 @@ import type {
 import type { FileTreeNodeInput } from '../../../../shared/ipc/schemas';
 
 interface FileTreeNodeProps {
+  workspaceId: string;
   node: FileTreeNodeInput;
   onChange: (patch: Partial<Pick<FileTreeNodeInput, 'x' | 'y'>>) => void;
 }
@@ -53,43 +54,47 @@ const emptyTreeState = (): FileTreeLoadResponse => ({
 
 const MAX_RENDERED_ENTRIES = 120;
 
-export const FileTreeNode = ({ node, onChange }: FileTreeNodeProps): JSX.Element => {
+export const FileTreeNode = ({ workspaceId, node, onChange }: FileTreeNodeProps): JSX.Element => {
   const [tree, setTree] = useState<FileTreeLoadResponse>(emptyTreeState);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const latestRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadTree = (rootDir: string): Promise<void> => {
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
     setLoading(true);
     setErrorMessage(null);
-    void getFilesBridge()
+
+    return getFilesBridge()
       .loadFileTree({
-        rootDir: node.rootDir
+        workspaceId,
+        rootDir
       })
       .then((response) => {
-        if (cancelled) {
+        if (latestRequestIdRef.current !== requestId) {
           return;
         }
         setTree(response);
       })
       .catch((error) => {
-        if (cancelled) {
+        if (latestRequestIdRef.current !== requestId) {
           return;
         }
         const message = error instanceof Error ? error.message : 'Failed to load file tree';
         setErrorMessage(message);
       })
       .finally(() => {
-        if (cancelled) {
+        if (latestRequestIdRef.current !== requestId) {
           return;
         }
         setLoading(false);
       });
+  };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [node.rootDir]);
+  useEffect(() => {
+    void loadTree(node.rootDir);
+  }, [node.rootDir, workspaceId]);
 
   return (
     <article
@@ -141,20 +146,7 @@ export const FileTreeNode = ({ node, onChange }: FileTreeNodeProps): JSX.Element
           data-testid={`file-tree-refresh-${node.id}`}
           disabled={loading}
           onClick={() => {
-            setLoading(true);
-            setErrorMessage(null);
-            void getFilesBridge()
-              .loadFileTree({ rootDir: node.rootDir })
-              .then((response) => {
-                setTree(response);
-              })
-              .catch((error) => {
-                const message = error instanceof Error ? error.message : 'Failed to refresh file tree';
-                setErrorMessage(message);
-              })
-              .finally(() => {
-                setLoading(false);
-              });
+            void loadTree(node.rootDir);
           }}
           style={{ alignSelf: 'end' }}
           type="button"

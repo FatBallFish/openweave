@@ -1,5 +1,7 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fork, type ChildProcess } from 'node:child_process';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
@@ -9,8 +11,10 @@ import {
   type GitStatusSummaryRecord
 } from '../../shared/ipc/contracts';
 import { fileTreeLoadSchema, type FileTreeLoadInput } from '../../shared/ipc/schemas';
+import { createRegistryRepository, type RegistryRepository } from '../db/registry';
+import { isPathWithinRoot, parseLocalDirectoryPath } from '../workspace/path-boundary';
 import { scanTree, type FileTreeScanEntry } from '../../worker/fs/file-tree-service';
-import { gitStatus, type GitStatusResult } from '../../worker/git/git-service';
+import { gitStatus } from '../../worker/git/git-service';
 
 interface FilesIpcMain {
   handle: (channel: string, listener: (...args: any[]) => unknown) => void;
@@ -21,10 +25,41 @@ export interface FilesIpcHandlers {
   loadFileTree: (_event: IpcMainInvokeEvent, input: FileTreeLoadInput) => Promise<FileTreeLoadResponse>;
 }
 
-export interface FilesIpcDependencies {
-  scanTree: (rootDir: string) => Promise<FileTreeScanEntry[]>;
-  gitStatus: (rootDir: string) => Promise<GitStatusResult>;
+interface FileTreeLoadResult {
+  entries: FileTreeScanEntry[];
+  isGitRepo: boolean;
+  statuses: Map<string, GitFileStatusCode>;
 }
+
+export interface FilesIpcDependencies {
+  resolveWorkspaceRootDir: (workspaceId: string) => string;
+  loadTreeForRootDir: (rootDir: string) => Promise<FileTreeLoadResult>;
+}
+
+interface FileTreeWorkerRequest {
+  requestId: string;
+  rootDir: string;
+}
+
+interface FileTreeWorkerResponseSuccess {
+  requestId: string;
+  ok: true;
+  payload: {
+    entries: FileTreeScanEntry[];
+    isGitRepo: boolean;
+    statuses: Record<string, string>;
+  };
+}
+
+interface FileTreeWorkerResponseError {
+  requestId: string;
+  ok: false;
+  error: string;
+}
+
+type FileTreeWorkerResponse = FileTreeWorkerResponseSuccess | FileTreeWorkerResponseError;
+
+const FILE_TREE_WORKER_TIMEOUT_MS = 20_000;
 
 const createEmptyGitSummary = (): GitStatusSummaryRecord => {
   return {
@@ -82,41 +117,165 @@ const mergeTreeWithGitStatus = (
   });
 };
 
-const parseRootDir = (rootDir: string): string => {
-  const trimmed = rootDir.trim();
-  if (trimmed.length === 0) {
-    throw new Error('Root directory is required');
-  }
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
-    throw new Error('Root directory must be a local filesystem path');
-  }
-
-  const resolved = path.resolve(trimmed);
-  if (!fs.existsSync(resolved)) {
-    throw new Error(`Root directory does not exist: ${resolved}`);
-  }
-  if (!fs.statSync(resolved).isDirectory()) {
-    throw new Error(`Root path is not a directory: ${resolved}`);
-  }
-  return resolved;
+const loadTreeInProcess = async (rootDir: string): Promise<FileTreeLoadResult> => {
+  const [entries, git] = await Promise.all([scanTree(rootDir), gitStatus(rootDir)]);
+  return {
+    entries,
+    isGitRepo: git.isGitRepo,
+    statuses: git.statuses
+  };
 };
 
-export const createFilesIpcHandlers = (deps?: Partial<FilesIpcDependencies>): FilesIpcHandlers => {
-  const scanTreeFn = deps?.scanTree ?? ((rootDir: string) => scanTree(rootDir));
-  const gitStatusFn = deps?.gitStatus ?? ((rootDir: string) => gitStatus(rootDir));
+const resolveWorkerEntryPath = (): string => {
+  const candidates = [
+    path.resolve(__dirname, '..', '..', 'worker', 'fs', 'file-tree-worker.js'),
+    path.resolve(process.cwd(), 'dist/worker/fs/file-tree-worker.js')
+  ];
 
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error('File tree worker entry is missing');
+};
+
+const terminateChild = (child: ChildProcess): void => {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  try {
+    child.kill();
+  } catch {
+    // Ignore kill errors during cleanup.
+  }
+};
+
+const toStatusMap = (input: Record<string, string>): Map<string, GitFileStatusCode> => {
+  const statuses = new Map<string, GitFileStatusCode>();
+  for (const [entryPath, rawStatus] of Object.entries(input)) {
+    if (
+      rawStatus === 'M' ||
+      rawStatus === 'A' ||
+      rawStatus === 'D' ||
+      rawStatus === 'R' ||
+      rawStatus === 'C' ||
+      rawStatus === 'U' ||
+      rawStatus === '?' ||
+      rawStatus === '!'
+    ) {
+      statuses.set(entryPath, rawStatus);
+    }
+  }
+  return statuses;
+};
+
+const loadTreeInWorkerProcess = async (rootDir: string): Promise<FileTreeLoadResult> => {
+  const workerEntryPath = resolveWorkerEntryPath();
+
+  return new Promise<FileTreeLoadResult>((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    const child = fork(workerEntryPath, [], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      env: process.env,
+      execArgv: []
+    });
+    let completed = false;
+
+    const cleanup = (): void => {
+      child.removeAllListeners('message');
+      child.removeAllListeners('error');
+      child.removeAllListeners('exit');
+      clearTimeout(timeoutHandle);
+      terminateChild(child);
+    };
+
+    const finish = (fn: () => void): void => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      cleanup();
+      fn();
+    };
+
+    const timeoutHandle = setTimeout(() => {
+      finish(() => {
+        reject(new Error(`File tree worker timed out after ${FILE_TREE_WORKER_TIMEOUT_MS}ms`));
+      });
+    }, FILE_TREE_WORKER_TIMEOUT_MS);
+
+    child.on('message', (message: unknown) => {
+      const response = message as FileTreeWorkerResponse | undefined;
+      if (!response || typeof response.requestId !== 'string' || response.requestId !== requestId) {
+        return;
+      }
+
+      if (!response.ok) {
+        finish(() => {
+          reject(new Error(response.error));
+        });
+        return;
+      }
+
+      finish(() => {
+        resolve({
+          entries: response.payload.entries,
+          isGitRepo: response.payload.isGitRepo,
+          statuses: toStatusMap(response.payload.statuses)
+        });
+      });
+    });
+
+    child.on('error', (error: Error) => {
+      finish(() => {
+        reject(error);
+      });
+    });
+
+    child.on('exit', (code, signal) => {
+      if (completed) {
+        return;
+      }
+      finish(() => {
+        reject(
+          new Error(
+            `File tree worker exited before response (code=${String(code)}, signal=${String(signal)})`
+          )
+        );
+      });
+    });
+
+    const request: FileTreeWorkerRequest = {
+      requestId,
+      rootDir
+    };
+    child.send(request);
+  });
+};
+
+export const createFilesIpcHandlers = (deps: FilesIpcDependencies): FilesIpcHandlers => {
   return {
     loadFileTree: async (_event: IpcMainInvokeEvent, input: FileTreeLoadInput) => {
       const parsed = fileTreeLoadSchema.parse(input);
-      const resolvedRootDir = parseRootDir(parsed.rootDir);
-      const [entries, git] = await Promise.all([scanTreeFn(resolvedRootDir), gitStatusFn(resolvedRootDir)]);
+      const workspaceRootDir = parseLocalDirectoryPath(deps.resolveWorkspaceRootDir(parsed.workspaceId), {
+        requireExists: false
+      });
+      const resolvedRootDir = parseLocalDirectoryPath(parsed.rootDir, { requireExists: true });
 
+      if (!isPathWithinRoot(workspaceRootDir, resolvedRootDir)) {
+        throw new Error('Root directory must stay within workspace root');
+      }
+
+      const loadedTree = await deps.loadTreeForRootDir(resolvedRootDir);
       return {
         rootDir: resolvedRootDir,
         readOnly: true,
-        isGitRepo: git.isGitRepo,
-        gitSummary: summarizeGitStatuses(git.statuses),
-        entries: mergeTreeWithGitStatus(entries, git.statuses)
+        isGitRepo: loadedTree.isGitRepo,
+        gitSummary: summarizeGitStatuses(loadedTree.statuses),
+        entries: mergeTreeWithGitStatus(loadedTree.entries, loadedTree.statuses)
       };
     }
   };
@@ -127,14 +286,56 @@ const resolveIpcMain = (): FilesIpcMain => {
   return ipcMain;
 };
 
+interface RegisteredFilesContext {
+  dbFilePath: string;
+  registry: RegistryRepository;
+}
+
+let registeredFilesContext: RegisteredFilesContext | null = null;
+
+const getOrCreateFilesRegistry = (dbFilePath: string): RegistryRepository => {
+  if (!registeredFilesContext) {
+    registeredFilesContext = {
+      dbFilePath,
+      registry: createRegistryRepository({ dbFilePath })
+    };
+    return registeredFilesContext.registry;
+  }
+
+  if (registeredFilesContext.dbFilePath !== dbFilePath) {
+    registeredFilesContext.registry.close();
+    registeredFilesContext = {
+      dbFilePath,
+      registry: createRegistryRepository({ dbFilePath })
+    };
+  }
+
+  return registeredFilesContext.registry;
+};
+
 export interface RegisterFilesIpcHandlersOptions {
+  dbFilePath: string;
   ipcMain?: FilesIpcMain;
 }
 
-export const registerFilesIpcHandlers = (options: RegisterFilesIpcHandlersOptions = {}): void => {
+export const registerFilesIpcHandlers = (options: RegisterFilesIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
-  const handlers = createFilesIpcHandlers();
+  const registry = getOrCreateFilesRegistry(options.dbFilePath);
+  const handlers = createFilesIpcHandlers({
+    resolveWorkspaceRootDir: (workspaceId: string) => registry.getWorkspace(workspaceId).rootDir,
+    loadTreeForRootDir: loadTreeInWorkerProcess
+  });
 
   ipcMain.removeHandler(IPC_CHANNELS.fileTreeLoad);
   ipcMain.handle(IPC_CHANNELS.fileTreeLoad, handlers.loadFileTree);
 };
+
+export const disposeFilesIpcHandlers = (): void => {
+  if (!registeredFilesContext) {
+    return;
+  }
+  registeredFilesContext.registry.close();
+  registeredFilesContext = null;
+};
+
+export const loadFileTreeForTestsOnly = loadTreeInProcess;
