@@ -1,5 +1,3 @@
-import os from 'node:os';
-import path from 'node:path';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
@@ -26,7 +24,12 @@ export interface WorkspaceIpcDependencies {
   registry: RegistryRepository;
 }
 
-const createHandlers = (deps: WorkspaceIpcDependencies): WorkspaceIpcHandlers => {
+interface WorkspaceIpcMain {
+  handle: (channel: string, listener: (...args: any[]) => unknown) => void;
+  removeHandler: (channel: string) => void;
+}
+
+export const createWorkspaceIpcHandlers = (deps: WorkspaceIpcDependencies): WorkspaceIpcHandlers => {
   return {
     create: async (_event: IpcMainInvokeEvent, input: WorkspaceCreateInput) => {
       const parsed = workspaceCreateSchema.parse(input);
@@ -54,18 +57,50 @@ const createHandlers = (deps: WorkspaceIpcDependencies): WorkspaceIpcHandlers =>
   };
 };
 
-let registryForIpc: RegistryRepository | null = null;
+interface RegisteredWorkspaceIpcContext {
+  dbFilePath: string;
+  registry: RegistryRepository;
+}
 
-const getOrCreateRegistry = (dbFilePath: string): RegistryRepository => {
-  if (!registryForIpc) {
-    registryForIpc = createRegistryRepository({ dbFilePath });
+let registeredWorkspaceIpcContext: RegisteredWorkspaceIpcContext | null = null;
+
+const getOrCreateRegistryForPath = (dbFilePath: string): RegistryRepository => {
+  if (!registeredWorkspaceIpcContext) {
+    registeredWorkspaceIpcContext = {
+      dbFilePath,
+      registry: createRegistryRepository({ dbFilePath })
+    };
+    return registeredWorkspaceIpcContext.registry;
   }
-  return registryForIpc;
+
+  if (registeredWorkspaceIpcContext.dbFilePath !== dbFilePath) {
+    registeredWorkspaceIpcContext.registry.close();
+    registeredWorkspaceIpcContext = {
+      dbFilePath,
+      registry: createRegistryRepository({ dbFilePath })
+    };
+  }
+
+  return registeredWorkspaceIpcContext.registry;
 };
 
-export const registerWorkspaceIpcHandlers = (dbFilePath: string): void => {
+const resolveIpcMain = (): WorkspaceIpcMain => {
   const { ipcMain } = require('electron') as typeof import('electron');
-  const handlers = createHandlers({ registry: getOrCreateRegistry(dbFilePath) });
+  return ipcMain;
+};
+
+export interface RegisterWorkspaceIpcHandlersOptions {
+  dbFilePath: string;
+  ipcMain?: WorkspaceIpcMain;
+}
+
+export const registerWorkspaceIpcHandlers = (
+  options: RegisterWorkspaceIpcHandlersOptions
+): void => {
+  const ipcMain = options.ipcMain ?? resolveIpcMain();
+  const handlers = createWorkspaceIpcHandlers({
+    registry: getOrCreateRegistryForPath(options.dbFilePath)
+  });
 
   ipcMain.removeHandler(IPC_CHANNELS.workspaceCreate);
   ipcMain.removeHandler(IPC_CHANNELS.workspaceList);
@@ -78,28 +113,9 @@ export const registerWorkspaceIpcHandlers = (dbFilePath: string): void => {
   ipcMain.handle(IPC_CHANNELS.workspaceDelete, handlers.delete);
 };
 
-const integrationRegistryPath = path.join(
-  os.tmpdir(),
-  'openweave-tests',
-  `registry-task5-${process.pid}.sqlite`
-);
-
-const integrationHandlers = createHandlers({
-  registry: createRegistryRepository({ dbFilePath: integrationRegistryPath })
-});
-
-export const createWorkspace = (input: WorkspaceCreateInput): Promise<WorkspaceMutationResponse> => {
-  return integrationHandlers.create({} as IpcMainInvokeEvent, input);
-};
-
-export const listWorkspaces = (): ReturnType<WorkspaceIpcHandlers['list']>['workspaces'] => {
-  return integrationHandlers.list({} as IpcMainInvokeEvent).workspaces;
-};
-
-export const openWorkspace = (workspaceId: string): Promise<WorkspaceMutationResponse> => {
-  return integrationHandlers.open({} as IpcMainInvokeEvent, { workspaceId });
-};
-
-export const deleteWorkspace = (workspaceId: string): Promise<WorkspaceDeleteResponse> => {
-  return integrationHandlers.delete({} as IpcMainInvokeEvent, { workspaceId });
+export const disposeWorkspaceIpcHandlers = (): void => {
+  if (registeredWorkspaceIpcContext) {
+    registeredWorkspaceIpcContext.registry.close();
+    registeredWorkspaceIpcContext = null;
+  }
 };

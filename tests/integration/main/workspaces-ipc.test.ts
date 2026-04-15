@@ -1,41 +1,72 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { IpcMainInvokeEvent } from 'electron';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  createWorkspace,
-  deleteWorkspace,
-  listWorkspaces,
-  openWorkspace
+  createWorkspaceIpcHandlers,
+  type WorkspaceIpcHandlers
 } from '../../../src/main/ipc/workspaces';
+import { createRegistryRepository, type RegistryRepository } from '../../../src/main/db/registry';
+
+let testDbDir = '';
+let registry: RegistryRepository;
+let handlers: WorkspaceIpcHandlers;
+
+beforeEach(() => {
+  testDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-workspaces-ipc-'));
+  registry = createRegistryRepository({
+    dbFilePath: path.join(testDbDir, 'registry.sqlite')
+  });
+  handlers = createWorkspaceIpcHandlers({ registry });
+});
+
+afterEach(() => {
+  registry.close();
+  fs.rmSync(testDbDir, { recursive: true, force: true });
+});
 
 describe('workspace IPC flow', () => {
   it('creates a workspace row and returns it in the list', async () => {
     const suffix = Date.now();
-    const result = await createWorkspace({ name: `Demo-${suffix}`, rootDir: `/tmp/demo-${suffix}` });
+    const result = await handlers.create({} as IpcMainInvokeEvent, {
+      name: `Demo-${suffix}`,
+      rootDir: `/tmp/demo-${suffix}`
+    });
     expect(result.workspace.name).toBe(`Demo-${suffix}`);
-    expect(listWorkspaces()[0].rootDir).toBe(`/tmp/demo-${suffix}`);
+    expect(handlers.list({} as IpcMainInvokeEvent).workspaces[0].rootDir).toBe(`/tmp/demo-${suffix}`);
   });
 
   it('updates last opened timestamp on open', async () => {
     const suffix = Date.now();
-    const result = await createWorkspace({
+    const result = await handlers.create({} as IpcMainInvokeEvent, {
       name: `Opened-${suffix}`,
       rootDir: `/tmp/opened-${suffix}`
     });
 
     expect(result.workspace.lastOpenedAtMs).toBeNull();
 
-    const opened = await openWorkspace(result.workspace.id);
+    const opened = await handlers.open({} as IpcMainInvokeEvent, {
+      workspaceId: result.workspace.id
+    });
     expect(opened.workspace.lastOpenedAtMs).toBeTypeOf('number');
   });
 
   it('deletes a workspace row', async () => {
     const suffix = Date.now();
-    const result = await createWorkspace({
+    const result = await handlers.create({} as IpcMainInvokeEvent, {
       name: `Deleted-${suffix}`,
       rootDir: `/tmp/deleted-${suffix}`
     });
 
-    const removed = await deleteWorkspace(result.workspace.id);
+    const removed = await handlers.delete({} as IpcMainInvokeEvent, {
+      workspaceId: result.workspace.id
+    });
     expect(removed.deleted).toBe(true);
-    expect(listWorkspaces().find((workspace) => workspace.id === result.workspace.id)).toBeUndefined();
+    expect(
+      handlers
+        .list({} as IpcMainInvokeEvent)
+        .workspaces.find((workspace) => workspace.id === result.workspace.id)
+    ).toBeUndefined();
   });
 });

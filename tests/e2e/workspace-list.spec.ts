@@ -1,12 +1,18 @@
+import os from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
 
 test('supports create/open/delete from the workspace list page', async () => {
+  const uniqueSuffix = Date.now().toString();
+  const userDataDir = path.join(os.tmpdir(), `openweave-e2e-workspace-list-${uniqueSuffix}`);
   const app = await electron.launch({
-    args: [path.resolve(__dirname, '../../dist/main/main.js')]
+    args: [path.resolve(__dirname, '../../dist/main/main.js')],
+    env: {
+      ...process.env,
+      OPENWEAVE_USER_DATA_DIR: userDataDir
+    }
   });
 
-  const uniqueSuffix = Date.now().toString();
   const workspaceName = `Workspace-${uniqueSuffix}`;
   const workspaceRoot = `/tmp/openweave-${uniqueSuffix}`;
 

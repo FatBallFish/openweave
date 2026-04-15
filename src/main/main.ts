@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import { registerWorkspaceIpcHandlers } from './ipc/workspaces';
+import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
+
+const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
+if (configuredUserDataDir) {
+  app.setPath('userData', path.resolve(configuredUserDataDir));
+}
 
 const createMainWindow = (): BrowserWindow => {
   const mainWindow = new BrowserWindow({
@@ -25,7 +30,9 @@ const createMainWindow = (): BrowserWindow => {
 };
 
 void app.whenReady().then(() => {
-  registerWorkspaceIpcHandlers(path.join(app.getPath('userData'), 'registry.db'));
+  registerWorkspaceIpcHandlers({
+    dbFilePath: path.join(app.getPath('userData'), 'registry.db')
+  });
   createMainWindow();
 
   app.on('activate', () => {
@@ -39,4 +46,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  disposeWorkspaceIpcHandlers();
 });
