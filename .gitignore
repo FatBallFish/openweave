@@ -6,3 +6,7 @@ worktrees/
 !/docs/plans/**
 !/docs/decisions/
 !/docs/decisions/**
+dist/
+node_modules/
+test-results/
+playwright-report/

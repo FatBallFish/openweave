@@ -5,14 +5,12 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "react-jsx",
-    "skipLibCheck": true,
-    "types": ["vitest/globals"]
+    "skipLibCheck": true
   },
   "include": [
     "src/renderer/**/*.ts",
     "src/renderer/**/*.tsx",
-    "src/shared/**/*.ts",
-    "tests/unit/**/*.ts"
+    "src/shared/**/*.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }
