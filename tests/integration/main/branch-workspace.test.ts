@@ -222,6 +222,44 @@ describe('branch workspace flow', () => {
     );
   });
 
+  it('fails closed when branch-workspace link points to an unmanaged cleanup target', async () => {
+    const branchName = `feature/safety-${Date.now().toString()}`;
+    const created = await branchHandlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
+      sourceWorkspaceId,
+      branchName,
+      copyCanvas: false
+    });
+
+    const unsafeTargetDir = path.join(testDir, 'unsafe-cleanup-target');
+    fs.mkdirSync(unsafeTargetDir, { recursive: true });
+    const sentinelFile = path.join(unsafeTargetDir, 'sentinel.txt');
+    writeFile(sentinelFile, 'must-not-delete\n');
+
+    registry.upsertBranchWorkspaceLink({
+      workspaceId: created.workspace.id,
+      sourceWorkspaceId,
+      branchName,
+      sourceRootDir: sourceWorkspaceRootDir,
+      targetRootDir: unsafeTargetDir
+    });
+
+    await expect(
+      workspaceHandlers.delete({} as IpcMainInvokeEvent, {
+        workspaceId: created.workspace.id
+      })
+    ).rejects.toThrow('Refusing cleanup for unmanaged target directory');
+
+    expect(registry.hasWorkspace(created.workspace.id)).toBe(true);
+    expect(registry.getBranchWorkspaceLink(created.workspace.id)?.targetRootDir).toBe(unsafeTargetDir);
+    expect(fs.existsSync(unsafeTargetDir)).toBe(true);
+    expect(fs.existsSync(sentinelFile)).toBe(true);
+    expect(fs.existsSync(created.workspace.rootDir)).toBe(true);
+    expect(branchExists(sourceWorkspaceRootDir, branchName)).toBe(true);
+    expect(runGit(sourceWorkspaceRootDir, ['worktree', 'list', '--porcelain'])).toContain(
+      created.workspace.rootDir
+    );
+  });
+
   it('rolls back workspace row and git artifacts when create fails after worktree setup', async () => {
     const branchName = `feature/rollback-${Date.now().toString()}`;
     const expectedTargetRootDir = toBranchWorkspaceRootDir(sourceWorkspaceRootDir, branchName);

@@ -16,6 +16,7 @@ import type { PortalSessionRecord } from '../../shared/portal/types';
 import type { PortalSessionService } from '../portal/portal-session-service';
 import {
   createGitWorktreeService,
+  toManagedWorktreeTargetDir,
   type GitWorktreeService
 } from '../../worker/git/worktree-service';
 
@@ -60,12 +61,7 @@ const toBranchWorkspaceName = (sourceWorkspaceName: string, branchName: string):
 };
 
 const toBranchWorkspaceRootDir = (sourceRootDir: string, branchName: string): string => {
-  const sourceBaseName = path.basename(sourceRootDir);
-  const branchPathSegments = branchName
-    .split('/')
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0);
-  return path.join(path.dirname(sourceRootDir), '.openweave-worktrees', sourceBaseName, ...branchPathSegments);
+  return toManagedWorktreeTargetDir(sourceRootDir, branchName);
 };
 
 const isPathInsideRoot = (rootDir: string, candidatePath: string): boolean => {
