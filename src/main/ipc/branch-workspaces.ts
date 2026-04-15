@@ -1,6 +1,10 @@
 import path from 'node:path';
 import type { IpcMainInvokeEvent } from 'electron';
-import { IPC_CHANNELS, type WorkspaceMutationResponse } from '../../shared/ipc/contracts';
+import {
+  IPC_CHANNELS,
+  type WorkspaceMutationResponse,
+  type WorkspaceRecord
+} from '../../shared/ipc/contracts';
 import {
   workspaceBranchCreateSchema,
   workspaceIdSchema,
@@ -25,6 +29,7 @@ export interface BranchWorkspaceIpcHandlers {
     _event: IpcMainInvokeEvent,
     input: WorkspaceBranchCreateInput
   ) => Promise<WorkspaceMutationResponse>;
+  cleanupBranchWorkspaceOnDelete: (workspaceId: string) => Promise<void>;
   listWorkspacePortalSessions: (workspaceId: string) => PortalSessionRecord[];
 }
 
@@ -33,6 +38,13 @@ export interface BranchWorkspaceIpcDependencies {
   workspaceDbDir: string;
   gitWorktreeService?: GitWorktreeService;
   portalSessionService?: Pick<PortalSessionService, 'listWorkspaceSessions'>;
+  cloneCanvasLayout?: (options: {
+    workspaceDbDir: string;
+    sourceWorkspaceId: string;
+    sourceWorkspaceRootDir: string;
+    targetWorkspaceId: string;
+    targetWorkspaceRootDir: string;
+  }) => void;
 }
 
 const toWorkspaceDbFileName = (workspaceId: string): string => {
@@ -121,6 +133,7 @@ export const createBranchWorkspaceIpcHandlers = (
   deps: BranchWorkspaceIpcDependencies
 ): BranchWorkspaceIpcHandlers => {
   const gitWorktreeService = deps.gitWorktreeService ?? createGitWorktreeService();
+  const cloneCanvasLayoutHandler = deps.cloneCanvasLayout ?? cloneCanvasLayout;
 
   return {
     createBranchWorkspace: async (
@@ -145,9 +158,16 @@ export const createBranchWorkspaceIpcHandlers = (
           rootDir: worktree.targetDir
         });
         createdWorkspaceId = createdWorkspace.id;
+        deps.registry.upsertBranchWorkspaceLink({
+          workspaceId: createdWorkspace.id,
+          sourceWorkspaceId: sourceWorkspace.id,
+          branchName: worktree.branchName,
+          sourceRootDir,
+          targetRootDir: worktree.targetDir
+        });
 
         if (parsed.copyCanvas) {
-          cloneCanvasLayout({
+          cloneCanvasLayoutHandler({
             workspaceDbDir: deps.workspaceDbDir,
             sourceWorkspaceId: sourceWorkspace.id,
             sourceWorkspaceRootDir: sourceRootDir,
@@ -163,8 +183,29 @@ export const createBranchWorkspaceIpcHandlers = (
         if (createdWorkspaceId) {
           deps.registry.deleteWorkspace(createdWorkspaceId);
         }
+        await gitWorktreeService.cleanup({
+          sourceDir: worktree.sourceDir,
+          branchName: worktree.branchName,
+          targetDir: worktree.targetDir,
+          removeBranch: worktree.createdBranch
+        });
         throw error;
       }
+    },
+    cleanupBranchWorkspaceOnDelete: async (workspaceId: string): Promise<void> => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      const link = deps.registry.getBranchWorkspaceLink(parsedWorkspaceId);
+      if (!link) {
+        return;
+      }
+
+      await gitWorktreeService.cleanup({
+        sourceDir: link.sourceRootDir,
+        branchName: link.branchName,
+        targetDir: link.targetRootDir,
+        removeBranch: true
+      });
+      deps.registry.deleteBranchWorkspaceLink(parsedWorkspaceId);
     },
     listWorkspacePortalSessions: (workspaceId: string): PortalSessionRecord[] => {
       if (!deps.portalSessionService) {
@@ -185,6 +226,7 @@ interface RegisteredBranchWorkspaceContext {
   dbFilePath: string;
   workspaceDbDir: string;
   registry: RegistryRepository;
+  handlers?: BranchWorkspaceIpcHandlers;
 }
 
 let registeredBranchWorkspaceContext: RegisteredBranchWorkspaceContext | null = null;
@@ -224,13 +266,32 @@ export const registerBranchWorkspaceIpcHandlers = (
   options: RegisterBranchWorkspaceIpcHandlersOptions
 ): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
+  const registry = getOrCreateRegistry(options.dbFilePath, options.workspaceDbDir);
   const handlers = createBranchWorkspaceIpcHandlers({
-    registry: getOrCreateRegistry(options.dbFilePath, options.workspaceDbDir),
+    registry,
     workspaceDbDir: options.workspaceDbDir
   });
+  registeredBranchWorkspaceContext = {
+    dbFilePath: options.dbFilePath,
+    workspaceDbDir: options.workspaceDbDir,
+    registry,
+    handlers
+  };
 
   ipcMain.removeHandler(IPC_CHANNELS.workspaceCreateBranch);
   ipcMain.handle(IPC_CHANNELS.workspaceCreateBranch, handlers.createBranchWorkspace);
+};
+
+export const cleanupRegisteredBranchWorkspaceOnDelete = async (
+  workspace: Pick<WorkspaceRecord, 'id'>
+): Promise<void> => {
+  if (!registeredBranchWorkspaceContext) {
+    return;
+  }
+  if (!registeredBranchWorkspaceContext.handlers) {
+    return;
+  }
+  await registeredBranchWorkspaceContext.handlers.cleanupBranchWorkspaceOnDelete(workspace.id);
 };
 
 export const disposeBranchWorkspaceIpcHandlers = (): void => {

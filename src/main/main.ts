@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import {
+  cleanupRegisteredBranchWorkspaceOnDelete,
   disposeBranchWorkspaceIpcHandlers,
   registerBranchWorkspaceIpcHandlers
 } from './ipc/branch-workspaces';
@@ -66,12 +67,20 @@ const createMainWindow = (): BrowserWindow => {
 
 void app.whenReady().then(() => {
   const registryDbFilePath = path.join(app.getPath('userData'), 'registry.db');
+  const workspaceDbDir = path.join(app.getPath('userData'), 'workspaces');
   const enableCrashRecoveryOnOpen = initializeCrashRecoveryMarker();
 
+  registerBranchWorkspaceIpcHandlers({
+    dbFilePath: registryDbFilePath,
+    workspaceDbDir
+  });
   registerWorkspaceIpcHandlers({
     dbFilePath: registryDbFilePath,
     onWorkspaceOpened: (workspaceId: string) => {
       recoverRunsForWorkspace(workspaceId);
+    },
+    onWorkspaceDeleting: async (workspace) => {
+      await cleanupRegisteredBranchWorkspaceOnDelete(workspace);
     },
     onWorkspaceDeleted: (workspaceId: string) => {
       disposeCanvasWorkspaceRepository(workspaceId);
@@ -80,16 +89,12 @@ void app.whenReady().then(() => {
     }
   });
   registerCanvasIpcHandlers({
-    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
+    workspaceDbDir,
     registryDbFilePath
-  });
-  registerBranchWorkspaceIpcHandlers({
-    dbFilePath: registryDbFilePath,
-    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces')
   });
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
-    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
+    workspaceDbDir,
     enableCrashRecoveryOnOpen
   });
   registerFilesIpcHandlers({

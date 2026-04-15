@@ -11,11 +11,13 @@ import {
   type BranchWorkspaceIpcHandlers
 } from '../../../src/main/ipc/branch-workspaces';
 import { createPortalSessionService } from '../../../src/main/portal/portal-session-service';
+import { createWorkspaceIpcHandlers, type WorkspaceIpcHandlers } from '../../../src/main/ipc/workspaces';
 
 let testDir = '';
 let workspaceDbDir = '';
 let registry: RegistryRepository;
-let handlers: BranchWorkspaceIpcHandlers;
+let branchHandlers: BranchWorkspaceIpcHandlers;
+let workspaceHandlers: WorkspaceIpcHandlers;
 let sourceWorkspaceId = '';
 let sourceWorkspaceRootDir = '';
 
@@ -23,14 +25,28 @@ const toWorkspaceDbFileName = (workspaceId: string): string => {
   return workspaceId.replace(/[^a-zA-Z0-9_-]/g, '_');
 };
 
-const runGit = (cwd: string, args: string[]): void => {
-  execFileSync('git', args, {
+const toWorkspaceDbPath = (workspaceId: string): string => {
+  return path.join(workspaceDbDir, `${toWorkspaceDbFileName(workspaceId)}.db`);
+};
+
+const toBranchWorkspaceRootDir = (sourceRootDir: string, branchName: string): string => {
+  const sourceBaseName = path.basename(sourceRootDir);
+  const branchPathSegments = branchName
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+  return path.join(path.dirname(sourceRootDir), '.openweave-worktrees', sourceBaseName, ...branchPathSegments);
+};
+
+const runGit = (cwd: string, args: string[]): string => {
+  return execFileSync('git', args, {
     cwd,
     stdio: 'pipe',
     env: {
       ...process.env,
       LC_ALL: 'C'
-    }
+    },
+    encoding: 'utf8'
   });
 };
 
@@ -47,6 +63,15 @@ const createFixtureRepo = (rootDir: string): void => {
   writeFile(path.join(rootDir, 'src/main.ts'), 'export const value = 1;\n');
   runGit(rootDir, ['add', '.']);
   runGit(rootDir, ['commit', '-m', 'init']);
+};
+
+const branchExists = (repoRootDir: string, branchName: string): boolean => {
+  try {
+    runGit(repoRootDir, ['show-ref', '--verify', `refs/heads/${branchName}`]);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 beforeEach(() => {
@@ -67,7 +92,7 @@ beforeEach(() => {
   sourceWorkspaceId = sourceWorkspace.id;
 
   const sourceRepository = createWorkspaceRepository({
-    dbFilePath: path.join(workspaceDbDir, `${toWorkspaceDbFileName(sourceWorkspaceId)}.db`)
+    dbFilePath: toWorkspaceDbPath(sourceWorkspaceId)
   });
   sourceRepository.saveCanvasState({
     nodes: [
@@ -90,7 +115,7 @@ beforeEach(() => {
         type: 'file-tree',
         x: 300,
         y: 80,
-        rootDir: sourceWorkspaceRootDir
+        rootDir: path.join(sourceWorkspaceRootDir, 'src')
       }
     ],
     edges: []
@@ -117,10 +142,16 @@ beforeEach(() => {
     url: 'http://127.0.0.1:3010/demo'
   });
 
-  handlers = createBranchWorkspaceIpcHandlers({
+  branchHandlers = createBranchWorkspaceIpcHandlers({
     registry,
     workspaceDbDir,
     portalSessionService: portalSessions
+  });
+  workspaceHandlers = createWorkspaceIpcHandlers({
+    registry,
+    onWorkspaceDeleting: async (workspace) => {
+      await branchHandlers.cleanupBranchWorkspaceOnDelete(workspace.id);
+    }
   });
 });
 
@@ -130,28 +161,110 @@ afterEach(() => {
 });
 
 describe('branch workspace flow', () => {
-  it('creates a branch workspace with copied layout but isolated runtime and portal state', async () => {
-    const created = await handlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
+  it('creates a branch workspace with copied canvas layout but isolated run and portal session state', async () => {
+    const branchName = `feature/demo-${Date.now().toString()}`;
+    const created = await branchHandlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
       sourceWorkspaceId,
-      branchName: 'feature/demo',
+      branchName,
       copyCanvas: true
     });
 
     expect(created.workspace.id).not.toBe(sourceWorkspaceId);
-    expect(created.workspace.rootDir).toContain(path.join('feature', 'demo'));
+    expect(created.workspace.rootDir).toBe(toBranchWorkspaceRootDir(sourceWorkspaceRootDir, branchName));
     expect(fs.existsSync(path.join(created.workspace.rootDir, '.git'))).toBe(true);
 
+    const link = registry.getBranchWorkspaceLink(created.workspace.id);
+    expect(link?.workspaceId).toBe(created.workspace.id);
+    expect(link?.sourceWorkspaceId).toBe(sourceWorkspaceId);
+    expect(link?.branchName).toBe(branchName);
+    expect(link?.targetRootDir).toBe(created.workspace.rootDir);
+
     const targetRepository = createWorkspaceRepository({
-      dbFilePath: path.join(workspaceDbDir, `${toWorkspaceDbFileName(created.workspace.id)}.db`)
+      dbFilePath: toWorkspaceDbPath(created.workspace.id)
     });
     const targetCanvas = targetRepository.loadCanvasState();
     const portalNode = targetCanvas.nodes.find((node) => node.type === 'portal');
     const fileTreeNode = targetCanvas.nodes.find((node) => node.type === 'file-tree');
     expect(portalNode?.type === 'portal' ? portalNode.url : null).toBe('http://127.0.0.1:3010/demo');
-    expect(fileTreeNode?.type === 'file-tree' ? fileTreeNode.rootDir : '').toBe(created.workspace.rootDir);
+    expect(fileTreeNode?.type === 'file-tree' ? fileTreeNode.rootDir : '').toBe(
+      path.join(created.workspace.rootDir, 'src')
+    );
     expect(targetRepository.listRuns()).toHaveLength(0);
     targetRepository.close();
 
-    expect(handlers.listWorkspacePortalSessions(created.workspace.id)).toHaveLength(0);
+    expect(branchHandlers.listWorkspacePortalSessions(created.workspace.id)).toHaveLength(0);
+  });
+
+  it('deletes branch workspace by cleaning up git worktree and branch', async () => {
+    const branchName = `feature/delete-${Date.now().toString()}`;
+    const created = await branchHandlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
+      sourceWorkspaceId,
+      branchName,
+      copyCanvas: false
+    });
+
+    expect(branchExists(sourceWorkspaceRootDir, branchName)).toBe(true);
+    expect(fs.existsSync(created.workspace.rootDir)).toBe(true);
+    expect(runGit(sourceWorkspaceRootDir, ['worktree', 'list', '--porcelain'])).toContain(
+      created.workspace.rootDir
+    );
+
+    const removed = await workspaceHandlers.delete({} as IpcMainInvokeEvent, {
+      workspaceId: created.workspace.id
+    });
+    expect(removed.deleted).toBe(true);
+    expect(registry.hasWorkspace(created.workspace.id)).toBe(false);
+    expect(registry.getBranchWorkspaceLink(created.workspace.id)).toBeNull();
+    expect(branchExists(sourceWorkspaceRootDir, branchName)).toBe(false);
+    expect(fs.existsSync(created.workspace.rootDir)).toBe(false);
+    expect(runGit(sourceWorkspaceRootDir, ['worktree', 'list', '--porcelain'])).not.toContain(
+      created.workspace.rootDir
+    );
+  });
+
+  it('rolls back workspace row and git artifacts when create fails after worktree setup', async () => {
+    const branchName = `feature/rollback-${Date.now().toString()}`;
+    const expectedTargetRootDir = toBranchWorkspaceRootDir(sourceWorkspaceRootDir, branchName);
+    const failingHandlers = createBranchWorkspaceIpcHandlers({
+      registry,
+      workspaceDbDir,
+      cloneCanvasLayout: () => {
+        throw new Error('clone failed intentionally');
+      }
+    });
+
+    await expect(
+      failingHandlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
+        sourceWorkspaceId,
+        branchName,
+        copyCanvas: true
+      })
+    ).rejects.toThrow('clone failed intentionally');
+
+    const remainingWorkspaces = registry.listWorkspaces();
+    expect(remainingWorkspaces).toHaveLength(1);
+    expect(remainingWorkspaces[0].id).toBe(sourceWorkspaceId);
+    expect(branchExists(sourceWorkspaceRootDir, branchName)).toBe(false);
+    expect(fs.existsSync(expectedTargetRootDir)).toBe(false);
+    expect(runGit(sourceWorkspaceRootDir, ['worktree', 'list', '--porcelain'])).not.toContain(
+      expectedTargetRootDir
+    );
+  });
+
+  it('rejects option-like branch names', async () => {
+    const branchName = '--dangerous';
+    const expectedTargetRootDir = toBranchWorkspaceRootDir(sourceWorkspaceRootDir, branchName);
+
+    await expect(
+      branchHandlers.createBranchWorkspace({} as IpcMainInvokeEvent, {
+        sourceWorkspaceId,
+        branchName,
+        copyCanvas: false
+      })
+    ).rejects.toThrow('Branch name cannot start with -');
+
+    expect(registry.listWorkspaces()).toHaveLength(1);
+    expect(branchExists(sourceWorkspaceRootDir, branchName)).toBe(false);
+    expect(fs.existsSync(expectedTargetRootDir)).toBe(false);
   });
 });

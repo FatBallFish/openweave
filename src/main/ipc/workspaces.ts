@@ -1,6 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
+  type WorkspaceRecord,
   type WorkspaceDeleteResponse,
   type WorkspaceListResponse,
   type WorkspaceMutationResponse
@@ -24,6 +25,7 @@ export interface WorkspaceIpcDependencies {
   registry: RegistryRepository;
   onWorkspaceCreated?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceOpened?: (workspaceId: string) => void | Promise<void>;
+  onWorkspaceDeleting?: (workspace: WorkspaceRecord) => void | Promise<void>;
   onWorkspaceDeleted?: (workspaceId: string) => void;
 }
 
@@ -56,6 +58,13 @@ export const createWorkspaceIpcHandlers = (deps: WorkspaceIpcDependencies): Work
     },
     delete: async (_event: IpcMainInvokeEvent, input: { workspaceId: string }) => {
       const parsed = workspaceDeleteSchema.parse(input);
+      if (!deps.registry.hasWorkspace(parsed.workspaceId)) {
+        return {
+          deleted: false
+        };
+      }
+      const workspace = deps.registry.getWorkspace(parsed.workspaceId);
+      await deps.onWorkspaceDeleting?.(workspace);
       const deleted = deps.registry.deleteWorkspace(parsed.workspaceId);
       if (deleted) {
         deps.onWorkspaceDeleted?.(parsed.workspaceId);
@@ -104,6 +113,7 @@ export interface RegisterWorkspaceIpcHandlersOptions {
   ipcMain?: WorkspaceIpcMain;
   onWorkspaceCreated?: (workspaceId: string) => void | Promise<void>;
   onWorkspaceOpened?: (workspaceId: string) => void | Promise<void>;
+  onWorkspaceDeleting?: (workspace: WorkspaceRecord) => void | Promise<void>;
   onWorkspaceDeleted?: (workspaceId: string) => void;
 }
 
@@ -115,6 +125,7 @@ export const registerWorkspaceIpcHandlers = (
     registry: getOrCreateRegistryForPath(options.dbFilePath),
     onWorkspaceCreated: options.onWorkspaceCreated,
     onWorkspaceOpened: options.onWorkspaceOpened,
+    onWorkspaceDeleting: options.onWorkspaceDeleting,
     onWorkspaceDeleted: options.onWorkspaceDeleted
   });
 

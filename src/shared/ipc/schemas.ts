@@ -23,6 +23,9 @@ export const workspaceBranchCreateSchema = z.object({
     .trim()
     .min(1)
     .regex(/^[A-Za-z0-9._/-]+$/, 'Branch name contains unsupported characters')
+    .refine((value) => !value.startsWith('-'), {
+      message: 'Branch name cannot start with -'
+    })
     .refine((value) => !value.startsWith('/') && !value.endsWith('/'), {
       message: 'Branch name cannot start or end with /'
     })

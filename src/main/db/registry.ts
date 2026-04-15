@@ -14,6 +14,15 @@ interface WorkspaceRow {
   last_opened_at_ms: number | null;
 }
 
+interface BranchWorkspaceLinkRow {
+  workspace_id: string;
+  source_workspace_id: string;
+  branch_name: string;
+  source_root_dir: string;
+  target_root_dir: string;
+  created_at_ms: number;
+}
+
 const fallbackMigrationSql = `
 CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
@@ -26,6 +35,18 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_updated_at_ms
   ON workspaces (updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS workspace_branch_links (
+  workspace_id TEXT PRIMARY KEY,
+  source_workspace_id TEXT NOT NULL,
+  branch_name TEXT NOT NULL,
+  source_root_dir TEXT NOT NULL,
+  target_root_dir TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_branch_links_source_workspace_id
+  ON workspace_branch_links (source_workspace_id);
 `;
 
 const selectWorkspaceByIdSql = `
@@ -57,10 +78,69 @@ DELETE FROM workspaces
 WHERE id = @id
 `;
 
+const upsertBranchWorkspaceLinkSql = `
+INSERT INTO workspace_branch_links (
+  workspace_id,
+  source_workspace_id,
+  branch_name,
+  source_root_dir,
+  target_root_dir,
+  created_at_ms
+)
+VALUES (
+  @workspace_id,
+  @source_workspace_id,
+  @branch_name,
+  @source_root_dir,
+  @target_root_dir,
+  @created_at_ms
+)
+ON CONFLICT(workspace_id) DO UPDATE SET
+  source_workspace_id = excluded.source_workspace_id,
+  branch_name = excluded.branch_name,
+  source_root_dir = excluded.source_root_dir,
+  target_root_dir = excluded.target_root_dir,
+  created_at_ms = excluded.created_at_ms
+`;
+
+const selectBranchWorkspaceLinkSql = `
+SELECT
+  workspace_id,
+  source_workspace_id,
+  branch_name,
+  source_root_dir,
+  target_root_dir,
+  created_at_ms
+FROM workspace_branch_links
+WHERE workspace_id = @workspace_id
+`;
+
+const deleteBranchWorkspaceLinkSql = `
+DELETE FROM workspace_branch_links
+WHERE workspace_id = @workspace_id
+`;
+
 export interface RegistryRepositoryOptions {
   dbFilePath: string;
   now?: () => number;
   randomId?: () => string;
+}
+
+export interface BranchWorkspaceLinkRecord {
+  workspaceId: string;
+  sourceWorkspaceId: string;
+  branchName: string;
+  sourceRootDir: string;
+  targetRootDir: string;
+  createdAtMs: number;
+}
+
+export interface UpsertBranchWorkspaceLinkInput {
+  workspaceId: string;
+  sourceWorkspaceId: string;
+  branchName: string;
+  sourceRootDir: string;
+  targetRootDir: string;
 }
 
 export interface RegistryRepository {
@@ -69,6 +149,9 @@ export interface RegistryRepository {
   getWorkspace: (workspaceId: string) => WorkspaceRecord;
   hasWorkspace: (workspaceId: string) => boolean;
   openWorkspace: (workspaceId: string) => WorkspaceRecord;
+  upsertBranchWorkspaceLink: (input: UpsertBranchWorkspaceLinkInput) => BranchWorkspaceLinkRecord;
+  getBranchWorkspaceLink: (workspaceId: string) => BranchWorkspaceLinkRecord | null;
+  deleteBranchWorkspaceLink: (workspaceId: string) => void;
   deleteWorkspace: (workspaceId: string) => boolean;
   close: () => void;
 }
@@ -81,6 +164,17 @@ const mapWorkspaceRow = (row: WorkspaceRow): WorkspaceRecord => {
     createdAtMs: row.created_at_ms,
     updatedAtMs: row.updated_at_ms,
     lastOpenedAtMs: row.last_opened_at_ms
+  };
+};
+
+const mapBranchWorkspaceLinkRow = (row: BranchWorkspaceLinkRow): BranchWorkspaceLinkRecord => {
+  return {
+    workspaceId: row.workspace_id,
+    sourceWorkspaceId: row.source_workspace_id,
+    branchName: row.branch_name,
+    sourceRootDir: row.source_root_dir,
+    targetRootDir: row.target_root_dir,
+    createdAtMs: row.created_at_ms
   };
 };
 
@@ -160,8 +254,47 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
 
       return getWorkspaceById(db, parsedWorkspaceId);
     },
+    upsertBranchWorkspaceLink: (input: UpsertBranchWorkspaceLinkInput): BranchWorkspaceLinkRecord => {
+      const timestamp = now();
+      const workspaceId = workspaceIdSchema.parse(input.workspaceId);
+      const sourceWorkspaceId = workspaceIdSchema.parse(input.sourceWorkspaceId);
+
+      db.prepare(upsertBranchWorkspaceLinkSql).run({
+        workspace_id: workspaceId,
+        source_workspace_id: sourceWorkspaceId,
+        branch_name: input.branchName,
+        source_root_dir: input.sourceRootDir,
+        target_root_dir: input.targetRootDir,
+        created_at_ms: timestamp
+      });
+
+      const row = db.prepare(selectBranchWorkspaceLinkSql).get({ workspace_id: workspaceId }) as
+        | BranchWorkspaceLinkRow
+        | undefined;
+      if (!row) {
+        throw new Error(`Branch workspace link not found: ${workspaceId}`);
+      }
+      return mapBranchWorkspaceLinkRow(row);
+    },
+    getBranchWorkspaceLink: (workspaceId: string): BranchWorkspaceLinkRecord | null => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      const row = db.prepare(selectBranchWorkspaceLinkSql).get({
+        workspace_id: parsedWorkspaceId
+      }) as BranchWorkspaceLinkRow | undefined;
+      if (!row) {
+        return null;
+      }
+      return mapBranchWorkspaceLinkRow(row);
+    },
+    deleteBranchWorkspaceLink: (workspaceId: string): void => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      db.prepare(deleteBranchWorkspaceLinkSql).run({
+        workspace_id: parsedWorkspaceId
+      });
+    },
     deleteWorkspace: (workspaceId: string): boolean => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      db.prepare(deleteBranchWorkspaceLinkSql).run({ workspace_id: parsedWorkspaceId });
       const result = db.prepare(deleteWorkspaceSql).run({ id: parsedWorkspaceId });
       return result.changes > 0;
     },
