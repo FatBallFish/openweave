@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync as NodeDatabaseSync } from 'node:sqlite';
-import { canvasStateSchema, type CanvasStateInput, type NoteNodeInput } from '../../shared/ipc/schemas';
+import {
+  canvasStateSchema,
+  type CanvasNodeInput,
+  type CanvasStateInput,
+  type NoteNodeInput,
+  type TerminalNodeInput
+} from '../../shared/ipc/schemas';
 
 interface CanvasNodeRow {
   id: string;
@@ -99,7 +105,19 @@ const parseNotePayload = (payloadJson: string): { contentMd: string } => {
   }
 };
 
+const parseTerminalPayload = (payloadJson: string): { command: string } => {
+  try {
+    const parsed = JSON.parse(payloadJson) as { command?: unknown };
+    return {
+      command: typeof parsed.command === 'string' ? parsed.command : ''
+    };
+  } catch {
+    return { command: '' };
+  }
+};
+
 export interface NoteNodeDraft extends NoteNodeInput {}
+export interface TerminalNodeDraft extends TerminalNodeInput {}
 
 export const serializeNoteNode = (node: NoteNodeDraft): {
   id: string;
@@ -117,18 +135,56 @@ export const serializeNoteNode = (node: NoteNodeDraft): {
   };
 };
 
-const mapNodeRow = (row: CanvasNodeRow): NoteNodeInput => {
-  if (row.node_type !== 'note') {
-    throw new Error(`Unsupported canvas node type: ${row.node_type}`);
+export const serializeTerminalNode = (node: TerminalNodeDraft): {
+  id: string;
+  node_type: 'terminal';
+  x: number;
+  y: number;
+  payload_json: string;
+} => {
+  return {
+    id: node.id,
+    node_type: 'terminal',
+    x: node.x,
+    y: node.y,
+    payload_json: JSON.stringify({ command: node.command })
+  };
+};
+
+const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
+  if (row.node_type === 'note') {
+    const payload = parseNotePayload(row.payload_json);
+    return {
+      id: row.id,
+      type: 'note',
+      x: row.x,
+      y: row.y,
+      contentMd: payload.contentMd
+    };
   }
 
-  const payload = parseNotePayload(row.payload_json);
+  if (row.node_type === 'terminal') {
+    const payload = parseTerminalPayload(row.payload_json);
+    return {
+      id: row.id,
+      type: 'terminal',
+      x: row.x,
+      y: row.y,
+      command: payload.command
+    };
+  }
+
+  throw new Error(`Unsupported canvas node type: ${row.node_type}`);
+};
+
+const serializeCanvasNode = (node: CanvasNodeInput):
+  | ReturnType<typeof serializeNoteNode>
+  | ReturnType<typeof serializeTerminalNode> => {
+  if (node.type === 'note') {
+    return serializeNoteNode(node);
+  }
   return {
-    id: row.id,
-    type: 'note',
-    x: row.x,
-    y: row.y,
-    contentMd: payload.contentMd
+    ...serializeTerminalNode(node)
   };
 };
 
@@ -189,7 +245,7 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
         db.prepare(deleteAllNodesSql).run();
 
         for (const node of parsed.nodes) {
-          const serialized = serializeNoteNode(node);
+          const serialized = serializeCanvasNode(node);
           db.prepare(insertNodeSql).run({
             ...serialized,
             created_at_ms: timestamp,

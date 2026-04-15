@@ -1,10 +1,15 @@
 import { useSyncExternalStore } from 'react';
 import type { OpenWeaveShellBridge } from '../../../shared/ipc/contracts';
-import type { CanvasStateInput, NoteNodeInput } from '../../../shared/ipc/schemas';
+import type {
+  CanvasNodeInput,
+  CanvasStateInput,
+  NoteNodeInput,
+  TerminalNodeInput
+} from '../../../shared/ipc/schemas';
 
 interface CanvasState {
   workspaceId: string | null;
-  nodes: NoteNodeInput[];
+  nodes: CanvasNodeInput[];
   edges: CanvasStateInput['edges'];
   loading: boolean;
   errorMessage: string | null;
@@ -55,9 +60,24 @@ const createNoteNode = (): NoteNodeInput => {
   };
 };
 
+const createTerminalNode = (): TerminalNodeInput => {
+  const fallbackId = `terminal-${Date.now()}`;
+  const generatedId =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : fallbackId;
+  return {
+    id: `terminal-${generatedId}`,
+    type: 'terminal',
+    x: 160,
+    y: 120,
+    command: 'echo hello'
+  };
+};
+
 const persistCanvasState = async (
   workspaceId: string,
-  nodes: NoteNodeInput[],
+  nodes: CanvasNodeInput[],
   edges: CanvasStateInput['edges']
 ): Promise<void> => {
   const requestId = ++latestSaveRequestId;
@@ -130,6 +150,24 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
+  addTerminalNode: async (): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = [...state.nodes, createTerminalNode()];
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save terminal node';
+      setState({ errorMessage });
+    }
+  },
   updateNoteNode: async (
     nodeId: string,
     patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'>>
@@ -140,7 +178,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const nextNodes = state.nodes.map((node) => {
-      if (node.id !== nodeId) {
+      if (node.id !== nodeId || node.type !== 'note') {
         return node;
       }
 
@@ -158,6 +196,37 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to update note node';
+      setState({ errorMessage });
+    }
+  },
+  updateTerminalNode: async (
+    nodeId: string,
+    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command'>>
+  ): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = state.nodes.map((node) => {
+      if (node.id !== nodeId || node.type !== 'terminal') {
+        return node;
+      }
+
+      return {
+        ...node,
+        ...patch
+      };
+    });
+
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update terminal node';
       setState({ errorMessage });
     }
   }

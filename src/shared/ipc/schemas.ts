@@ -23,6 +23,16 @@ export const noteNodeSchema = z.object({
   contentMd: z.string()
 });
 
+export const terminalNodeSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.literal('terminal'),
+  x: z.number().finite(),
+  y: z.number().finite(),
+  command: z.string()
+});
+
+export const canvasNodeSchema = z.discriminatedUnion('type', [noteNodeSchema, terminalNodeSchema]);
+
 export const canvasEdgeSchema = z.object({
   id: z.string().trim().min(1),
   sourceNodeId: z.string().trim().min(1),
@@ -30,7 +40,7 @@ export const canvasEdgeSchema = z.object({
 });
 
 export const canvasStateSchema = z.object({
-  nodes: z.array(noteNodeSchema),
+  nodes: z.array(canvasNodeSchema),
   edges: z.array(canvasEdgeSchema)
 });
 
@@ -43,11 +53,38 @@ export const canvasSaveSchema = z.object({
   state: canvasStateSchema
 });
 
+export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude']);
+
+export const runStatusSchema = z.enum(['queued', 'running', 'completed', 'failed']);
+
+export const runStartSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  runtime: runRuntimeSchema,
+  command: z.string().trim().min(1)
+});
+
+export const runGetSchema = z.object({
+  runId: z.string().trim().min(1)
+});
+
+export const runListSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1)
+});
+
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
 export type NoteNodeInput = z.infer<typeof noteNodeSchema>;
+export type TerminalNodeInput = z.infer<typeof terminalNodeSchema>;
+export type CanvasNodeInput = z.infer<typeof canvasNodeSchema>;
 export type CanvasEdgeInput = z.infer<typeof canvasEdgeSchema>;
 export type CanvasStateInput = z.infer<typeof canvasStateSchema>;
 export type CanvasLoadInput = z.infer<typeof canvasLoadSchema>;
 export type CanvasSaveInput = z.infer<typeof canvasSaveSchema>;
+export type RunRuntimeInput = z.infer<typeof runRuntimeSchema>;
+export type RunStatusInput = z.infer<typeof runStatusSchema>;
+export type RunStartInput = z.infer<typeof runStartSchema>;
+export type RunGetInput = z.infer<typeof runGetSchema>;
+export type RunListInput = z.infer<typeof runListSchema>;
