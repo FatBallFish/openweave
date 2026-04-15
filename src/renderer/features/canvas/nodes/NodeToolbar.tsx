@@ -2,9 +2,15 @@ interface NodeToolbarProps {
   disabled: boolean;
   onAddNote: () => void;
   onAddTerminal: () => void;
+  onAddFileTree: () => void;
 }
 
-export const NodeToolbar = ({ disabled, onAddNote, onAddTerminal }: NodeToolbarProps): JSX.Element => {
+export const NodeToolbar = ({
+  disabled,
+  onAddNote,
+  onAddTerminal,
+  onAddFileTree
+}: NodeToolbarProps): JSX.Element => {
   return (
     <div
       data-testid="node-toolbar"
@@ -20,6 +26,14 @@ export const NodeToolbar = ({ disabled, onAddNote, onAddTerminal }: NodeToolbarP
         type="button"
       >
         Add terminal
+      </button>
+      <button
+        data-testid="canvas-add-file-tree"
+        disabled={disabled}
+        onClick={onAddFileTree}
+        type="button"
+      >
+        Add file tree
       </button>
     </div>
   );

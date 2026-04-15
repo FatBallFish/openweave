@@ -3,6 +3,7 @@ import type { OpenWeaveShellBridge } from '../../../shared/ipc/contracts';
 import type {
   CanvasNodeInput,
   CanvasStateInput,
+  FileTreeNodeInput,
   NoteNodeInput,
   TerminalNodeInput
 } from '../../../shared/ipc/schemas';
@@ -72,6 +73,21 @@ const createTerminalNode = (): TerminalNodeInput => {
     x: 160,
     y: 120,
     command: 'echo hello'
+  };
+};
+
+const createFileTreeNode = (rootDir: string): FileTreeNodeInput => {
+  const fallbackId = `file-tree-${Date.now()}`;
+  const generatedId =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : fallbackId;
+  return {
+    id: `file-tree-${generatedId}`,
+    type: 'file-tree',
+    x: 240,
+    y: 120,
+    rootDir
   };
 };
 
@@ -168,6 +184,24 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
+  addFileTreeNode: async (rootDir: string): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = [...state.nodes, createFileTreeNode(rootDir)];
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save file tree node';
+      setState({ errorMessage });
+    }
+  },
   updateNoteNode: async (
     nodeId: string,
     patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'>>
@@ -227,6 +261,37 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to update terminal node';
+      setState({ errorMessage });
+    }
+  },
+  updateFileTreeNode: async (
+    nodeId: string,
+    patch: Partial<Pick<FileTreeNodeInput, 'x' | 'y'>>
+  ): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextNodes = state.nodes.map((node) => {
+      if (node.id !== nodeId || node.type !== 'file-tree') {
+        return node;
+      }
+
+      return {
+        ...node,
+        ...patch
+      };
+    });
+
+    setState({ nodes: nextNodes, errorMessage: null });
+    try {
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update file tree node';
       setState({ errorMessage });
     }
   }

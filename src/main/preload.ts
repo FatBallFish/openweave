@@ -3,6 +3,7 @@ import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts
 import type {
   CanvasLoadInput,
   CanvasSaveInput,
+  FileTreeLoadInput,
   RunGetInput,
   RunListInput,
   RunStartInput,
@@ -30,6 +31,9 @@ const shellBridge: OpenWeaveShellBridge = {
     startRun: (input: RunStartInput) => ipcRenderer.invoke(IPC_CHANNELS.runStart, input),
     getRun: (input: RunGetInput) => ipcRenderer.invoke(IPC_CHANNELS.runGet, input),
     listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input)
+  },
+  files: {
+    loadFileTree: (input: FileTreeLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.fileTreeLoad, input)
   }
 };
 

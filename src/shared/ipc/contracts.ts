@@ -2,6 +2,7 @@ import type {
   CanvasLoadInput,
   CanvasSaveInput,
   CanvasStateInput,
+  FileTreeLoadInput,
   RunGetInput,
   RunListInput,
   RunRuntimeInput,
@@ -21,7 +22,8 @@ export const IPC_CHANNELS = {
   canvasSave: 'canvas:save',
   runStart: 'run:start',
   runGet: 'run:get',
-  runList: 'run:list'
+  runList: 'run:list',
+  fileTreeLoad: 'file-tree:load'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -81,6 +83,33 @@ export interface RunListResponse {
   runs: RunRecord[];
 }
 
+export type GitFileStatusCode = 'M' | 'A' | 'D' | 'R' | 'C' | 'U' | '?' | '!';
+
+export interface FileTreeEntryRecord {
+  path: string;
+  kind: 'file' | 'directory';
+  gitStatus: GitFileStatusCode | null;
+}
+
+export interface GitStatusSummaryRecord {
+  modified: number;
+  added: number;
+  deleted: number;
+  renamed: number;
+  copied: number;
+  unmerged: number;
+  untracked: number;
+  ignored: number;
+}
+
+export interface FileTreeLoadResponse {
+  rootDir: string;
+  readOnly: true;
+  isGitRepo: boolean;
+  gitSummary: GitStatusSummaryRecord;
+  entries: FileTreeEntryRecord[];
+}
+
 export interface WorkspaceBridgeApi {
   createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceMutationResponse>;
   listWorkspaces: () => Promise<WorkspaceListResponse>;
@@ -99,10 +128,15 @@ export interface RunsBridgeApi {
   listRuns: (input: RunListInput) => Promise<RunListResponse>;
 }
 
+export interface FilesBridgeApi {
+  loadFileTree: (input: FileTreeLoadInput) => Promise<FileTreeLoadResponse>;
+}
+
 export interface OpenWeaveShellBridge {
   platform: string;
   ipcChannels: typeof IPC_CHANNELS;
   workspaces: WorkspaceBridgeApi;
   canvas: CanvasBridgeApi;
   runs: RunsBridgeApi;
+  files: FilesBridgeApi;
 }

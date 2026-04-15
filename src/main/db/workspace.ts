@@ -5,6 +5,7 @@ import {
   canvasStateSchema,
   type CanvasNodeInput,
   type CanvasStateInput,
+  type FileTreeNodeInput,
   type NoteNodeInput,
   type TerminalNodeInput
 } from '../../shared/ipc/schemas';
@@ -116,8 +117,20 @@ const parseTerminalPayload = (payloadJson: string): { command: string } => {
   }
 };
 
+const parseFileTreePayload = (payloadJson: string): { rootDir: string } => {
+  try {
+    const parsed = JSON.parse(payloadJson) as { rootDir?: unknown };
+    return {
+      rootDir: typeof parsed.rootDir === 'string' ? parsed.rootDir : ''
+    };
+  } catch {
+    return { rootDir: '' };
+  }
+};
+
 export interface NoteNodeDraft extends NoteNodeInput {}
 export interface TerminalNodeDraft extends TerminalNodeInput {}
+export interface FileTreeNodeDraft extends FileTreeNodeInput {}
 
 export const serializeNoteNode = (node: NoteNodeDraft): {
   id: string;
@@ -151,6 +164,22 @@ export const serializeTerminalNode = (node: TerminalNodeDraft): {
   };
 };
 
+export const serializeFileTreeNode = (node: FileTreeNodeDraft): {
+  id: string;
+  node_type: 'file-tree';
+  x: number;
+  y: number;
+  payload_json: string;
+} => {
+  return {
+    id: node.id,
+    node_type: 'file-tree',
+    x: node.x,
+    y: node.y,
+    payload_json: JSON.stringify({ rootDir: node.rootDir })
+  };
+};
+
 const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
   if (row.node_type === 'note') {
     const payload = parseNotePayload(row.payload_json);
@@ -174,14 +203,31 @@ const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
     };
   }
 
+  if (row.node_type === 'file-tree') {
+    const payload = parseFileTreePayload(row.payload_json);
+    return {
+      id: row.id,
+      type: 'file-tree',
+      x: row.x,
+      y: row.y,
+      rootDir: payload.rootDir
+    };
+  }
+
   throw new Error(`Unsupported canvas node type: ${row.node_type}`);
 };
 
 const serializeCanvasNode = (node: CanvasNodeInput):
   | ReturnType<typeof serializeNoteNode>
-  | ReturnType<typeof serializeTerminalNode> => {
+  | ReturnType<typeof serializeTerminalNode>
+  | ReturnType<typeof serializeFileTreeNode> => {
   if (node.type === 'note') {
     return serializeNoteNode(node);
+  }
+  if (node.type === 'file-tree') {
+    return {
+      ...serializeFileTreeNode(node)
+    };
   }
   return {
     ...serializeTerminalNode(node)

@@ -31,7 +31,19 @@ export const terminalNodeSchema = z.object({
   command: z.string()
 });
 
-export const canvasNodeSchema = z.discriminatedUnion('type', [noteNodeSchema, terminalNodeSchema]);
+export const fileTreeNodeSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.literal('file-tree'),
+  x: z.number().finite(),
+  y: z.number().finite(),
+  rootDir: z.string().trim().min(1)
+});
+
+export const canvasNodeSchema = z.discriminatedUnion('type', [
+  noteNodeSchema,
+  terminalNodeSchema,
+  fileTreeNodeSchema
+]);
 
 export const canvasEdgeSchema = z.object({
   id: z.string().trim().min(1),
@@ -74,11 +86,22 @@ export const runListSchema = z.object({
   nodeId: z.string().trim().min(1)
 });
 
+export const fileTreeLoadSchema = z.object({
+  rootDir: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value), {
+      message: 'Root directory must be a local filesystem path'
+    })
+});
+
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
 export type NoteNodeInput = z.infer<typeof noteNodeSchema>;
 export type TerminalNodeInput = z.infer<typeof terminalNodeSchema>;
+export type FileTreeNodeInput = z.infer<typeof fileTreeNodeSchema>;
 export type CanvasNodeInput = z.infer<typeof canvasNodeSchema>;
 export type CanvasEdgeInput = z.infer<typeof canvasEdgeSchema>;
 export type CanvasStateInput = z.infer<typeof canvasStateSchema>;
@@ -89,3 +112,4 @@ export type RunStatusInput = z.infer<typeof runStatusSchema>;
 export type RunStartInput = z.infer<typeof runStartSchema>;
 export type RunGetInput = z.infer<typeof runGetSchema>;
 export type RunListInput = z.infer<typeof runListSchema>;
+export type FileTreeLoadInput = z.infer<typeof fileTreeLoadSchema>;

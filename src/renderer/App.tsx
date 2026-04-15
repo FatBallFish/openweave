@@ -20,7 +20,11 @@ export const App = (): JSX.Element => {
       <p data-testid="app-shell-subtitle">Electron shell ready for MVP tasks.</p>
       <WorkspaceListPage />
       {activeWorkspace ? (
-        <WorkspaceCanvasPage workspaceId={activeWorkspace.id} workspaceName={activeWorkspace.name} />
+        <WorkspaceCanvasPage
+          workspaceId={activeWorkspace.id}
+          workspaceName={activeWorkspace.name}
+          workspaceRootDir={activeWorkspace.rootDir}
+        />
       ) : null}
     </main>
   );
