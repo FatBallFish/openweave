@@ -140,6 +140,16 @@ const mapEdgeRow = (row: CanvasEdgeRow): CanvasStateInput['edges'][number] => {
   };
 };
 
+const sanitizeCanvasState = (state: CanvasStateInput): CanvasStateInput => {
+  const nodeIds = new Set<string>(state.nodes.map((node) => node.id));
+  return {
+    nodes: state.nodes,
+    edges: state.edges.filter(
+      (edge) => nodeIds.has(edge.sourceNodeId) && nodeIds.has(edge.targetNodeId)
+    )
+  };
+};
+
 export interface WorkspaceRepositoryOptions {
   dbFilePath: string;
   now?: () => number;
@@ -163,13 +173,14 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
     loadCanvasState: (): CanvasStateInput => {
       const nodeRows = db.prepare(selectNodesSql).all() as unknown as CanvasNodeRow[];
       const edgeRows = db.prepare(selectEdgesSql).all() as unknown as CanvasEdgeRow[];
-      return canvasStateSchema.parse({
+      const parsed = canvasStateSchema.parse({
         nodes: nodeRows.map(mapNodeRow),
         edges: edgeRows.map(mapEdgeRow)
       });
+      return sanitizeCanvasState(parsed);
     },
     saveCanvasState: (state: CanvasStateInput): CanvasStateInput => {
-      const parsed = canvasStateSchema.parse(state);
+      const parsed = sanitizeCanvasState(canvasStateSchema.parse(state));
       const timestamp = now();
 
       db.exec('BEGIN');

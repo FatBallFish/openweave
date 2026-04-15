@@ -22,6 +22,7 @@ export interface WorkspaceIpcHandlers {
 
 export interface WorkspaceIpcDependencies {
   registry: RegistryRepository;
+  onWorkspaceDeleted?: (workspaceId: string) => void;
 }
 
 interface WorkspaceIpcMain {
@@ -50,8 +51,12 @@ export const createWorkspaceIpcHandlers = (deps: WorkspaceIpcDependencies): Work
     },
     delete: async (_event: IpcMainInvokeEvent, input: { workspaceId: string }) => {
       const parsed = workspaceDeleteSchema.parse(input);
+      const deleted = deps.registry.deleteWorkspace(parsed.workspaceId);
+      if (deleted) {
+        deps.onWorkspaceDeleted?.(parsed.workspaceId);
+      }
       return {
-        deleted: deps.registry.deleteWorkspace(parsed.workspaceId)
+        deleted
       };
     }
   };
@@ -92,6 +97,7 @@ const resolveIpcMain = (): WorkspaceIpcMain => {
 export interface RegisterWorkspaceIpcHandlersOptions {
   dbFilePath: string;
   ipcMain?: WorkspaceIpcMain;
+  onWorkspaceDeleted?: (workspaceId: string) => void;
 }
 
 export const registerWorkspaceIpcHandlers = (
@@ -99,7 +105,8 @@ export const registerWorkspaceIpcHandlers = (
 ): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const handlers = createWorkspaceIpcHandlers({
-    registry: getOrCreateRegistryForPath(options.dbFilePath)
+    registry: getOrCreateRegistryForPath(options.dbFilePath),
+    onWorkspaceDeleted: options.onWorkspaceDeleted
   });
 
   ipcMain.removeHandler(IPC_CHANNELS.workspaceCreate);

@@ -12,13 +12,20 @@ import { createRegistryRepository, type RegistryRepository } from '../../../src/
 let testDbDir = '';
 let registry: RegistryRepository;
 let handlers: WorkspaceIpcHandlers;
+let deletedWorkspaceIds: string[] = [];
 
 beforeEach(() => {
   testDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-workspaces-ipc-'));
+  deletedWorkspaceIds = [];
   registry = createRegistryRepository({
     dbFilePath: path.join(testDbDir, 'registry.sqlite')
   });
-  handlers = createWorkspaceIpcHandlers({ registry });
+  handlers = createWorkspaceIpcHandlers({
+    registry,
+    onWorkspaceDeleted: (workspaceId: string) => {
+      deletedWorkspaceIds.push(workspaceId);
+    }
+  });
 });
 
 afterEach(() => {
@@ -63,10 +70,20 @@ describe('workspace IPC flow', () => {
       workspaceId: result.workspace.id
     });
     expect(removed.deleted).toBe(true);
+    expect(deletedWorkspaceIds).toEqual([result.workspace.id]);
     expect(
       handlers
         .list({} as IpcMainInvokeEvent)
         .workspaces.find((workspace) => workspace.id === result.workspace.id)
     ).toBeUndefined();
+  });
+
+  it('does not emit delete callback when the workspace does not exist', async () => {
+    const removed = await handlers.delete({} as IpcMainInvokeEvent, {
+      workspaceId: 'missing-workspace'
+    });
+
+    expect(removed.deleted).toBe(false);
+    expect(deletedWorkspaceIds).toEqual([]);
   });
 });

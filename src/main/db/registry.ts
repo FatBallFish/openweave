@@ -66,6 +66,7 @@ export interface RegistryRepositoryOptions {
 export interface RegistryRepository {
   createWorkspace: (input: WorkspaceCreateInput) => WorkspaceRecord;
   listWorkspaces: () => WorkspaceRecord[];
+  hasWorkspace: (workspaceId: string) => boolean;
   openWorkspace: (workspaceId: string) => WorkspaceRecord;
   deleteWorkspace: (workspaceId: string) => boolean;
   close: () => void;
@@ -134,6 +135,13 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
     listWorkspaces: (): WorkspaceRecord[] => {
       const rows = db.prepare(selectWorkspacesSql).all() as unknown as WorkspaceRow[];
       return rows.map(mapWorkspaceRow);
+    },
+    hasWorkspace: (workspaceId: string): boolean => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      const row = db.prepare(selectWorkspaceByIdSql).get({ id: parsedWorkspaceId }) as
+        | WorkspaceRow
+        | undefined;
+      return row !== undefined;
     },
     openWorkspace: (workspaceId: string): WorkspaceRecord => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);

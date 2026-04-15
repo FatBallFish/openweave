@@ -1,6 +1,10 @@
 import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import { disposeCanvasIpcHandlers, registerCanvasIpcHandlers } from './ipc/canvas';
+import {
+  disposeCanvasIpcHandlers,
+  disposeCanvasWorkspaceRepository,
+  registerCanvasIpcHandlers
+} from './ipc/canvas';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
@@ -31,11 +35,14 @@ const createMainWindow = (): BrowserWindow => {
 };
 
 void app.whenReady().then(() => {
+  const registryDbFilePath = path.join(app.getPath('userData'), 'registry.db');
   registerWorkspaceIpcHandlers({
-    dbFilePath: path.join(app.getPath('userData'), 'registry.db')
+    dbFilePath: registryDbFilePath,
+    onWorkspaceDeleted: disposeCanvasWorkspaceRepository
   });
   registerCanvasIpcHandlers({
-    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces')
+    workspaceDbDir: path.join(app.getPath('userData'), 'workspaces'),
+    registryDbFilePath
   });
   createMainWindow();
 

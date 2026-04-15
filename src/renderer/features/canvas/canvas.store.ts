@@ -22,6 +22,8 @@ type StateListener = () => void;
 
 let state: CanvasState = initialState;
 const listeners = new Set<StateListener>();
+let latestLoadRequestId = 0;
+let latestSaveRequestId = 0;
 
 const setState = (nextState: Partial<CanvasState>): void => {
   state = { ...state, ...nextState };
@@ -58,10 +60,14 @@ const persistCanvasState = async (
   nodes: NoteNodeInput[],
   edges: CanvasStateInput['edges']
 ): Promise<void> => {
+  const requestId = ++latestSaveRequestId;
   const result = await getBridge().saveCanvasState({
     workspaceId,
     state: { nodes, edges }
   });
+  if (requestId !== latestSaveRequestId || state.workspaceId !== workspaceId) {
+    return;
+  }
   setState({
     nodes: result.state.nodes,
     edges: result.state.edges,
@@ -78,9 +84,19 @@ export const canvasStore = {
     };
   },
   loadCanvasState: async (workspaceId: string): Promise<void> => {
-    setState({ loading: true, workspaceId, errorMessage: null });
+    const requestId = ++latestLoadRequestId;
+    setState({
+      loading: true,
+      workspaceId,
+      nodes: [],
+      edges: [],
+      errorMessage: null
+    });
     try {
       const result = await getBridge().loadCanvasState({ workspaceId });
+      if (requestId !== latestLoadRequestId || state.workspaceId !== workspaceId) {
+        return;
+      }
       setState({
         workspaceId,
         nodes: result.state.nodes,
@@ -89,8 +105,11 @@ export const canvasStore = {
         errorMessage: null
       });
     } catch (error) {
+      if (requestId !== latestLoadRequestId || state.workspaceId !== workspaceId) {
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to load canvas';
-      setState({ loading: false, errorMessage });
+      setState({ loading: false, nodes: [], edges: [], errorMessage });
     }
   },
   addNoteNode: async (): Promise<void> => {
@@ -98,11 +117,15 @@ export const canvasStore = {
       return;
     }
 
+    const workspaceId = state.workspaceId;
     const nextNodes = [...state.nodes, createNoteNode()];
     setState({ nodes: nextNodes, errorMessage: null });
     try {
-      await persistCanvasState(state.workspaceId, nextNodes, state.edges);
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
     } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to save note node';
       setState({ errorMessage });
     }
@@ -115,6 +138,7 @@ export const canvasStore = {
       return;
     }
 
+    const workspaceId = state.workspaceId;
     const nextNodes = state.nodes.map((node) => {
       if (node.id !== nodeId) {
         return node;
@@ -128,8 +152,11 @@ export const canvasStore = {
 
     setState({ nodes: nextNodes, errorMessage: null });
     try {
-      await persistCanvasState(state.workspaceId, nextNodes, state.edges);
+      await persistCanvasState(workspaceId, nextNodes, state.edges);
     } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to update note node';
       setState({ errorMessage });
     }
