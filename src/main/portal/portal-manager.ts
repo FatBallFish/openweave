@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebContentsView } from 'electron';
+import { assertPortalUrlAllowed } from '../../shared/portal/types';
 import type { PortalScreenshotResult, PortalStructureResult } from '../../shared/portal/types';
 
 interface ManagedPortalEntry {
@@ -16,6 +18,85 @@ const FALLBACK_PNG_BUFFER = Buffer.from(
 const sanitizeSegment = (value: string): string => {
   const normalized = value.replace(/[^a-zA-Z0-9_-]/g, '-');
   return normalized.length > 0 ? normalized : 'portal';
+};
+
+export const toPortalPartitionId = (portalId: string): string => {
+  const hash = createHash('sha256').update(portalId).digest('hex');
+  return `openweave-portal-${hash}`;
+};
+
+const isAllowedPortalUrl = (value: string): boolean => {
+  try {
+    assertPortalUrlAllowed(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const attachPortalNavigationGuards = (
+  entry: ManagedPortalEntry,
+  getLastLoadedUrl: () => string | null
+): void => {
+  const webContents = entry.view.webContents;
+  let blockedNavigationPendingRecovery = false;
+  const recoverLastAllowedUrl = (): void => {
+    const fallbackUrl = getLastLoadedUrl();
+    if (!fallbackUrl || webContents.isDestroyed()) {
+      return;
+    }
+    setTimeout(() => {
+      if (webContents.isDestroyed()) {
+        return;
+      }
+      void webContents.loadURL(fallbackUrl).catch(() => {
+        // Keep recovery best-effort because blocking a bad navigation is the primary guarantee.
+      });
+    }, 0);
+  };
+
+  const blockDisallowedNavigation = (
+    details: Pick<Electron.Event<Electron.WebContentsWillNavigateEventParams>, 'isMainFrame' | 'url' | 'preventDefault'>
+  ): void => {
+    if (!details.isMainFrame || isAllowedPortalUrl(details.url)) {
+      return;
+    }
+    blockedNavigationPendingRecovery = true;
+    details.preventDefault();
+    recoverLastAllowedUrl();
+  };
+
+  const recoverFromBlockedNavigationFailure = (
+    _event: Electron.Event,
+    _errorCode: number,
+    _errorDescription: string,
+    _validatedURL: string,
+    isMainFrame: boolean
+  ): void => {
+    if (!isMainFrame || !blockedNavigationPendingRecovery) {
+      return;
+    }
+    blockedNavigationPendingRecovery = false;
+    recoverLastAllowedUrl();
+  };
+
+  webContents.on('will-navigate', (details) => {
+    blockDisallowedNavigation(details);
+  });
+  webContents.on('will-redirect', (details) => {
+    blockDisallowedNavigation(details);
+  });
+  webContents.on('did-fail-load', recoverFromBlockedNavigationFailure);
+  webContents.on('did-fail-provisional-load', recoverFromBlockedNavigationFailure);
+  webContents.on('did-finish-load', () => {
+    blockedNavigationPendingRecovery = false;
+  });
+  webContents.setWindowOpenHandler((details) => {
+    if (!isAllowedPortalUrl(details.url)) {
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
 };
 
 export interface PortalManager {
@@ -58,19 +139,19 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       return existing;
     }
 
-    const view = new WebContentsView({
-      webPreferences: {
-        sandbox: true,
-        partition: `openweave-portal-${sanitizeSegment(portalId)}`,
-        contextIsolation: true,
-        nodeIntegration: false
-      }
-    });
-    view.webContents.setAudioMuted(true);
     const created: ManagedPortalEntry = {
-      view,
+      view: new WebContentsView({
+        webPreferences: {
+          sandbox: true,
+          partition: toPortalPartitionId(portalId),
+          contextIsolation: true,
+          nodeIntegration: false
+        }
+      }),
       loadedUrl: null
     };
+    created.view.webContents.setAudioMuted(true);
+    attachPortalNavigationGuards(created, () => created.loadedUrl);
     entries.set(portalId, created);
     return created;
   };

@@ -7,7 +7,14 @@ const startPortalFixtureServer = async (): Promise<{
   origin: string;
   close: () => Promise<void>;
 }> => {
-  const server = http.createServer((_request, response) => {
+  const server = http.createServer((request, response) => {
+    if (request.url === '/redirect-to-file') {
+      response.writeHead(302, {
+        location: 'file:///tmp/openweave-blocked-redirect.html'
+      });
+      response.end();
+      return;
+    }
     response.writeHead(200, {
       'content-type': 'text/html; charset=utf-8'
     });
@@ -21,16 +28,31 @@ const startPortalFixtureServer = async (): Promise<{
     <h1>Portal Fixture</h1>
     <input id="message-input" type="text" value="" />
     <button id="action-button" type="button">Run action</button>
+    <button id="navigate-file-button" type="button">Navigate file</button>
+    <button id="redirect-file-button" type="button">Redirect file</button>
+    <button id="open-file-button" type="button">Open file</button>
     <p id="result">idle</p>
     <script>
       const input = document.getElementById('message-input');
       const button = document.getElementById('action-button');
+      const navigateFileButton = document.getElementById('navigate-file-button');
+      const redirectFileButton = document.getElementById('redirect-file-button');
+      const openFileButton = document.getElementById('open-file-button');
       const result = document.getElementById('result');
       input.addEventListener('input', () => {
         result.textContent = 'input:' + input.value;
       });
       button.addEventListener('click', () => {
         result.textContent = 'clicked:' + input.value;
+      });
+      navigateFileButton.addEventListener('click', () => {
+        window.location.href = 'file:///tmp/openweave-blocked-navigation.html';
+      });
+      redirectFileButton.addEventListener('click', () => {
+        window.location.href = '/redirect-to-file';
+      });
+      openFileButton.addEventListener('click', () => {
+        window.open('file:///tmp/openweave-blocked-open.html', '_blank');
       });
     </script>
   </body>
@@ -92,6 +114,7 @@ test('loads portal url and supports click/input/capture/structure with file:// r
     const urlInput = page.locator('[data-testid^="portal-url-input-"]').first();
     const loadButton = page.locator('[data-testid^="portal-load-"]').first();
     const inputValueField = page.locator('[data-testid^="portal-input-value-"]').first();
+    const clickSelectorField = page.locator('[data-testid^="portal-click-selector-"]').first();
     const inputButton = page.locator('button[data-testid^="portal-input-"]').first();
     const clickButton = page.locator('button[data-testid^="portal-click-"]').first();
     const captureButton = page.locator('button[data-testid^="portal-capture-"]').first();
@@ -109,6 +132,41 @@ test('loads portal url and supports click/input/capture/structure with file:// r
     await inputButton.click();
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
 
+    await clickButton.click();
+    await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
+
+    await clickSelectorField.fill('#navigate-file-button');
+    await clickButton.click();
+    await page.waitForTimeout(250);
+
+    await inputValueField.fill('after-navigate-attempt');
+    await inputButton.click();
+    await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
+    await expect(errorMessage).toHaveCount(0);
+
+    await clickSelectorField.fill('#redirect-file-button');
+    await clickButton.click();
+    await page.waitForTimeout(250);
+
+    await urlInput.fill(fixture.origin);
+    await loadButton.click();
+    await expect(actionStatus).toContainText('Loaded portal URL', { timeout: 10000 });
+
+    await inputValueField.fill('after-redirect-attempt');
+    await inputButton.click();
+    await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
+    await expect(errorMessage).toHaveCount(0);
+
+    await clickSelectorField.fill('#open-file-button');
+    await clickButton.click();
+    await page.waitForTimeout(250);
+
+    await inputValueField.fill('after-open-attempt');
+    await inputButton.click();
+    await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
+    await expect(errorMessage).toHaveCount(0);
+
+    await clickSelectorField.fill('#action-button');
     await clickButton.click();
     await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
 
