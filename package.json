@@ -29,6 +29,7 @@
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "electron": "^35.2.1",
     "electron-builder": "^24.13.3",
     "typescript": "^5.8.3",

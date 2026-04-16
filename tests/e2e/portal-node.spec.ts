@@ -1,6 +1,7 @@
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs';
 import { _electron as electron, expect, test } from '@playwright/test';
 
 const startPortalFixtureServer = async (): Promise<{
@@ -23,15 +24,41 @@ const startPortalFixtureServer = async (): Promise<{
   <head>
     <meta charset="utf-8" />
     <title>Portal Fixture</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+        font-family: sans-serif;
+        background:
+          radial-gradient(circle at top left, #ffd166 0%, transparent 35%),
+          linear-gradient(135deg, #073b4c 0%, #118ab2 45%, #06d6a0 100%);
+        color: #f8fafc;
+      }
+      .card {
+        max-width: 720px;
+        padding: 24px;
+        border-radius: 18px;
+        background: rgba(15, 23, 42, 0.72);
+        box-shadow: 0 18px 48px rgba(2, 6, 23, 0.35);
+      }
+      #result {
+        font-size: 20px;
+        font-weight: 700;
+        color: #ffd166;
+      }
+    </style>
   </head>
   <body>
-    <h1>Portal Fixture</h1>
-    <input id="message-input" type="text" value="" />
-    <button id="action-button" type="button">Run action</button>
-    <button id="navigate-file-button" type="button">Navigate file</button>
-    <button id="redirect-file-button" type="button">Redirect file</button>
-    <button id="open-file-button" type="button">Open file</button>
-    <p id="result">idle</p>
+    <div class="card">
+      <h1>Portal Fixture</h1>
+      <input id="message-input" type="text" value="" />
+      <button id="action-button" type="button">Run action</button>
+      <button id="navigate-file-button" type="button">Navigate file</button>
+      <button id="redirect-file-button" type="button">Redirect file</button>
+      <button id="open-file-button" type="button">Open file</button>
+      <p id="result">idle</p>
+    </div>
     <script>
       const input = document.getElementById('message-input');
       const button = document.getElementById('action-button');
@@ -89,7 +116,7 @@ test('loads portal url and supports click/input/capture/structure with file:// r
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-portal-${uniqueSuffix}`);
   const workspaceName = `Portal-${uniqueSuffix}`;
-  const workspaceRoot = `/tmp/openweave-portal-${uniqueSuffix}`;
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-portal-'));
 
   const app = await electron.launch({
     args: [path.resolve(__dirname, '../../dist/main/main.js')],
@@ -172,6 +199,10 @@ test('loads portal url and supports click/input/capture/structure with file:// r
 
     await captureButton.click();
     await expect(screenshotPath).toContainText('artifacts/portal/');
+    const capturedPath = (await screenshotPath.textContent())?.replace(/^Screenshot:\s*/, '').trim() ?? '';
+    expect(capturedPath.length).toBeGreaterThan(0);
+    expect(fs.existsSync(capturedPath)).toBe(true);
+    expect(fs.statSync(capturedPath).size).toBeGreaterThan(10_000);
 
     await structureButton.click();
     await expect(structureList).toContainText('button:');

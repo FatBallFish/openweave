@@ -89,14 +89,25 @@ export interface RuntimeBridgeOptions {
   spawnWorker?: (request: RuntimeStartRequest, env: NodeJS.ProcessEnv) => RuntimeWorkerHandle;
 }
 
-const resolveRuntimeWorkerPath = (): string => {
+export interface ResolveRuntimeWorkerPathOptions {
+  runtimeDir?: string;
+  cwd?: string;
+  pathExists?: (candidate: string) => boolean;
+}
+
+export const resolveRuntimeWorkerPath = (
+  options: ResolveRuntimeWorkerPathOptions = {}
+): string => {
+  const runtimeDir = options.runtimeDir ?? __dirname;
+  const cwd = options.cwd ?? process.cwd();
+  const pathExists = options.pathExists ?? fs.existsSync;
   const candidates = [
-    path.resolve(__dirname, '..', 'worker', 'runtime-worker.js'),
-    path.resolve(process.cwd(), 'dist/worker/runtime-worker.js')
+    path.resolve(runtimeDir, '..', '..', 'worker', 'runtime-worker.js'),
+    path.resolve(cwd, 'dist', 'worker', 'runtime-worker.js')
   ];
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
+    if (pathExists(candidate)) {
       return candidate;
     }
   }

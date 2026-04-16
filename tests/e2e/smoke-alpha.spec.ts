@@ -9,13 +9,9 @@ interface SeedWorkspaceInput {
   rootDir: string;
 }
 
-const resolvePackagedExecutablePath = (): string => {
-  const executablePath = process.env.OPENWEAVE_PACKAGED_EXECUTABLE;
-  if (!executablePath) {
-    throw new Error('OPENWEAVE_PACKAGED_EXECUTABLE is required for packaged alpha smoke tests.');
-  }
-  return path.resolve(executablePath);
-};
+const packagedExecutablePath = process.env.OPENWEAVE_PACKAGED_EXECUTABLE
+  ? path.resolve(process.env.OPENWEAVE_PACKAGED_EXECUTABLE)
+  : null;
 
 const seedWorkspace = (userDataDir: string, workspace: SeedWorkspaceInput): void => {
   fs.mkdirSync(userDataDir, { recursive: true });
@@ -36,6 +32,8 @@ const seedWorkspace = (userDataDir: string, workspace: SeedWorkspaceInput): void
 };
 
 test('launches the packaged app and opens an existing workspace', async () => {
+  test.skip(!packagedExecutablePath, 'OPENWEAVE_PACKAGED_EXECUTABLE is required for packaged alpha smoke tests.');
+
   const uniqueSuffix = Date.now().toString();
   const workspaceName = `Alpha-Workspace-${uniqueSuffix}`;
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-alpha-user-${uniqueSuffix}`);
@@ -47,7 +45,7 @@ test('launches the packaged app and opens an existing workspace', async () => {
   });
 
   const app = await electron.launch({
-    executablePath: resolvePackagedExecutablePath(),
+    executablePath: packagedExecutablePath ?? undefined,
     env: {
       ...process.env,
       OPENWEAVE_USER_DATA_DIR: userDataDir

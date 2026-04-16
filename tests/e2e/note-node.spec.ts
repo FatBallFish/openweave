@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
@@ -6,7 +7,8 @@ test('persists note node content and position across restart', async () => {
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-note-node-${uniqueSuffix}`);
   const workspaceName = `Canvas-${uniqueSuffix}`;
-  const workspaceRoot = `/tmp/openweave-canvas-${uniqueSuffix}`;
+  const workspaceRoot = path.join(os.tmpdir(), `openweave-canvas-${uniqueSuffix}`);
+  fs.mkdirSync(workspaceRoot, { recursive: true });
 
   const firstApp = await electron.launch({
     args: [path.resolve(__dirname, '../../dist/main/main.js')],

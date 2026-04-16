@@ -58,4 +58,14 @@ describe('buildPackagePlan', () => {
       })
     ).toThrow('Unsupported packaging platform: freebsd');
   });
+
+  it('rejects unsupported CPU architectures', () => {
+    expect(() =>
+      buildPackagePlan({
+        platform: 'darwin',
+        arch: 'ia32',
+        projectDir
+      })
+    ).toThrow('Unsupported packaging arch: ia32');
+  });
 });

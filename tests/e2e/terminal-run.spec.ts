@@ -1,19 +1,32 @@
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs';
 import { _electron as electron, expect, test } from '@playwright/test';
+
+const resolveElectronLaunchOptions = (
+  userDataDir: string
+): {
+  args?: string[];
+  executablePath?: string;
+  env: NodeJS.ProcessEnv;
+} => {
+  const packagedExecutablePath = process.env.OPENWEAVE_PACKAGED_EXECUTABLE;
+  return {
+    args: packagedExecutablePath ? undefined : [path.resolve(__dirname, '../../dist/main/main.js')],
+    executablePath: packagedExecutablePath ? path.resolve(packagedExecutablePath) : undefined,
+    env: {
+      ...process.env,
+      OPENWEAVE_USER_DATA_DIR: userDataDir
+    }
+  };
+};
 
 test('runs a terminal command and shows queued to completed status', async () => {
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-terminal-run-${uniqueSuffix}`);
   const workspaceName = `Terminal-${uniqueSuffix}`;
-  const workspaceRoot = `/tmp/openweave-terminal-${uniqueSuffix}`;
-  const app = await electron.launch({
-    args: [path.resolve(__dirname, '../../dist/main/main.js')],
-    env: {
-      ...process.env,
-      OPENWEAVE_USER_DATA_DIR: userDataDir
-    }
-  });
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-terminal-'));
+  const app = await electron.launch(resolveElectronLaunchOptions(userDataDir));
 
   try {
     const page = await app.firstWindow();

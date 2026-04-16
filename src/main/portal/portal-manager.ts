@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { WebContentsView } from 'electron';
+import { BrowserWindow, WebContentsView } from 'electron';
 import { assertPortalUrlAllowed } from '../../shared/portal/types';
 import type { PortalScreenshotResult, PortalStructureResult } from '../../shared/portal/types';
 
@@ -14,6 +14,9 @@ const FALLBACK_PNG_BUFFER = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==',
   'base64'
 );
+const PORTAL_CAPTURE_WIDTH = 1280;
+const PORTAL_CAPTURE_HEIGHT = 800;
+const PORTAL_CAPTURE_SETTLE_MS = 250;
 
 const sanitizeSegment = (value: string): string => {
   const normalized = value.replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -114,6 +117,12 @@ export interface PortalManagerOptions {
   now?: () => number;
 }
 
+const wait = async (durationMs: number): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+};
+
 const executeOnPortal = async <T,>(
   entry: ManagedPortalEntry,
   executor: () => Promise<T>,
@@ -179,6 +188,39 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
     entries.delete(portalId);
   };
 
+  const captureFromAttachedHostWindow = async (entry: ManagedPortalEntry): Promise<Buffer> => {
+    const hostWindow = new BrowserWindow({
+      width: PORTAL_CAPTURE_WIDTH,
+      height: PORTAL_CAPTURE_HEIGHT,
+      show: false,
+      paintWhenInitiallyHidden: true,
+      webPreferences: {
+        sandbox: false
+      }
+    });
+
+    try {
+      entry.view.setBounds({
+        x: 0,
+        y: 0,
+        width: PORTAL_CAPTURE_WIDTH,
+        height: PORTAL_CAPTURE_HEIGHT
+      });
+      hostWindow.contentView.addChildView(entry.view);
+      await wait(PORTAL_CAPTURE_SETTLE_MS);
+      const image = await entry.view.webContents.capturePage();
+      const buffer = image.toPNG();
+      return buffer.length > 0 ? buffer : FALLBACK_PNG_BUFFER;
+    } finally {
+      try {
+        hostWindow.contentView.removeChildView(entry.view);
+      } catch {
+        // Keep cleanup best-effort.
+      }
+      hostWindow.destroy();
+    }
+  };
+
   return {
     loadUrl: async (portalId: string, url: string): Promise<void> => {
       const entry = resolveEntry(portalId);
@@ -214,11 +256,7 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
 
       const pngBuffer = await executeOnPortal(
         entry,
-        async () => {
-          const image = await entry.view.webContents.capturePage();
-          const buffer = image.toPNG();
-          return buffer.length > 0 ? buffer : FALLBACK_PNG_BUFFER;
-        },
+        async () => captureFromAttachedHostWindow(entry),
         FALLBACK_PNG_BUFFER
       );
 

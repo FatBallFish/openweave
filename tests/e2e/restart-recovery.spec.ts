@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -112,7 +113,8 @@ test('recovers queued/running runs after unclean shutdown, keeps canvas state, a
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-recovery-${uniqueSuffix}`);
   const workspaceName = `Recovery-${uniqueSuffix}`;
-  const workspaceRoot = `/tmp/openweave-recovery-${uniqueSuffix}`;
+  const workspaceRoot = path.join(os.tmpdir(), `openweave-recovery-${uniqueSuffix}`);
+  fs.mkdirSync(workspaceRoot, { recursive: true });
 
   const app = await electron.launch({
     args: [path.resolve(__dirname, '../../dist/main/main.js')],

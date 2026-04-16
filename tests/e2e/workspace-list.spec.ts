@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
@@ -14,7 +15,8 @@ test('supports create/open/delete from the workspace list page', async () => {
   });
 
   const workspaceName = `Workspace-${uniqueSuffix}`;
-  const workspaceRoot = `/tmp/openweave-${uniqueSuffix}`;
+  const workspaceRoot = path.join(os.tmpdir(), `openweave-${uniqueSuffix}`);
+  fs.mkdirSync(workspaceRoot, { recursive: true });
 
   try {
     const page = await app.firstWindow();
