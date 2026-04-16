@@ -15,12 +15,12 @@ export const CreateWorkspaceDialog = ({
   onCreate
 }: CreateWorkspaceDialogProps): JSX.Element | null => {
   const [name, setName] = useState('');
-  const [rootDir, setRootDir] = useState('/tmp/openweave-demo');
+  const [rootDir, setRootDir] = useState('');
 
   useEffect(() => {
     if (open) {
       setName('');
-      setRootDir('/tmp/openweave-demo');
+      setRootDir('');
     }
   }, [open]);
 

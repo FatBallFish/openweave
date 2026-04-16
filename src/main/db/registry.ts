@@ -202,6 +202,24 @@ const getWorkspaceById = (db: NodeDatabaseSync, workspaceId: string): WorkspaceR
   return mapWorkspaceRow(row);
 };
 
+const toCanonicalWorkspaceRootDir = (rootDir: string): string => {
+  const resolvedPath = path.resolve(rootDir);
+  let canonicalPath: string;
+
+  try {
+    canonicalPath = fs.realpathSync(resolvedPath);
+  } catch {
+    throw new Error(`Workspace root directory does not exist: ${resolvedPath}`);
+  }
+
+  const stats = fs.statSync(canonicalPath);
+  if (!stats.isDirectory()) {
+    throw new Error(`Workspace root directory must be a directory: ${canonicalPath}`);
+  }
+
+  return canonicalPath;
+};
+
 export const createRegistryRepository = (options: RegistryRepositoryOptions): RegistryRepository => {
   const now = options.now ?? (() => Date.now());
   const randomId = options.randomId ?? (() => crypto.randomUUID());
@@ -216,11 +234,12 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
       const parsed = workspaceCreateSchema.parse(input);
       const timestamp = now();
       const workspaceId = randomId();
+      const canonicalRootDir = toCanonicalWorkspaceRootDir(parsed.rootDir);
 
       db.prepare(insertWorkspaceSql).run({
         id: workspaceId,
         name: parsed.name,
-        root_dir: parsed.rootDir,
+        root_dir: canonicalRootDir,
         created_at_ms: timestamp,
         updated_at_ms: timestamp
       });

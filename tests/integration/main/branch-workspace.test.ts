@@ -85,6 +85,7 @@ beforeEach(() => {
   sourceWorkspaceRootDir = path.join(testDir, 'repo-source');
   fs.mkdirSync(sourceWorkspaceRootDir, { recursive: true });
   createFixtureRepo(sourceWorkspaceRootDir);
+  sourceWorkspaceRootDir = fs.realpathSync(sourceWorkspaceRootDir);
   const sourceWorkspace = registry.createWorkspace({
     name: 'Main Workspace',
     rootDir: sourceWorkspaceRootDir

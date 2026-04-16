@@ -34,21 +34,29 @@ afterEach(() => {
 });
 
 describe('workspace IPC flow', () => {
+  const createWorkspaceRootDir = (name: string): string => {
+    const rootDir = path.join(testDbDir, name);
+    fs.mkdirSync(rootDir, { recursive: true });
+    return rootDir;
+  };
+
   it('creates a workspace row and returns it in the list', async () => {
     const suffix = Date.now();
+    const rootDir = createWorkspaceRootDir(`demo-${suffix}`);
     const result = await handlers.create({} as IpcMainInvokeEvent, {
       name: `Demo-${suffix}`,
-      rootDir: `/tmp/demo-${suffix}`
+      rootDir
     });
     expect(result.workspace.name).toBe(`Demo-${suffix}`);
-    expect(handlers.list({} as IpcMainInvokeEvent).workspaces[0].rootDir).toBe(`/tmp/demo-${suffix}`);
+    expect(handlers.list({} as IpcMainInvokeEvent).workspaces[0].rootDir).toBe(fs.realpathSync(rootDir));
   });
 
   it('updates last opened timestamp on open', async () => {
     const suffix = Date.now();
+    const rootDir = createWorkspaceRootDir(`opened-${suffix}`);
     const result = await handlers.create({} as IpcMainInvokeEvent, {
       name: `Opened-${suffix}`,
-      rootDir: `/tmp/opened-${suffix}`
+      rootDir
     });
 
     expect(result.workspace.lastOpenedAtMs).toBeNull();
@@ -61,9 +69,10 @@ describe('workspace IPC flow', () => {
 
   it('deletes a workspace row', async () => {
     const suffix = Date.now();
+    const rootDir = createWorkspaceRootDir(`deleted-${suffix}`);
     const result = await handlers.create({} as IpcMainInvokeEvent, {
       name: `Deleted-${suffix}`,
-      rootDir: `/tmp/deleted-${suffix}`
+      rootDir
     });
 
     const removed = await handlers.delete({} as IpcMainInvokeEvent, {
@@ -85,5 +94,39 @@ describe('workspace IPC flow', () => {
 
     expect(removed.deleted).toBe(false);
     expect(deletedWorkspaceIds).toEqual([]);
+  });
+
+  it('rejects workspace creation when root directory does not exist', async () => {
+    const missingRoot = path.join(testDbDir, 'missing-root');
+    await expect(
+      handlers.create({} as IpcMainInvokeEvent, {
+        name: 'Invalid Root',
+        rootDir: missingRoot
+      })
+    ).rejects.toThrow();
+  });
+
+  it('rejects workspace creation when root path points to a file', async () => {
+    const fileRoot = path.join(testDbDir, 'workspace-root.txt');
+    fs.writeFileSync(fileRoot, 'not a directory\n');
+
+    await expect(
+      handlers.create({} as IpcMainInvokeEvent, {
+        name: 'Invalid File Root',
+        rootDir: fileRoot
+      })
+    ).rejects.toThrow();
+  });
+
+  it('stores workspace root as canonical existing directory path', async () => {
+    const canonicalRoot = fs.mkdtempSync(path.join(testDbDir, 'canonical-root-'));
+    const nonCanonicalInput = path.join(canonicalRoot, '..', path.basename(canonicalRoot));
+
+    const created = await handlers.create({} as IpcMainInvokeEvent, {
+      name: 'Canonical Root',
+      rootDir: nonCanonicalInput
+    });
+
+    expect(created.workspace.rootDir).toBe(fs.realpathSync(canonicalRoot));
   });
 });

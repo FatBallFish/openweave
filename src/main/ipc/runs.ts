@@ -43,6 +43,7 @@ export interface RunsIpcHandlers {
 
 export interface RunsIpcDependencies {
   assertWorkspaceExists: (workspaceId: string) => void;
+  resolveWorkspaceRootDir?: (workspaceId: string) => string;
   runtimeBridge?: RuntimeBridge;
   now?: () => number;
   randomId?: () => string;
@@ -51,6 +52,7 @@ export interface RunsIpcDependencies {
 
 interface RunsServiceOptions {
   assertWorkspaceExists: (workspaceId: string) => void;
+  resolveWorkspaceRootDir?: (workspaceId: string) => string;
   runtimeBridge: RuntimeBridge;
   now: () => number;
   randomId: () => string;
@@ -99,6 +101,8 @@ class InMemoryRunsService {
 
   private readonly assertWorkspaceExists: (workspaceId: string) => void;
 
+  private readonly resolveWorkspaceRootDir?: (workspaceId: string) => string;
+
   private readonly runtimeBridge: RuntimeBridge;
 
   private readonly now: () => number;
@@ -111,6 +115,7 @@ class InMemoryRunsService {
 
   constructor(options: RunsServiceOptions) {
     this.assertWorkspaceExists = options.assertWorkspaceExists;
+    this.resolveWorkspaceRootDir = options.resolveWorkspaceRootDir;
     this.runtimeBridge = options.runtimeBridge;
     this.now = options.now;
     this.randomId = options.randomId;
@@ -146,6 +151,7 @@ class InMemoryRunsService {
   public startRun(input: RunStartInput): RunRecord {
     const parsed = runStartSchema.parse(input);
     this.assertWorkspaceExists(parsed.workspaceId);
+    const workspaceRootDir = this.resolveWorkspaceRootDir?.(parsed.workspaceId);
 
     const run: RunRecord = {
       id: this.randomId(),
@@ -168,6 +174,7 @@ class InMemoryRunsService {
         runId: run.id,
         runtime: run.runtime,
         command: run.command,
+        cwd: workspaceRootDir,
         env: this.launchEnv
       });
     } catch (error) {
@@ -252,7 +259,7 @@ class InMemoryRunsService {
     }
 
     const status: RunStatusInput = event.code === 0 ? 'completed' : 'failed';
-    const tailLog = appendTailLog(run.tailLog, event.tail);
+    const tailLog = event.tail.length > 0 ? appendTailLog('', event.tail) : run.tailLog;
     const summary = buildSummary(tailLog);
     this.storeRun({
       ...run,
@@ -294,6 +301,7 @@ class InMemoryRunsService {
 export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandlers => {
   const service = new InMemoryRunsService({
     assertWorkspaceExists: deps.assertWorkspaceExists,
+    resolveWorkspaceRootDir: deps.resolveWorkspaceRootDir,
     runtimeBridge: deps.runtimeBridge ?? createRuntimeBridge(),
     now: deps.now ?? (() => Date.now()),
     randomId: deps.randomId ?? (() => crypto.randomUUID()),
@@ -402,6 +410,10 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
           if (!registry.hasWorkspace(parsedWorkspaceId)) {
             throw new Error(`Workspace not found: ${parsedWorkspaceId}`);
           }
+        },
+        resolveWorkspaceRootDir: (workspaceId: string) => {
+          const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+          return registry.getWorkspace(parsedWorkspaceId).rootDir;
         },
         runtimeBridge: options.runtimeBridge ?? createRuntimeBridge(),
         now: () => Date.now(),
