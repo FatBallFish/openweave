@@ -1,0 +1,20 @@
+appId: com.openweave.desktop
+productName: OpenWeave
+asar: false
+directories:
+  output: deploy/target/default
+files:
+  - dist/**/*
+  - package.json
+mac:
+  identity: null
+  category: public.app-category.developer-tools
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+linux:
+  category: Development
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+win:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+nsis:
+  oneClick: false
+  perMachine: false
