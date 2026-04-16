@@ -1,0 +1,16 @@
+.DS_Store
+.worktrees/
+worktrees/
+/docs/*
+!/docs/plans/
+!/docs/plans/**
+!/docs/decisions/
+!/docs/decisions/**
+!/docs/release/
+!/docs/release/**
+dist/
+node_modules/
+test-results/
+playwright-report/
+release/
+deploy/target/

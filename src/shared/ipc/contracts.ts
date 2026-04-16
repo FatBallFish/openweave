@@ -1,0 +1,189 @@
+import type {
+  CanvasLoadInput,
+  CanvasSaveInput,
+  CanvasStateInput,
+  FileTreeLoadInput,
+  PortalCaptureInput,
+  PortalClickInput,
+  PortalInputInput,
+  PortalLoadInput,
+  PortalStructureInput,
+  RunGetInput,
+  RunListInput,
+  RunRuntimeInput,
+  RunStartInput,
+  RunStatusInput,
+  WorkspaceCreateInput,
+  WorkspaceBranchCreateInput,
+  WorkspaceDeleteInput,
+  WorkspaceOpenInput
+} from './schemas';
+import type {
+  PortalScreenshotResult,
+  PortalSessionRecord,
+  PortalStructureResult
+} from '../portal/types';
+
+export const IPC_CHANNELS = {
+  workspaceCreate: 'workspace:create',
+  workspaceList: 'workspace:list',
+  workspaceOpen: 'workspace:open',
+  workspaceDelete: 'workspace:delete',
+  workspaceCreateBranch: 'workspace:create-branch',
+  canvasLoad: 'canvas:load',
+  canvasSave: 'canvas:save',
+  runStart: 'run:start',
+  runGet: 'run:get',
+  runList: 'run:list',
+  fileTreeLoad: 'file-tree:load',
+  portalLoad: 'portal:load',
+  portalCapture: 'portal:capture',
+  portalReadStructure: 'portal:read-structure',
+  portalClick: 'portal:click',
+  portalInput: 'portal:input'
+} as const;
+
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
+
+export interface WorkspaceRecord {
+  id: string;
+  name: string;
+  rootDir: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+  lastOpenedAtMs: number | null;
+}
+
+export interface WorkspaceListResponse {
+  workspaces: WorkspaceRecord[];
+}
+
+export interface WorkspaceMutationResponse {
+  workspace: WorkspaceRecord;
+}
+
+export interface WorkspaceDeleteResponse {
+  deleted: boolean;
+}
+
+export interface CanvasLoadResponse {
+  state: CanvasStateInput;
+}
+
+export interface CanvasSaveResponse {
+  state: CanvasStateInput;
+}
+
+export interface RunRecord {
+  id: string;
+  workspaceId: string;
+  nodeId: string;
+  runtime: RunRuntimeInput;
+  command: string;
+  status: RunStatusInput;
+  summary: string | null;
+  tailLog: string;
+  createdAtMs: number;
+  startedAtMs: number | null;
+  completedAtMs: number | null;
+}
+
+export interface RunMutationResponse {
+  run: RunRecord;
+}
+
+export interface RunGetResponse {
+  run: RunRecord;
+}
+
+export interface RunListResponse {
+  runs: RunRecord[];
+}
+
+export type GitFileStatusCode = 'M' | 'A' | 'D' | 'R' | 'C' | 'U' | '?' | '!';
+
+export interface FileTreeEntryRecord {
+  path: string;
+  kind: 'file' | 'directory';
+  gitStatus: GitFileStatusCode | null;
+}
+
+export interface GitStatusSummaryRecord {
+  modified: number;
+  added: number;
+  deleted: number;
+  renamed: number;
+  copied: number;
+  unmerged: number;
+  untracked: number;
+  ignored: number;
+}
+
+export interface FileTreeLoadResponse {
+  rootDir: string;
+  readOnly: true;
+  isGitRepo: boolean;
+  gitSummary: GitStatusSummaryRecord;
+  entries: FileTreeEntryRecord[];
+}
+
+export interface PortalLoadResponse {
+  portal: PortalSessionRecord;
+}
+
+export interface PortalCaptureResponse {
+  screenshot: PortalScreenshotResult;
+}
+
+export interface PortalStructureResponse {
+  structure: PortalStructureResult;
+}
+
+export interface PortalClickResponse {
+  ok: true;
+}
+
+export interface PortalInputResponse {
+  ok: true;
+}
+
+export interface WorkspaceBridgeApi {
+  createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceMutationResponse>;
+  createBranchWorkspace: (input: WorkspaceBranchCreateInput) => Promise<WorkspaceMutationResponse>;
+  listWorkspaces: () => Promise<WorkspaceListResponse>;
+  openWorkspace: (input: WorkspaceOpenInput) => Promise<WorkspaceMutationResponse>;
+  deleteWorkspace: (input: WorkspaceDeleteInput) => Promise<WorkspaceDeleteResponse>;
+}
+
+export interface CanvasBridgeApi {
+  loadCanvasState: (input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
+  saveCanvasState: (input: CanvasSaveInput) => Promise<CanvasSaveResponse>;
+}
+
+export interface RunsBridgeApi {
+  startRun: (input: RunStartInput) => Promise<RunMutationResponse>;
+  getRun: (input: RunGetInput) => Promise<RunGetResponse>;
+  listRuns: (input: RunListInput) => Promise<RunListResponse>;
+}
+
+export interface FilesBridgeApi {
+  loadFileTree: (input: FileTreeLoadInput) => Promise<FileTreeLoadResponse>;
+}
+
+export interface PortalBridgeApi {
+  loadPortal: (input: PortalLoadInput) => Promise<PortalLoadResponse>;
+  capturePortalScreenshot: (input: PortalCaptureInput) => Promise<PortalCaptureResponse>;
+  readPortalStructure: (input: PortalStructureInput) => Promise<PortalStructureResponse>;
+  clickPortalElement: (input: PortalClickInput) => Promise<PortalClickResponse>;
+  inputPortalText: (input: PortalInputInput) => Promise<PortalInputResponse>;
+}
+
+export interface OpenWeaveShellBridge {
+  platform: string;
+  ipcChannels: typeof IPC_CHANNELS;
+  workspaces: WorkspaceBridgeApi;
+  canvas: CanvasBridgeApi;
+  runs: RunsBridgeApi;
+  files: FilesBridgeApi;
+  portal: PortalBridgeApi;
+}

@@ -1,0 +1,39 @@
+{
+  "name": "openweave",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Workflow Engine for AI Visualization and Execution",
+  "author": "OpenWeave",
+  "type": "commonjs",
+  "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:main": "tsc -p tsconfig.node.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test -c playwright.config.ts",
+    "package:mac": "npm run build && electron-builder --config electron-builder.yml --mac dir zip --arm64 --publish never",
+    "verify:alpha": "bash scripts/verify-alpha.sh"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "@vitest/coverage-v8": "^2.1.9",
+    "electron": "^35.2.1",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^2.1.8"
+  }
+}
