@@ -19,6 +19,7 @@
     "verify:alpha": "bash scripts/verify-alpha.sh"
   },
   "dependencies": {
+    "extract-zip": "^2.0.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^3.23.8"
@@ -35,5 +36,8 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^2.1.8"
+  },
+  "bin": {
+    "openweave": "dist/cli/index.js"
   }
 }

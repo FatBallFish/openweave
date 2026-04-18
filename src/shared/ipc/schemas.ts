@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  componentCapabilitySchema,
+  componentNameSchema,
+  componentVersionSchema
+} from '../components/manifest';
 import { assertPortalUrlAllowed } from '../portal/types';
 
 export const workspaceCreateSchema = z.object({
@@ -100,7 +105,148 @@ export const canvasSaveSchema = z.object({
   state: canvasStateSchema
 });
 
-export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude']);
+export const componentTypeSchema = componentNameSchema;
+
+const graphNodeBoundsSchemaV2 = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().gt(0, 'Node width must be greater than 0'),
+  height: z.number().finite().gt(0, 'Node height must be greater than 0')
+});
+
+export const graphNodeSchemaV2 = z.object({
+  id: z.string().trim().min(1),
+  componentType: componentTypeSchema,
+  componentVersion: componentVersionSchema,
+  title: z.string().trim().min(1),
+  bounds: graphNodeBoundsSchemaV2,
+  config: z.record(z.unknown()),
+  state: z.record(z.unknown()),
+  capabilities: z
+    .array(componentCapabilitySchema)
+    .refine((values) => new Set(values).size === values.length, {
+      message: 'Node capabilities must be unique'
+    }),
+  createdAtMs: z.number().int().nonnegative(),
+  updatedAtMs: z.number().int().nonnegative()
+});
+
+export const graphEdgeSchemaV2 = z
+  .object({
+    id: z.string().trim().min(1),
+    source: z.string().trim().min(1),
+    target: z.string().trim().min(1),
+    sourceHandle: z.string().trim().min(1).nullish().transform((value) => value ?? null),
+    targetHandle: z.string().trim().min(1).nullish().transform((value) => value ?? null),
+    label: z.string().trim().min(1).nullish().transform((value) => value ?? null),
+    meta: z.record(z.unknown()).nullish().transform((value) => value ?? {}),
+    createdAtMs: z.number().int().nonnegative(),
+    updatedAtMs: z.number().int().nonnegative()
+  })
+  .refine((edge) => edge.source !== edge.target, {
+    message: 'Graph self-loops are not supported'
+  });
+
+export const graphSnapshotSchemaV2 = z
+  .object({
+    schemaVersion: z.literal(2),
+    nodes: z.array(graphNodeSchemaV2),
+    edges: z.array(graphEdgeSchemaV2)
+  })
+  .superRefine((snapshot, context) => {
+    const nodeIds = new Set<string>();
+    for (const [index, node] of snapshot.nodes.entries()) {
+      if (nodeIds.has(node.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', index, 'id'],
+          message: 'Graph node ids must be unique'
+        });
+      }
+      nodeIds.add(node.id);
+    }
+
+    const edgeIds = new Set<string>();
+    for (const [index, edge] of snapshot.edges.entries()) {
+      if (edgeIds.has(edge.id)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['edges', index, 'id'],
+          message: 'Graph edge ids must be unique'
+        });
+      }
+      edgeIds.add(edge.id);
+
+      if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['edges', index],
+          message: 'Graph edges must reference existing nodes'
+        });
+      }
+    }
+  });
+
+export const graphLoadSchemaV2 = z.object({
+  workspaceId: workspaceIdSchema
+});
+
+export const graphSaveSchemaV2 = z.object({
+  workspaceId: workspaceIdSchema,
+  graphSnapshot: graphSnapshotSchemaV2
+});
+
+export const workspaceInfoSchema = z.object({
+  workspaceId: workspaceIdSchema
+});
+
+export const nodeListSchema = z.object({
+  workspaceId: workspaceIdSchema
+});
+
+export const nodeGetSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1)
+});
+
+export const nodeNeighborsSchema = nodeGetSchema;
+
+export const nodeReadSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  mode: z.string().trim().min(1).optional()
+});
+
+export const nodeActionSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  action: z.string().trim().min(1),
+  payload: z.record(z.unknown()).optional(),
+  requestId: z.string().trim().min(1).optional()
+});
+
+export const componentListSchema = z.object({
+  workspaceId: workspaceIdSchema.optional()
+});
+
+export const componentInstallSourceTypeSchema = z.enum(['directory', 'zip']);
+
+export const componentInstallSchema = z
+  .object({
+    sourceType: componentInstallSourceTypeSchema,
+    sourcePath: z.string().trim().min(1)
+  })
+  .refine((input) => /^(?:[A-Za-z]:[\\/]|\/|\\\\)/.test(input.sourcePath), {
+    message: 'Component install source path must be absolute',
+    path: ['sourcePath']
+  });
+
+export const componentUninstallSchema = z.object({
+  name: componentTypeSchema,
+  version: componentVersionSchema.optional()
+});
+
+export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude', 'opencode']);
 
 export const runStatusSchema = z.enum(['queued', 'running', 'completed', 'failed']);
 
@@ -185,6 +331,21 @@ export type CanvasEdgeInput = z.infer<typeof canvasEdgeSchema>;
 export type CanvasStateInput = z.infer<typeof canvasStateSchema>;
 export type CanvasLoadInput = z.infer<typeof canvasLoadSchema>;
 export type CanvasSaveInput = z.infer<typeof canvasSaveSchema>;
+export type GraphNodeV2Input = z.infer<typeof graphNodeSchemaV2>;
+export type GraphEdgeV2Input = z.infer<typeof graphEdgeSchemaV2>;
+export type GraphSnapshotV2Input = z.infer<typeof graphSnapshotSchemaV2>;
+export type GraphLoadV2Input = z.infer<typeof graphLoadSchemaV2>;
+export type GraphSaveV2Input = z.infer<typeof graphSaveSchemaV2>;
+export type WorkspaceInfoInput = z.infer<typeof workspaceInfoSchema>;
+export type NodeListInput = z.infer<typeof nodeListSchema>;
+export type NodeGetInput = z.infer<typeof nodeGetSchema>;
+export type NodeNeighborsInput = z.infer<typeof nodeNeighborsSchema>;
+export type NodeReadInput = z.infer<typeof nodeReadSchema>;
+export type NodeActionInput = z.infer<typeof nodeActionSchema>;
+export type ComponentListInput = z.infer<typeof componentListSchema>;
+export type ComponentInstallSourceTypeInput = z.infer<typeof componentInstallSourceTypeSchema>;
+export type ComponentInstallInput = z.infer<typeof componentInstallSchema>;
+export type ComponentUninstallInput = z.infer<typeof componentUninstallSchema>;
 export type RunRuntimeInput = z.infer<typeof runRuntimeSchema>;
 export type RunStatusInput = z.infer<typeof runStatusSchema>;
 export type RunStartInput = z.infer<typeof runStartSchema>;
@@ -196,3 +357,5 @@ export type PortalCaptureInput = z.infer<typeof portalCaptureSchema>;
 export type PortalStructureInput = z.infer<typeof portalStructureSchema>;
 export type PortalClickInput = z.infer<typeof portalClickSchema>;
 export type PortalInputInput = z.infer<typeof portalInputSchema>;
+
+export { componentCapabilitySchema };

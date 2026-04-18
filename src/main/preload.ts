@@ -3,6 +3,9 @@ import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts
 import type {
   CanvasLoadInput,
   CanvasSaveInput,
+  ComponentInstallInput,
+  ComponentListInput,
+  ComponentUninstallInput,
   FileTreeLoadInput,
   PortalCaptureInput,
   PortalClickInput,
@@ -30,6 +33,14 @@ const shellBridge: OpenWeaveShellBridge = {
     openWorkspace: (input: WorkspaceOpenInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpen, input),
     deleteWorkspace: (input: WorkspaceDeleteInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.workspaceDelete, input)
+  },
+  components: {
+    listComponents: (input: ComponentListInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.componentList, input),
+    installComponent: (input: ComponentInstallInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.componentInstall, input),
+    uninstallComponent: (input: ComponentUninstallInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.componentUninstall, input)
   },
   canvas: {
     loadCanvasState: (input: CanvasLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasLoad, input),
