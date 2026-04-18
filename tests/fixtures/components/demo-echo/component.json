@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 1,
+  "name": "external.demo-echo",
+  "version": "0.1.0",
+  "displayName": "Demo Echo",
+  "category": "demo",
+  "kind": "external",
+  "description": "Demo external component fixture used to validate installer and registry flows.",
+  "entry": {
+    "renderer": "renderer/index.js",
+    "worker": "worker/index.js"
+  },
+  "node": {
+    "defaultTitle": "Demo Echo",
+    "defaultSize": {
+      "width": 320,
+      "height": 180
+    }
+  },
+  "schema": {
+    "config": {
+      "type": "object"
+    },
+    "state": {
+      "type": "object"
+    }
+  },
+  "capabilities": ["read", "write"],
+  "actions": [
+    {
+      "name": "read",
+      "description": "Read the current demo echo content.",
+      "inputSchema": "schemas/action.read.input.json",
+      "outputSchema": "schemas/action.read.output.json",
+      "idempotent": true
+    },
+    {
+      "name": "write",
+      "description": "Write demo echo content.",
+      "inputSchema": "schemas/action.write.input.json",
+      "outputSchema": "schemas/action.write.output.json",
+      "idempotent": false
+    },
+    {
+      "name": "echo",
+      "description": "Echo the current content with a suffix.",
+      "inputSchema": "schemas/action.echo.input.json",
+      "outputSchema": "schemas/action.echo.output.json",
+      "idempotent": true
+    }
+  ],
+  "permissions": {
+    "fs": "none",
+    "network": "none",
+    "process": "none"
+  },
+  "compatibility": {
+    "openweave": ">=0.1.0",
+    "platforms": ["darwin", "linux", "win32"]
+  }
+}

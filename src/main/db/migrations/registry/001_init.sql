@@ -21,3 +21,20 @@ CREATE TABLE IF NOT EXISTS workspace_branch_links (
 
 CREATE INDEX IF NOT EXISTS idx_workspace_branch_links_source_workspace_id
   ON workspace_branch_links (source_workspace_id);
+
+CREATE TABLE IF NOT EXISTS component_packages (
+  name TEXT NOT NULL,
+  version TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  package_root TEXT NOT NULL,
+  package_checksum TEXT,
+  manifest_json TEXT NOT NULL,
+  is_enabled INTEGER NOT NULL,
+  is_installed INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (name, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_component_packages_enabled
+  ON component_packages (is_enabled, source_kind, name, version);

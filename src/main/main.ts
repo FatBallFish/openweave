@@ -11,6 +11,7 @@ import {
   disposeCanvasWorkspaceRepository,
   registerCanvasIpcHandlers
 } from './ipc/canvas';
+import { disposeComponentsIpcHandlers, registerComponentsIpcHandlers } from './ipc/components';
 import { disposeFilesIpcHandlers, registerFilesIpcHandlers } from './ipc/files';
 import {
   disposePortalIpcHandlers,
@@ -92,6 +93,11 @@ void app.whenReady().then(() => {
     workspaceDbDir,
     registryDbFilePath
   });
+  registerComponentsIpcHandlers({
+    dbFilePath: registryDbFilePath,
+    installRoot: path.join(app.getPath('userData'), 'components'),
+    appVersion: app.getVersion()
+  });
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
     workspaceDbDir,
@@ -128,6 +134,7 @@ app.on('will-quit', () => {
     }
   }
   disposeFilesIpcHandlers();
+  disposeComponentsIpcHandlers();
   disposePortalIpcHandlers();
   disposeRunsIpcHandlers();
   disposeBranchWorkspaceIpcHandlers();

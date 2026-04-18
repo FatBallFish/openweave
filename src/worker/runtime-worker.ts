@@ -1,10 +1,11 @@
 import type { RuntimeAdapterInput, RuntimeAdapterProcess } from './adapters/shell-runtime';
 import { launchClaudeRuntime } from './adapters/claude-runtime';
 import { launchCodexRuntime } from './adapters/codex-runtime';
+import { launchOpenCodeRuntime } from './adapters/opencode-runtime';
 import { launchShellRuntime } from './adapters/shell-runtime';
 
-type RuntimeKind = 'shell' | 'codex' | 'claude';
-const RUNTIME_KINDS = new Set<RuntimeKind>(['shell', 'codex', 'claude']);
+type RuntimeKind = 'shell' | 'codex' | 'claude' | 'opencode';
+const RUNTIME_KINDS = new Set<RuntimeKind>(['shell', 'codex', 'claude', 'opencode']);
 
 interface StartRunMessage {
   type: 'start';
@@ -79,7 +80,23 @@ const toRuntimeEnv = (input: Record<string, string | undefined>): NodeJS.Process
   return env;
 };
 
-const resolveRuntimeLauncher = (
+export type RuntimeWorkerErrorCode = 'RUNTIME_UNSUPPORTED';
+
+export class RuntimeWorkerError extends Error {
+  public readonly code: RuntimeWorkerErrorCode;
+
+  constructor(code: RuntimeWorkerErrorCode, message: string) {
+    super(`[${code}] ${message}`);
+    this.name = 'RuntimeWorkerError';
+    this.code = code;
+  }
+}
+
+const createUnsupportedRuntimeError = (runtime: string): RuntimeWorkerError => {
+  return new RuntimeWorkerError('RUNTIME_UNSUPPORTED', `Unsupported runtime: ${runtime}`);
+};
+
+export const resolveRuntimeLauncher = (
   runtime: RuntimeKind
 ): ((input: RuntimeAdapterInput) => RuntimeAdapterProcess) => {
   switch (runtime) {
@@ -89,8 +106,10 @@ const resolveRuntimeLauncher = (
       return launchCodexRuntime;
     case 'claude':
       return launchClaudeRuntime;
+    case 'opencode':
+      return launchOpenCodeRuntime;
     default:
-      throw new Error(`Unsupported runtime: ${String(runtime)}`);
+      throw createUnsupportedRuntimeError(String(runtime));
   }
 };
 
@@ -202,7 +221,7 @@ const handleMessage = (message: unknown): void => {
   }
 
   if (!isRuntimeKind(maybeStartMessage.runtime)) {
-    const chunk = `Unsupported runtime: ${maybeStartMessage.runtime}\n`;
+    const chunk = `${createUnsupportedRuntimeError(maybeStartMessage.runtime).message}\n`;
     sendMessage({
       type: 'stderr',
       runId: maybeStartMessage.runId,

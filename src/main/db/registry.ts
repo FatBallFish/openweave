@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync as NodeDatabaseSync } from 'node:sqlite';
+import type { ComponentManifestV1 } from '../../shared/components/manifest';
 import type { WorkspaceRecord } from '../../shared/ipc/contracts';
 import { workspaceCreateSchema, workspaceIdSchema, type WorkspaceCreateInput } from '../../shared/ipc/schemas';
 
@@ -21,6 +22,19 @@ interface BranchWorkspaceLinkRow {
   source_root_dir: string;
   target_root_dir: string;
   created_at_ms: number;
+}
+
+interface ComponentPackageRow {
+  name: string;
+  version: string;
+  source_kind: 'builtin' | 'external';
+  package_root: string;
+  package_checksum: string | null;
+  manifest_json: string;
+  is_enabled: number;
+  is_installed: number;
+  created_at_ms: number;
+  updated_at_ms: number;
 }
 
 const fallbackMigrationSql = `
@@ -47,6 +61,23 @@ CREATE TABLE IF NOT EXISTS workspace_branch_links (
 
 CREATE INDEX IF NOT EXISTS idx_workspace_branch_links_source_workspace_id
   ON workspace_branch_links (source_workspace_id);
+
+CREATE TABLE IF NOT EXISTS component_packages (
+  name TEXT NOT NULL,
+  version TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  package_root TEXT NOT NULL,
+  package_checksum TEXT,
+  manifest_json TEXT NOT NULL,
+  is_enabled INTEGER NOT NULL,
+  is_installed INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (name, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_component_packages_enabled
+  ON component_packages (is_enabled, source_kind, name, version);
 `;
 
 const selectWorkspaceByIdSql = `
@@ -120,6 +151,81 @@ DELETE FROM workspace_branch_links
 WHERE workspace_id = @workspace_id
 `;
 
+const upsertComponentPackageSql = `
+INSERT INTO component_packages (
+  name,
+  version,
+  source_kind,
+  package_root,
+  package_checksum,
+  manifest_json,
+  is_enabled,
+  is_installed,
+  created_at_ms,
+  updated_at_ms
+)
+VALUES (
+  @name,
+  @version,
+  @source_kind,
+  @package_root,
+  @package_checksum,
+  @manifest_json,
+  @is_enabled,
+  @is_installed,
+  @created_at_ms,
+  @updated_at_ms
+)
+ON CONFLICT(name, version) DO UPDATE SET
+  source_kind = excluded.source_kind,
+  package_root = excluded.package_root,
+  package_checksum = excluded.package_checksum,
+  manifest_json = excluded.manifest_json,
+  is_enabled = excluded.is_enabled,
+  is_installed = excluded.is_installed,
+  updated_at_ms = excluded.updated_at_ms
+`;
+
+const selectComponentPackageSql = `
+SELECT
+  name,
+  version,
+  source_kind,
+  package_root,
+  package_checksum,
+  manifest_json,
+  is_enabled,
+  is_installed,
+  created_at_ms,
+  updated_at_ms
+FROM component_packages
+WHERE name = @name AND version = @version
+`;
+
+const selectComponentPackagesSql = `
+SELECT
+  name,
+  version,
+  source_kind,
+  package_root,
+  package_checksum,
+  manifest_json,
+  is_enabled,
+  is_installed,
+  created_at_ms,
+  updated_at_ms
+FROM component_packages
+ORDER BY name ASC, version ASC
+`;
+
+const updateComponentPackageStatusSql = `
+UPDATE component_packages
+SET is_enabled = @is_enabled,
+    is_installed = @is_installed,
+    updated_at_ms = @updated_at_ms
+WHERE name = @name AND version = @version
+`;
+
 export interface RegistryRepositoryOptions {
   dbFilePath: string;
   now?: () => number;
@@ -143,6 +249,30 @@ export interface UpsertBranchWorkspaceLinkInput {
   targetRootDir: string;
 }
 
+export interface ComponentPackageRecord {
+  name: string;
+  version: string;
+  sourceKind: 'builtin' | 'external';
+  packageRoot: string;
+  packageChecksum: string | null;
+  manifest: ComponentManifestV1;
+  isEnabled: boolean;
+  isInstalled: boolean;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface UpsertComponentPackageInput {
+  name: string;
+  version: string;
+  sourceKind: 'builtin' | 'external';
+  packageRoot: string;
+  packageChecksum?: string | null;
+  manifest: ComponentManifestV1;
+  isEnabled: boolean;
+  isInstalled: boolean;
+}
+
 export interface RegistryRepository {
   createWorkspace: (input: WorkspaceCreateInput) => WorkspaceRecord;
   listWorkspaces: () => WorkspaceRecord[];
@@ -152,6 +282,14 @@ export interface RegistryRepository {
   upsertBranchWorkspaceLink: (input: UpsertBranchWorkspaceLinkInput) => BranchWorkspaceLinkRecord;
   getBranchWorkspaceLink: (workspaceId: string) => BranchWorkspaceLinkRecord | null;
   deleteBranchWorkspaceLink: (workspaceId: string) => void;
+  upsertComponentPackage: (input: UpsertComponentPackageInput) => ComponentPackageRecord;
+  getComponentPackage: (name: string, version: string) => ComponentPackageRecord | null;
+  listComponentPackages: () => ComponentPackageRecord[];
+  setComponentPackageStatus: (
+    name: string,
+    version: string,
+    status: { isEnabled: boolean; isInstalled: boolean }
+  ) => void;
   deleteWorkspace: (workspaceId: string) => boolean;
   close: () => void;
 }
@@ -176,6 +314,32 @@ const mapBranchWorkspaceLinkRow = (row: BranchWorkspaceLinkRow): BranchWorkspace
     targetRootDir: row.target_root_dir,
     createdAtMs: row.created_at_ms
   };
+};
+
+const mapComponentPackageRow = (row: ComponentPackageRow): ComponentPackageRecord => {
+  return {
+    name: row.name,
+    version: row.version,
+    sourceKind: row.source_kind,
+    packageRoot: row.package_root,
+    packageChecksum: row.package_checksum,
+    manifest: JSON.parse(row.manifest_json) as ComponentManifestV1,
+    isEnabled: row.is_enabled === 1,
+    isInstalled: row.is_installed === 1,
+    createdAtMs: row.created_at_ms,
+    updatedAtMs: row.updated_at_ms
+  };
+};
+
+const ensureComponentPackageSchema = (db: NodeDatabaseSync): void => {
+  const columns = db
+    .prepare('PRAGMA table_info(component_packages)')
+    .all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has('package_checksum')) {
+    db.exec('ALTER TABLE component_packages ADD COLUMN package_checksum TEXT');
+  }
 };
 
 const readMigrationSql = (): string => {
@@ -228,6 +392,7 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
   fs.mkdirSync(path.dirname(options.dbFilePath), { recursive: true });
   const db: NodeDatabaseSync = new DatabaseSync(options.dbFilePath);
   db.exec(readMigrationSql());
+  ensureComponentPackageSchema(db);
 
   return {
     createWorkspace: (input: WorkspaceCreateInput): WorkspaceRecord => {
@@ -309,6 +474,55 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
       db.prepare(deleteBranchWorkspaceLinkSql).run({
         workspace_id: parsedWorkspaceId
+      });
+    },
+    upsertComponentPackage: (input: UpsertComponentPackageInput): ComponentPackageRecord => {
+      const timestamp = now();
+
+      db.prepare(upsertComponentPackageSql).run({
+        name: input.name,
+        version: input.version,
+        source_kind: input.sourceKind,
+        package_root: path.resolve(input.packageRoot),
+        package_checksum: input.packageChecksum ?? null,
+        manifest_json: JSON.stringify(input.manifest),
+        is_enabled: input.isEnabled ? 1 : 0,
+        is_installed: input.isInstalled ? 1 : 0,
+        created_at_ms: timestamp,
+        updated_at_ms: timestamp
+      });
+
+      const row = db.prepare(selectComponentPackageSql).get({
+        name: input.name,
+        version: input.version
+      }) as ComponentPackageRow | undefined;
+      if (!row) {
+        throw new Error(`Component package not found: ${input.name}@${input.version}`);
+      }
+      return mapComponentPackageRow(row);
+    },
+    getComponentPackage: (name: string, version: string): ComponentPackageRecord | null => {
+      const row = db.prepare(selectComponentPackageSql).get({
+        name,
+        version
+      }) as ComponentPackageRow | undefined;
+      return row ? mapComponentPackageRow(row) : null;
+    },
+    listComponentPackages: (): ComponentPackageRecord[] => {
+      const rows = db.prepare(selectComponentPackagesSql).all() as unknown as ComponentPackageRow[];
+      return rows.map(mapComponentPackageRow);
+    },
+    setComponentPackageStatus: (
+      name: string,
+      version: string,
+      status: { isEnabled: boolean; isInstalled: boolean }
+    ): void => {
+      db.prepare(updateComponentPackageStatusSql).run({
+        name,
+        version,
+        is_enabled: status.isEnabled ? 1 : 0,
+        is_installed: status.isInstalled ? 1 : 0,
+        updated_at_ms: now()
       });
     },
     deleteWorkspace: (workspaceId: string): boolean => {

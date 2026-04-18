@@ -16,12 +16,15 @@ import {
   type RunGetInput,
   type RunListInput,
   type RunStartInput,
+  type RunRuntimeInput,
   type RunStatusInput
 } from '../../shared/ipc/schemas';
 import { createAuditLog } from '../audit/audit-log';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository } from '../db/workspace';
 import { createRecoveryService } from '../recovery/recovery-service';
+import type { SkillPackRuntimeKind } from '../skills/skill-pack-manager';
+import { createWorkspaceSkillInjectionManager } from '../skills/workspace-skill-injection-manager';
 import {
   createRuntimeBridge,
   type RuntimeBridge,
@@ -44,15 +47,23 @@ export interface RunsIpcHandlers {
 export interface RunsIpcDependencies {
   assertWorkspaceExists: (workspaceId: string) => void;
   resolveWorkspaceRootDir?: (workspaceId: string) => string;
+  prepareRuntimeLaunch?: (input: PrepareRuntimeLaunchInput) => void;
   runtimeBridge?: RuntimeBridge;
   now?: () => number;
   randomId?: () => string;
   launchEnv?: NodeJS.ProcessEnv;
 }
 
+export interface PrepareRuntimeLaunchInput {
+  workspaceId: string;
+  workspaceRootDir?: string;
+  runtime: RunRuntimeInput;
+}
+
 interface RunsServiceOptions {
   assertWorkspaceExists: (workspaceId: string) => void;
   resolveWorkspaceRootDir?: (workspaceId: string) => string;
+  prepareRuntimeLaunch?: (input: PrepareRuntimeLaunchInput) => void;
   runtimeBridge: RuntimeBridge;
   now: () => number;
   randomId: () => string;
@@ -64,8 +75,14 @@ const MAX_TAIL_LOG_LENGTH = 4096;
 const MAX_STORED_RUNS = 200;
 const MAX_LISTED_RUNS = 100;
 
+const MANAGED_RUNTIMES = new Set<SkillPackRuntimeKind>(['codex', 'claude', 'opencode']);
+
 const isTerminalRunStatus = (status: RunStatusInput): boolean => {
   return status === 'completed' || status === 'failed';
+};
+
+const isManagedRuntime = (runtime: RunRuntimeInput): runtime is SkillPackRuntimeKind => {
+  return MANAGED_RUNTIMES.has(runtime as SkillPackRuntimeKind);
 };
 
 const appendTailLog = (tail: string, chunk: string): string => {
@@ -96,12 +113,21 @@ const toErrorMessage = (error: unknown): string => {
   return 'Runtime launch failed';
 };
 
+const BRIDGE_USAGE_HINT = 'Use the OpenWeave bridge to inspect workspace graph nodes.';
+const CLI_USAGE_HINT = 'Use the openweave CLI from the workspace root.';
+
+const buildManagedRuntimeConflictMessage = (activeRun: RunRecord, nextRuntime: RunRuntimeInput): string => {
+  return `Managed runtime launch blocked: ${nextRuntime} cannot start while ${activeRun.runtime} run ${activeRun.id} is still ${activeRun.status}`;
+};
+
 class InMemoryRunsService {
   private readonly runs = new Map<string, RunRecord>();
 
   private readonly assertWorkspaceExists: (workspaceId: string) => void;
 
   private readonly resolveWorkspaceRootDir?: (workspaceId: string) => string;
+
+  private readonly prepareRuntimeLaunch?: (input: PrepareRuntimeLaunchInput) => void;
 
   private readonly runtimeBridge: RuntimeBridge;
 
@@ -113,9 +139,31 @@ class InMemoryRunsService {
 
   private readonly onRunUpdated?: (run: RunRecord) => void;
 
+  private findManagedRuntimeConflict(run: RunRecord): RunRecord | null {
+    if (!isManagedRuntime(run.runtime)) {
+      return null;
+    }
+
+    for (const existingRun of this.runs.values()) {
+      if (existingRun.id === run.id || existingRun.workspaceId !== run.workspaceId) {
+        continue;
+      }
+      if (isTerminalRunStatus(existingRun.status) || !isManagedRuntime(existingRun.runtime)) {
+        continue;
+      }
+      if (existingRun.runtime === run.runtime) {
+        continue;
+      }
+      return existingRun;
+    }
+
+    return null;
+  }
+
   constructor(options: RunsServiceOptions) {
     this.assertWorkspaceExists = options.assertWorkspaceExists;
     this.resolveWorkspaceRootDir = options.resolveWorkspaceRootDir;
+    this.prepareRuntimeLaunch = options.prepareRuntimeLaunch;
     this.runtimeBridge = options.runtimeBridge;
     this.now = options.now;
     this.randomId = options.randomId;
@@ -170,6 +218,15 @@ class InMemoryRunsService {
     this.storeRun(run);
 
     try {
+      const managedRuntimeConflict = this.findManagedRuntimeConflict(run);
+      if (managedRuntimeConflict) {
+        throw new Error(buildManagedRuntimeConflictMessage(managedRuntimeConflict, run.runtime));
+      }
+      this.prepareRuntimeLaunch?.({
+        workspaceId: run.workspaceId,
+        workspaceRootDir,
+        runtime: run.runtime
+      });
       this.runtimeBridge.start({
         runId: run.id,
         runtime: run.runtime,
@@ -302,6 +359,7 @@ export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandler
   const service = new InMemoryRunsService({
     assertWorkspaceExists: deps.assertWorkspaceExists,
     resolveWorkspaceRootDir: deps.resolveWorkspaceRootDir,
+    prepareRuntimeLaunch: deps.prepareRuntimeLaunch,
     runtimeBridge: deps.runtimeBridge ?? createRuntimeBridge(),
     now: deps.now ?? (() => Date.now()),
     randomId: deps.randomId ?? (() => crypto.randomUUID()),
@@ -340,6 +398,7 @@ interface RegisteredRunsContext {
   workspaceDbDir: string;
   enableCrashRecoveryOnOpen: boolean;
   recoveredWorkspaceIds: Set<string>;
+  workspaceRootDirs: Map<string, string>;
   registry: RegistryRepository;
   service: InMemoryRunsService;
 }
@@ -381,6 +440,29 @@ const assertRegisteredWorkspaceExists = (context: RegisteredRunsContext, workspa
   return parsedWorkspaceId;
 };
 
+const prepareRegisteredRuntimeLaunch = (
+  workspaceDbDir: string,
+  input: PrepareRuntimeLaunchInput
+): void => {
+  const workspaceRootDir = input.workspaceRootDir;
+  const runtimeKind = isManagedRuntime(input.runtime) ? input.runtime : null;
+  if (!workspaceRootDir || runtimeKind === null) {
+    return;
+  }
+
+  withWorkspaceRepository(workspaceDbDir, input.workspaceId, (repository) => {
+    createWorkspaceSkillInjectionManager({
+      workspaceId: input.workspaceId,
+      workspaceRoot: workspaceRootDir,
+      repository
+    }).prepareForRuntimeLaunch({
+      runtimeKind,
+      bridgeUsageHint: BRIDGE_USAGE_HINT,
+      cliUsageHint: CLI_USAGE_HINT
+    });
+  });
+};
+
 export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const workspaceDbDir = options.workspaceDbDir ?? path.join(path.dirname(options.dbFilePath), 'workspaces');
@@ -398,11 +480,15 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     }
 
     const registry = createRegistryRepository({ dbFilePath: options.dbFilePath });
+    const workspaceRootDirs = new Map(
+      registry.listWorkspaces().map((workspace) => [workspace.id, workspace.rootDir] as const)
+    );
     registeredRunsContext = {
       dbFilePath: options.dbFilePath,
       workspaceDbDir,
       enableCrashRecoveryOnOpen,
       recoveredWorkspaceIds: new Set<string>(),
+      workspaceRootDirs,
       registry,
       service: new InMemoryRunsService({
         assertWorkspaceExists: (workspaceId: string) => {
@@ -413,7 +499,12 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
         },
         resolveWorkspaceRootDir: (workspaceId: string) => {
           const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
-          return registry.getWorkspace(parsedWorkspaceId).rootDir;
+          const workspaceRootDir = registry.getWorkspace(parsedWorkspaceId).rootDir;
+          registeredRunsContext?.workspaceRootDirs.set(parsedWorkspaceId, workspaceRootDir);
+          return workspaceRootDir;
+        },
+        prepareRuntimeLaunch: (input: PrepareRuntimeLaunchInput) => {
+          prepareRegisteredRuntimeLaunch(workspaceDbDir, input);
         },
         runtimeBridge: options.runtimeBridge ?? createRuntimeBridge(),
         now: () => Date.now(),
@@ -483,10 +574,26 @@ export const disposeRunsForWorkspace = (workspaceId: string): void => {
   const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
   registeredRunsContext.service.disposeWorkspaceRuns(parsedWorkspaceId);
   registeredRunsContext.recoveredWorkspaceIds.delete(parsedWorkspaceId);
+  const workspaceRootDir =
+    registeredRunsContext.workspaceRootDirs.get(parsedWorkspaceId) ??
+    (registeredRunsContext.registry.hasWorkspace(parsedWorkspaceId)
+      ? registeredRunsContext.registry.getWorkspace(parsedWorkspaceId).rootDir
+      : undefined);
   withWorkspaceRepository(registeredRunsContext.workspaceDbDir, parsedWorkspaceId, (repository) => {
+    if (workspaceRootDir) {
+      const manager = createWorkspaceSkillInjectionManager({
+        workspaceId: parsedWorkspaceId,
+        workspaceRoot: workspaceRootDir,
+        repository
+      });
+      for (const record of repository.listSkillInjections()) {
+        manager.cleanupRuntimeInjection(record.runtimeKind);
+      }
+    }
     repository.deleteWorkspaceRuns(parsedWorkspaceId);
     repository.deleteWorkspaceAuditLogs(parsedWorkspaceId);
   });
+  registeredRunsContext.workspaceRootDirs.delete(parsedWorkspaceId);
 };
 
 export const recoverRunsForWorkspace = (workspaceId: string): void => {

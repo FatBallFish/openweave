@@ -2,7 +2,19 @@ import type {
   CanvasLoadInput,
   CanvasSaveInput,
   CanvasStateInput,
+  ComponentInstallInput,
+  ComponentInstallSourceTypeInput,
+  ComponentListInput,
+  ComponentUninstallInput,
   FileTreeLoadInput,
+  GraphLoadV2Input,
+  GraphSaveV2Input,
+  GraphSnapshotV2Input,
+  NodeActionInput,
+  NodeGetInput,
+  NodeListInput,
+  NodeNeighborsInput,
+  NodeReadInput,
   PortalCaptureInput,
   PortalClickInput,
   PortalInputInput,
@@ -13,11 +25,17 @@ import type {
   RunRuntimeInput,
   RunStartInput,
   RunStatusInput,
+  WorkspaceInfoInput,
   WorkspaceCreateInput,
   WorkspaceBranchCreateInput,
   WorkspaceDeleteInput,
   WorkspaceOpenInput
 } from './schemas';
+import type {
+  ComponentActionManifest,
+  ComponentCapability,
+  ComponentManifestV1
+} from '../components/manifest';
 import type {
   PortalScreenshotResult,
   PortalSessionRecord,
@@ -30,6 +48,9 @@ export const IPC_CHANNELS = {
   workspaceOpen: 'workspace:open',
   workspaceDelete: 'workspace:delete',
   workspaceCreateBranch: 'workspace:create-branch',
+  componentList: 'component:list',
+  componentInstall: 'component:install',
+  componentUninstall: 'component:uninstall',
   canvasLoad: 'canvas:load',
   canvasSave: 'canvas:save',
   runStart: 'run:start',
@@ -66,12 +87,29 @@ export interface WorkspaceDeleteResponse {
   deleted: boolean;
 }
 
+export interface WorkspaceInfoResponse {
+  workspaceId: string;
+  name: string;
+  rootDir: string;
+  graphSchemaVersion: 2;
+  nodeCount: number;
+  edgeCount: number;
+}
+
 export interface CanvasLoadResponse {
   state: CanvasStateInput;
 }
 
 export interface CanvasSaveResponse {
   state: CanvasStateInput;
+}
+
+export interface GraphLoadResponseV2 {
+  graphSnapshot: GraphSnapshotV2Input;
+}
+
+export interface GraphSaveResponseV2 {
+  graphSnapshot: GraphSnapshotV2Input;
 }
 
 export interface RunRecord {
@@ -147,6 +185,103 @@ export interface PortalInputResponse {
   ok: true;
 }
 
+export interface ComponentSummaryRecord {
+  name: string;
+  version: string;
+  kind: ComponentManifestV1['kind'];
+  displayName: string;
+  category: string;
+  capabilities: ComponentCapability[];
+  installed: boolean;
+  builtin: boolean;
+}
+
+export interface ComponentInstallRecord {
+  componentId: string;
+  name: string;
+  version: string;
+  sourceType: ComponentInstallSourceTypeInput;
+  installRoot: string;
+}
+
+export interface ComponentListResponse {
+  components: ComponentSummaryRecord[];
+}
+
+export interface ComponentInstallResponse {
+  component: ComponentInstallRecord;
+}
+
+export interface ComponentUninstallResponse {
+  name: string;
+  version: string | null;
+  uninstalled: boolean;
+  fallbackRequired: boolean;
+}
+
+export interface GraphNodeSummaryRecord {
+  id: string;
+  title: string;
+  componentType: string;
+  componentVersion: string;
+  capabilities: ComponentCapability[];
+}
+
+export interface GraphNodeRecord {
+  id: string;
+  componentType: string;
+  componentVersion: string;
+  title: string;
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  config: Record<string, unknown>;
+  state: Record<string, unknown>;
+  capabilities: ComponentCapability[];
+}
+
+export interface GraphNodeGetResponse {
+  node: GraphNodeRecord;
+}
+
+export interface GraphNodeListResponse {
+  nodes: GraphNodeSummaryRecord[];
+}
+
+export interface GraphNodeNeighborRecord {
+  edgeId: string;
+  nodeId: string;
+  componentType: string;
+  title: string;
+}
+
+export interface GraphNodeNeighborsResponse {
+  nodeId: string;
+  upstream: GraphNodeNeighborRecord[];
+  downstream: GraphNodeNeighborRecord[];
+}
+
+export interface GraphNodeReadResponse {
+  nodeId: string;
+  action: 'read';
+  result: Record<string, unknown>;
+}
+
+export interface GraphNodeActionResponse {
+  nodeId: string;
+  action: string;
+  ok: true;
+  result: Record<string, unknown>;
+}
+
+export interface ComponentMetadataRecord {
+  manifest: ComponentManifestV1;
+  actions: ComponentActionManifest[];
+}
+
 export interface WorkspaceBridgeApi {
   createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceMutationResponse>;
   createBranchWorkspace: (input: WorkspaceBranchCreateInput) => Promise<WorkspaceMutationResponse>;
@@ -158,6 +293,11 @@ export interface WorkspaceBridgeApi {
 export interface CanvasBridgeApi {
   loadCanvasState: (input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
   saveCanvasState: (input: CanvasSaveInput) => Promise<CanvasSaveResponse>;
+}
+
+export interface GraphBridgeApiV2 {
+  loadGraphSnapshot: (input: GraphLoadV2Input) => Promise<GraphLoadResponseV2>;
+  saveGraphSnapshot: (input: GraphSaveV2Input) => Promise<GraphSaveResponseV2>;
 }
 
 export interface RunsBridgeApi {
@@ -178,10 +318,29 @@ export interface PortalBridgeApi {
   inputPortalText: (input: PortalInputInput) => Promise<PortalInputResponse>;
 }
 
+export interface AgentWorkspaceBridgeApi {
+  getWorkspaceInfo: (input: WorkspaceInfoInput) => Promise<WorkspaceInfoResponse>;
+}
+
+export interface AgentNodeBridgeApi {
+  listNodes: (input: NodeListInput) => Promise<GraphNodeListResponse>;
+  getNode: (input: NodeGetInput) => Promise<GraphNodeGetResponse>;
+  getNodeNeighbors: (input: NodeNeighborsInput) => Promise<GraphNodeNeighborsResponse>;
+  readNode: (input: NodeReadInput) => Promise<GraphNodeReadResponse>;
+  runNodeAction: (input: NodeActionInput) => Promise<GraphNodeActionResponse>;
+}
+
+export interface AgentComponentBridgeApi {
+  listComponents: (input: ComponentListInput) => Promise<ComponentListResponse>;
+  installComponent: (input: ComponentInstallInput) => Promise<ComponentInstallResponse>;
+  uninstallComponent: (input: ComponentUninstallInput) => Promise<ComponentUninstallResponse>;
+}
+
 export interface OpenWeaveShellBridge {
   platform: string;
   ipcChannels: typeof IPC_CHANNELS;
   workspaces: WorkspaceBridgeApi;
+  components: AgentComponentBridgeApi;
   canvas: CanvasBridgeApi;
   runs: RunsBridgeApi;
   files: FilesBridgeApi;
