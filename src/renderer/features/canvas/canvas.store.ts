@@ -169,8 +169,8 @@ const createTerminalGraphNode = (): GraphNodeRecord => {
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
     bounds: {
-      x: 160,
-      y: 120,
+      x: 520,
+      y: 80,
       width: manifest.node.defaultSize.width,
       height: manifest.node.defaultSize.height
     },
@@ -195,8 +195,8 @@ const createFileTreeGraphNode = (rootDir: string): GraphNodeRecord => {
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
     bounds: {
-      x: 240,
-      y: 120,
+      x: 80,
+      y: 360,
       width: manifest.node.defaultSize.width,
       height: manifest.node.defaultSize.height
     },
@@ -222,8 +222,8 @@ const createPortalGraphNode = (): GraphNodeRecord => {
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
     bounds: {
-      x: 320,
-      y: 140,
+      x: 520,
+      y: 360,
       width: manifest.node.defaultSize.width,
       height: manifest.node.defaultSize.height
     },

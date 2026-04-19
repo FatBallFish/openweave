@@ -80,6 +80,36 @@ const createGraphSnapshot = (): GraphSnapshotV2Input => ({
   edges: []
 });
 
+const rectanglesOverlap = (
+  left:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | undefined,
+  right:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      }
+    | undefined
+): boolean => {
+  if (!left || !right) {
+    return false;
+  }
+
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -179,6 +209,45 @@ describe('canvas store', () => {
       command: 'pwd',
       runtime: 'codex'
     });
+  });
+
+  it('places newly added builtin hosts on a non-overlapping starter grid', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addPortalNode();
+    await canvasStore.addTerminalNode();
+    await canvasStore.addFileTreeNode('/tmp/ws-1');
+
+    const graphNodes = canvasStore.getState().graphSnapshot.nodes;
+    const portalNode = graphNodes.find((node) => node.componentType === 'builtin.portal');
+    const terminalNode = graphNodes.find((node) => node.componentType === 'builtin.terminal');
+    const fileTreeNode = graphNodes.find((node) => node.componentType === 'builtin.file-tree');
+
+    expect(portalNode).toBeDefined();
+    expect(terminalNode).toBeDefined();
+    expect(fileTreeNode).toBeDefined();
+
+    expect(
+      rectanglesOverlap(
+        portalNode?.bounds,
+        fileTreeNode?.bounds
+      )
+    ).toBe(false);
+    expect(
+      rectanglesOverlap(
+        portalNode?.bounds,
+        terminalNode?.bounds
+      )
+    ).toBe(false);
   });
 
   it('stores save failures and ignores mutations when no workspace is active', async () => {

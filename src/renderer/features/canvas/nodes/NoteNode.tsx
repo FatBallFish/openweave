@@ -20,6 +20,11 @@ export const NoteNode = ({ node, onChange }: NoteNodeProps): JSX.Element => {
       style={{
         border: '1px solid #d0d7e2',
         borderRadius: '8px',
+        boxSizing: 'border-box',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        overflow: 'auto',
         padding: '12px',
         display: 'grid',
         gap: '8px'

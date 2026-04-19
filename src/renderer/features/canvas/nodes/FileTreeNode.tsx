@@ -108,6 +108,11 @@ export const FileTreeNode = ({
       style={{
         border: '1px solid #12b76a',
         borderRadius: '8px',
+        boxSizing: 'border-box',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        overflow: 'hidden',
         padding: '12px',
         display: 'grid',
         gap: '8px',
@@ -115,7 +120,10 @@ export const FileTreeNode = ({
       }}
     >
       <h3 style={{ margin: 0 }}>File tree</h3>
-      <p data-testid={`file-tree-root-${node.id}`} style={{ margin: 0, color: '#344054' }}>
+      <p
+        data-testid={`file-tree-root-${node.id}`}
+        style={{ margin: 0, color: '#344054', overflowWrap: 'anywhere' }}
+      >
         Root: {node.rootDir}
       </p>
 

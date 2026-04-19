@@ -96,6 +96,11 @@ export const TerminalNode = ({
       style={{
         border: '1px solid #84adff',
         borderRadius: '8px',
+        boxSizing: 'border-box',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        overflow: 'auto',
         padding: '12px',
         display: 'grid',
         gap: '8px',

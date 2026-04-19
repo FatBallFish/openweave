@@ -14,6 +14,12 @@ import {
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 
+const DEFAULT_CANVAS_VIEWPORT = {
+  x: 0,
+  y: 0,
+  zoom: 1
+} as const;
+
 interface CanvasShellNodeData {
   workspaceId: string;
   workspaceRootDir: string;
@@ -43,7 +49,16 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
 
 const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element => {
   return (
-    <div data-testid={`canvas-shell-node-${data.node.id}`} style={{ width: '100%', height: '100%' }}>
+    <div
+      className="nodrag nopan"
+      data-testid={`canvas-shell-node-${data.node.id}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        overflow: 'hidden'
+      }}
+    >
       <BuiltinHostRenderer
         workspaceId={data.workspaceId}
         workspaceRootDir={data.workspaceRootDir}
@@ -142,7 +157,7 @@ export const CanvasShell = ({
       >
         <ReactFlowProvider>
           <ReactFlow
-            fitView
+            defaultViewport={DEFAULT_CANVAS_VIEWPORT}
             edges={edges}
             minZoom={0.4}
             nodeTypes={nodeTypes}

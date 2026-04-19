@@ -58,9 +58,30 @@
 - Mitigation: keep this as a non-blocking follow-up; investigate the exact timeout step in a dedicated session instead of widening this slice after the required verification batch is already green.
 - Reproduction status: re-ran `npx playwright test -c playwright.config.ts tests/e2e/branch-workspace.spec.ts --reporter=line` during branch-finish verification and it still timed out standalone.
 
+### 8. 2026-04-20 follow-up: branch-workspace regression is now mitigated
+
+- Status: mitigated in `feat/phase2-interactive-terminal`.
+- Root cause A: `src/main/ipc/branch-workspaces.ts` still cloned only legacy `canvas` rows when `copyCanvas` was enabled, so the new branch workspace opened with an empty Graph Schema V2 snapshot even though renderer hosts now read from graph data.
+- Root cause B: Canvas Shell V2 host interactions were still fragile under React Flow defaults; overflowing host content plus auto-fit viewport transforms caused Playwright clicks inside `portal` / `terminal` / `file-tree` hosts to be mis-targeted during the branch-workspace flow.
+- Landed mitigation: branch-workspace cloning now copies Graph Schema V2 and remaps `builtin.file-tree` `config.rootDir`; renderer starter-node placement now keeps the default portal/terminal/file-tree layout separated; canvas-shell host wrappers now constrain overflow and use a stable default viewport so host controls remain clickable.
+- Primary files: `src/main/ipc/branch-workspaces.ts`, `src/renderer/features/canvas/canvas.store.ts`, `src/renderer/features/canvas-shell/CanvasShell.tsx`, `src/renderer/features/canvas/nodes/FileTreeNode.tsx`, `src/renderer/features/canvas/nodes/PortalNode.tsx`, `src/renderer/features/canvas/nodes/TerminalNode.tsx`, `src/renderer/features/canvas/nodes/NoteNode.tsx`.
+- Verification: `tests/integration/main/branch-workspace.test.ts`, `tests/unit/renderer/canvas.store.test.ts`, `tests/unit/renderer/canvas-shell.test.ts`, `tests/unit/renderer/terminal-node.test.ts`, `tests/unit/renderer/builtin-hosts.test.ts`, `npm run build`, and `npx playwright test -c playwright.config.ts tests/e2e/branch-workspace.spec.ts --reporter=line`.
+
+### 9. Residual guardrail after the 2026-04-20 fix
+
+- Risk: Canvas Shell V2 host content still depends on bounded node layouts; future host UI growth or viewport policy changes could reintroduce click interception or overflow regressions.
+- Impact: interactive renderer controls can become flaky in E2E before functional IPC breaks, especially when a host adds taller toolbars, longer path/url text, or another automatic viewport transform.
+- Mitigation: keep the new branch-workspace integration test plus canvas-store starter-grid test as regression guards, and treat future canvas-shell host styling changes as E2E-sensitive.
+
 ## 2026-04-19 Focused verification record
 
 - `npm run build`
 - `npx vitest run tests/unit/main/preload.test.ts tests/unit/main/runtime-bridge.behavior.test.ts tests/unit/worker/runtime-adapters.test.ts tests/unit/renderer/canvas.store.test.ts tests/unit/renderer/terminal-node.test.ts tests/unit/renderer/terminal-session-pane.test.ts tests/unit/renderer/static-components.test.ts tests/unit/renderer/builtin-host-registry.test.ts tests/unit/renderer/builtin-hosts.test.ts tests/unit/renderer/canvas-shell.test.ts tests/integration/main/graph-persistence-v2.test.ts tests/integration/main/bridge-cli-roundtrip.test.ts tests/integration/main/runs-ipc.test.ts tests/integration/main/runs-register-recovery.test.ts tests/integration/main/runtime-launch.test.ts`
 - `npx playwright test -c playwright.config.ts tests/e2e/terminal-run.spec.ts tests/e2e/restart-recovery.spec.ts --reporter=line`
 - Additional non-blocking coverage: `tests/e2e/note-node.spec.ts`, `tests/e2e/file-tree.spec.ts`, and `tests/e2e/portal-node.spec.ts` passed; `tests/e2e/branch-workspace.spec.ts` timed out and remains logged as residual risk.
+
+## 2026-04-20 branch-workspace follow-up verification
+
+- `npx vitest run tests/unit/renderer/canvas.store.test.ts tests/unit/renderer/canvas-shell.test.ts tests/unit/renderer/terminal-node.test.ts tests/unit/renderer/builtin-hosts.test.ts tests/integration/main/branch-workspace.test.ts`
+- `npm run build`
+- `npx playwright test -c playwright.config.ts tests/e2e/branch-workspace.spec.ts --reporter=line`
