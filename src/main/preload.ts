@@ -7,6 +7,8 @@ import type {
   ComponentListInput,
   ComponentUninstallInput,
   FileTreeLoadInput,
+  GraphLoadV2Input,
+  GraphSaveV2Input,
   PortalCaptureInput,
   PortalClickInput,
   PortalInputInput,
@@ -47,6 +49,10 @@ const shellBridge: OpenWeaveShellBridge = {
   canvas: {
     loadCanvasState: (input: CanvasLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasLoad, input),
     saveCanvasState: (input: CanvasSaveInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasSave, input)
+  },
+  graph: {
+    loadGraphSnapshot: (input: GraphLoadV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphLoad, input),
+    saveGraphSnapshot: (input: GraphSaveV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphSave, input)
   },
   runs: {
     startRun: (input: RunStartInput) => ipcRenderer.invoke(IPC_CHANNELS.runStart, input),

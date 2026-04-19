@@ -55,6 +55,8 @@ export const IPC_CHANNELS = {
   componentUninstall: 'component:uninstall',
   canvasLoad: 'canvas:load',
   canvasSave: 'canvas:save',
+  graphLoad: 'graph:load-v2',
+  graphSave: 'graph:save-v2',
   runStart: 'run:start',
   runGet: 'run:get',
   runList: 'run:list',
@@ -352,6 +354,7 @@ export interface OpenWeaveShellBridge {
   workspaces: WorkspaceBridgeApi;
   components: AgentComponentBridgeApi;
   canvas: CanvasBridgeApi;
+  graph: GraphBridgeApiV2;
   runs: RunsBridgeApi;
   files: FilesBridgeApi;
   portal: PortalBridgeApi;
