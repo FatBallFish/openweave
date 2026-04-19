@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('portal manager behavior', () => {
-  it('loads urls, captures screenshots, reads structure, and cleans up views', async () => {
+  it('loads urls into a hidden host window, supports portal actions, and cleans up owned resources', async () => {
     const executeJavaScript = vi.fn(async () => [
       { tag: 'button', text: 'Run action', id: 'action-button', role: 'button' }
     ]);
@@ -31,6 +31,8 @@ describe('portal manager behavior', () => {
     const close = vi.fn();
     const removeChildView = vi.fn();
     const addChildView = vi.fn();
+    const destroy = vi.fn();
+    const browserWindowOptions: Array<Record<string, unknown>> = [];
 
     vi.doMock('electron', () => {
       class MockWebContentsView {
@@ -49,12 +51,17 @@ describe('portal manager behavior', () => {
       }
 
       class MockBrowserWindow {
+        public constructor(options: Record<string, unknown>) {
+          browserWindowOptions.push(options);
+        }
+
         public readonly contentView = {
           addChildView,
           removeChildView
         };
 
-        public destroy = vi.fn();
+        public readonly isDestroyed = vi.fn(() => false);
+        public readonly destroy = destroy;
       }
 
       return {
@@ -71,6 +78,14 @@ describe('portal manager behavior', () => {
     });
 
     await manager.loadUrl('ws-1:portal-1', 'https://example.com/demo');
+    expect(browserWindowOptions).toEqual([
+      expect.objectContaining({
+        show: false,
+        paintWhenInitiallyHidden: true
+      })
+    ]);
+    expect(addChildView).toHaveBeenCalledTimes(1);
+
     const screenshot = await manager.capture('ws-1:portal-1', 'ws-1', 'portal-1');
     const structure = await manager.readStructure('ws-1:portal-1');
     await manager.click('ws-1:portal-1', '#action-button');
@@ -84,9 +99,9 @@ describe('portal manager behavior', () => {
     expect(fs.statSync(screenshot.path).size).toBeGreaterThan(10_000);
     expect(structure.elements[0]).toMatchObject({ tag: 'button', text: 'Run action' });
     expect(executeJavaScript).toHaveBeenCalled();
-    expect(addChildView).toHaveBeenCalled();
     expect(removeChildView).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalled();
   });
 
   it('rejects capture before a portal is loaded', async () => {

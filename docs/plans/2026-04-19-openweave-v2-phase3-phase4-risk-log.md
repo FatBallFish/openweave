@@ -73,6 +73,21 @@
 - Impact: interactive renderer controls can become flaky in E2E before functional IPC breaks, especially when a host adds taller toolbars, longer path/url text, or another automatic viewport transform.
 - Mitigation: keep the new branch-workspace integration test plus canvas-store starter-grid test as regression guards, and treat future canvas-shell host styling changes as E2E-sensitive.
 
+### 10. 2026-04-20 portal containment follow-up is now mitigated
+
+- Status: mitigated in `feat/phase3-portal-isolation-followup`.
+- Root cause A: `src/main/portal/portal-manager.ts` created a `WebContentsView` per portal but did not attach it to a dedicated hidden host until screenshot capture time, so portal ownership/containment remained implicit during `loadURL`, click, and input flows.
+- Root cause B: `tests/e2e/portal-node.spec.ts` still lacked an explicit renderer-containment assertion and could time out earlier because the React Flow `MiniMap` overlay intercepted portal action clicks before the test reached the navigation checks.
+- Landed mitigation: portal manager now allocates one hidden `BrowserWindow` host per active portal entry, attaches the `WebContentsView` before `loadURL`, keeps that host hidden from the user, and disposes the owned view/window pair deterministically. The portal E2E now asserts the main renderer window remains on the `file:` entry and keeps `workspace-canvas-page` plus `canvas-workspace-name` visible after portal load and action cycles. `CanvasShell` also disables `MiniMap` pointer interception so host controls stay clickable under the focused E2E paths.
+- Primary files: `src/main/portal/portal-manager.ts`, `src/renderer/features/canvas-shell/CanvasShell.tsx`, `tests/unit/main/portal-manager.behavior.test.ts`, `tests/e2e/portal-node.spec.ts`.
+- Verification: `npx vitest run tests/unit/main/portal-manager.behavior.test.ts tests/integration/main/portal-ipc.test.ts tests/integration/main/portal-register-ipc.test.ts tests/unit/renderer/canvas.store.test.ts tests/unit/renderer/canvas-shell.test.ts tests/unit/renderer/terminal-node.test.ts tests/unit/renderer/builtin-hosts.test.ts tests/integration/main/branch-workspace.test.ts`, `npm run build`, and `npx playwright test -c playwright.config.ts tests/e2e/portal-node.spec.ts tests/e2e/branch-workspace.spec.ts --reporter=line`.
+
+### 11. Residual guardrail after the portal containment follow-up
+
+- Risk: portal/file-tree/terminal host interactivity can still regress if future React Flow overlays or host chrome introduce new pointer-event overlap zones beyond the `MiniMap` case fixed here.
+- Impact: containment assertions may stay green while real user clicks become flaky, especially near shell overlay edges or after node sizing changes.
+- Mitigation: keep both `tests/e2e/portal-node.spec.ts` and `tests/e2e/branch-workspace.spec.ts` in the focused verification set for any canvas-shell layout or overlay change, because those flows now cover both host clickability and renderer containment.
+
 ## 2026-04-19 Focused verification record
 
 - `npm run build`
@@ -85,3 +100,9 @@
 - `npx vitest run tests/unit/renderer/canvas.store.test.ts tests/unit/renderer/canvas-shell.test.ts tests/unit/renderer/terminal-node.test.ts tests/unit/renderer/builtin-hosts.test.ts tests/integration/main/branch-workspace.test.ts`
 - `npm run build`
 - `npx playwright test -c playwright.config.ts tests/e2e/branch-workspace.spec.ts --reporter=line`
+
+## 2026-04-20 portal containment follow-up verification
+
+- `npx vitest run tests/unit/main/portal-manager.behavior.test.ts tests/integration/main/portal-ipc.test.ts tests/integration/main/portal-register-ipc.test.ts tests/unit/renderer/canvas.store.test.ts tests/unit/renderer/canvas-shell.test.ts tests/unit/renderer/terminal-node.test.ts tests/unit/renderer/builtin-hosts.test.ts tests/integration/main/branch-workspace.test.ts`
+- `npm run build`
+- `npx playwright test -c playwright.config.ts tests/e2e/portal-node.spec.ts tests/e2e/branch-workspace.spec.ts --reporter=line`
