@@ -86,18 +86,40 @@ describe('canvas store', () => {
     const fileTreeId =
       canvasStore.getState().nodes.find((node) => node.type === 'file-tree')?.id ?? '';
     const portalId = canvasStore.getState().nodes.find((node) => node.type === 'portal')?.id ?? '';
+    expect(canvasStore.getState().nodes.find((node) => node.id === terminalId)).toMatchObject({
+      command: 'echo hello',
+      runtime: 'shell'
+    });
 
     await canvasStore.updateNoteNode(noteId, { contentMd: 'updated' });
-    await canvasStore.updateTerminalNode(terminalId, { command: 'pwd' });
+    await (canvasStore as unknown as {
+      updateTerminalNode: (
+        nodeId: string,
+        patch: { command?: string; runtime?: string }
+      ) => Promise<void>;
+    }).updateTerminalNode(terminalId, { command: 'pwd', runtime: 'codex' });
     await canvasStore.updateFileTreeNode(fileTreeId, { x: 500 });
     await canvasStore.updatePortalNode(portalId, { url: 'https://example.com/demo' });
 
     expect(saveCanvasState).toHaveBeenCalled();
+    expect(saveCanvasState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        state: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              id: terminalId,
+              runtime: 'codex'
+            })
+          ])
+        })
+      })
+    );
     expect(canvasStore.getState().nodes.find((node) => node.id === noteId)).toMatchObject({
       contentMd: 'updated'
     });
     expect(canvasStore.getState().nodes.find((node) => node.id === terminalId)).toMatchObject({
-      command: 'pwd'
+      command: 'pwd',
+      runtime: 'codex'
     });
   });
 

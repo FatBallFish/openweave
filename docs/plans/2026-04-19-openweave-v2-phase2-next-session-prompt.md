@@ -1,6 +1,20 @@
 # OpenWeave V2 Phase 2 新 Session 提示词
 
-请在新 session 中直接粘贴下面这段提示词：
+## 当前状态
+
+- 这份 prompt 已不再是 Phase 2 的首选继续入口。
+- 当前 worktree 上，V2 Phase 2 Interactive Terminal 的计划内 Task 已完成：
+  - additive `runInput` / `runStop` contracts 已落地
+  - `stopped` 已成为一等终态
+  - main-process stop finalization 已改为 confirmed worker exit 驱动
+  - terminal node runtime 持久化与 selector 已落地
+  - renderer interactive terminal session surface 已落地
+  - focused Vitest / build / Playwright verification 已跑通
+- 如果需要开启新 session，请不要再按“继续完成 Phase 2”来拆任务；优先改为评估 Phase 3 builtin components 或 Phase 4 Canvas Shell V2 的下一步计划。
+
+## 历史交接 Prompt
+
+如果需要回看当时的历史交接上下文，可以使用下面这段旧提示词：
 
 ```text
 当前仓库是 OpenWeave。

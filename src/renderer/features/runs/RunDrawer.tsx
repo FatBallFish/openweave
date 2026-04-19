@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { OpenWeaveShellBridge, RunRecord } from '../../../shared/ipc/contracts';
+import { TerminalSessionPane } from './TerminalSessionPane';
 
 interface RunDrawerProps {
   workspaceId: string;
@@ -16,17 +17,25 @@ const getRunsBridge = (): OpenWeaveShellBridge['runs'] => {
 };
 
 const isTerminalState = (status: RunRecord['status']): boolean => {
-  return status === 'completed' || status === 'failed';
+  return status === 'completed' || status === 'failed' || status === 'stopped';
 };
 
 export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.Element | null => {
   const [run, setRun] = useState<RunRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
+  const [isSubmittingInput, setIsSubmittingInput] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   useEffect(() => {
     if (!runId) {
       setRun(null);
       setErrorMessage(null);
+      setInputValue('');
+      setInputErrorMessage(null);
+      setIsSubmittingInput(false);
+      setIsStopping(false);
       return;
     }
 
@@ -58,6 +67,23 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
       clearInterval(timer);
     };
   }, [runId, workspaceId]);
+
+  useEffect(() => {
+    if (!runId) {
+      return;
+    }
+
+    setInputValue('');
+    setInputErrorMessage(null);
+    setIsSubmittingInput(false);
+    setIsStopping(false);
+  }, [runId]);
+
+  useEffect(() => {
+    if (run && isTerminalState(run.status)) {
+      setIsStopping(false);
+    }
+  }, [run]);
 
   if (!runId) {
     return null;
@@ -98,15 +124,65 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
           <p data-testid="run-drawer-summary" style={{ margin: 0 }}>
             Summary: {run.summary ?? '(pending)'}
           </p>
+          <TerminalSessionPane
+            inputErrorMessage={inputErrorMessage}
+            inputValue={inputValue}
+            isStopping={isStopping}
+            isSubmittingInput={isSubmittingInput}
+            onInputChange={setInputValue}
+            onStop={() => {
+              if (!run || isTerminalState(run.status) || isStopping) {
+                return;
+              }
+
+              setInputErrorMessage(null);
+              setIsStopping(true);
+              void getRunsBridge()
+                .stopRun({
+                  workspaceId,
+                  runId: run.id
+                })
+                .then((result) => {
+                  setRun(result.run);
+                })
+                .catch((error) => {
+                  const message = error instanceof Error ? error.message : 'Failed to stop run';
+                  setInputErrorMessage(message);
+                  setIsStopping(false);
+                });
+            }}
+            onSubmitInput={() => {
+              if (!run || isTerminalState(run.status) || inputValue.trim().length === 0) {
+                return;
+              }
+
+              const payload = inputValue.endsWith('\n') ? inputValue : `${inputValue}\n`;
+              setIsSubmittingInput(true);
+              setInputErrorMessage(null);
+              void getRunsBridge()
+                .inputRun({
+                  workspaceId,
+                  runId: run.id,
+                  input: payload
+                })
+                .then(() => {
+                  setInputValue('');
+                })
+                .catch((error) => {
+                  const message =
+                    error instanceof Error ? error.message : 'Failed to send terminal input';
+                  setInputErrorMessage(message);
+                })
+                .finally(() => {
+                  setIsSubmittingInput(false);
+                });
+            }}
+            run={run}
+          />
           <pre
             data-testid="run-drawer-tail-log"
             style={{
-              whiteSpace: 'pre-wrap',
-              backgroundColor: '#101828',
-              color: '#f2f4f7',
-              borderRadius: '8px',
-              padding: '8px',
-              margin: 0
+              display: 'none'
             }}
           >
             {run.tailLog.length > 0 ? run.tailLog : '(no output yet)'}

@@ -579,14 +579,15 @@ const parseNotePayload = (payloadJson: string): { contentMd: string } => {
   }
 };
 
-const parseTerminalPayload = (payloadJson: string): { command: string } => {
+const parseTerminalPayload = (payloadJson: string): { command: string; runtime: RunRuntimeInput } => {
   try {
-    const parsed = JSON.parse(payloadJson) as { command?: unknown };
+    const parsed = JSON.parse(payloadJson) as { command?: unknown; runtime?: unknown };
     return {
-      command: typeof parsed.command === 'string' ? parsed.command : ''
+      command: typeof parsed.command === 'string' ? parsed.command : '',
+      runtime: runRuntimeSchema.catch('shell').parse(parsed.runtime)
     };
   } catch {
-    return { command: '' };
+    return { command: '', runtime: 'shell' };
   }
 };
 
@@ -669,7 +670,7 @@ export const serializeTerminalNode = (node: TerminalNodeDraft): {
     node_type: 'terminal',
     x: node.x,
     y: node.y,
-    payload_json: JSON.stringify({ command: node.command })
+    payload_json: JSON.stringify({ command: node.command, runtime: node.runtime })
   };
 };
 
@@ -724,7 +725,8 @@ const mapNodeRow = (row: CanvasNodeRow): CanvasNodeInput => {
       type: 'terminal',
       x: row.x,
       y: row.y,
-      command: payload.command
+      command: payload.command,
+      runtime: payload.runtime
     };
   }
 

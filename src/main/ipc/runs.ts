@@ -4,19 +4,24 @@ import type { IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
   type RunGetResponse,
+  type RunInputResponse,
   type RunListResponse,
   type RunMutationResponse,
   type RunRecord
 } from '../../shared/ipc/contracts';
 import {
   runGetSchema,
+  runInputSchema,
   runListSchema,
   runStartSchema,
+  runStopSchema,
   workspaceIdSchema,
   type RunGetInput,
+  type RunInputInput,
   type RunListInput,
   type RunStartInput,
   type RunRuntimeInput,
+  type RunStopInput,
   type RunStatusInput
 } from '../../shared/ipc/schemas';
 import { createAuditLog } from '../audit/audit-log';
@@ -41,6 +46,8 @@ export interface RunsIpcHandlers {
   startRun: (_event: IpcMainInvokeEvent, input: RunStartInput) => Promise<RunMutationResponse>;
   getRun: (_event: IpcMainInvokeEvent, input: RunGetInput) => Promise<RunGetResponse>;
   listRuns: (_event: IpcMainInvokeEvent, input: RunListInput) => Promise<RunListResponse>;
+  inputRun: (_event: IpcMainInvokeEvent, input: RunInputInput) => Promise<RunInputResponse>;
+  stopRun: (_event: IpcMainInvokeEvent, input: RunStopInput) => Promise<RunMutationResponse>;
   disposeWorkspaceRuns: (workspaceId: string) => void;
 }
 
@@ -74,11 +81,12 @@ interface RunsServiceOptions {
 const MAX_TAIL_LOG_LENGTH = 4096;
 const MAX_STORED_RUNS = 200;
 const MAX_LISTED_RUNS = 100;
+const STOPPED_RUN_SUMMARY = 'Run stopped';
 
 const MANAGED_RUNTIMES = new Set<SkillPackRuntimeKind>(['codex', 'claude', 'opencode']);
 
 const isTerminalRunStatus = (status: RunStatusInput): boolean => {
-  return status === 'completed' || status === 'failed';
+  return status === 'completed' || status === 'failed' || status === 'stopped';
 };
 
 const isManagedRuntime = (runtime: RunRuntimeInput): runtime is SkillPackRuntimeKind => {
@@ -120,8 +128,21 @@ const buildManagedRuntimeConflictMessage = (activeRun: RunRecord, nextRuntime: R
   return `Managed runtime launch blocked: ${nextRuntime} cannot start while ${activeRun.runtime} run ${activeRun.id} is still ${activeRun.status}`;
 };
 
+const deriveExitStatus = (
+  event: RuntimeExitEvent,
+  stopRequested: boolean
+): RunStatusInput => {
+  if (stopRequested && (event.signal !== null || event.code !== 0)) {
+    return 'stopped';
+  }
+
+  return event.code === 0 ? 'completed' : 'failed';
+};
+
 class InMemoryRunsService {
   private readonly runs = new Map<string, RunRecord>();
+
+  private readonly stopIntents = new Set<string>();
 
   private readonly assertWorkspaceExists: (workspaceId: string) => void;
 
@@ -254,13 +275,7 @@ class InMemoryRunsService {
 
   public getRun(input: RunGetInput): RunRecord {
     const parsed = runGetSchema.parse(input);
-    this.assertWorkspaceExists(parsed.workspaceId);
-
-    const run = this.runs.get(parsed.runId);
-    if (!run || run.workspaceId !== parsed.workspaceId) {
-      throw new Error(`Run not found: ${parsed.runId}`);
-    }
-    return run;
+    return this.requireRun(parsed.workspaceId, parsed.runId);
   }
 
   public listRuns(input: RunListInput): RunRecord[] {
@@ -271,6 +286,41 @@ class InMemoryRunsService {
       .filter((run) => run.workspaceId === parsed.workspaceId && run.nodeId === parsed.nodeId)
       .sort((left, right) => right.createdAtMs - left.createdAtMs)
       .slice(0, MAX_LISTED_RUNS);
+  }
+
+  public inputRun(input: RunInputInput): RunInputResponse {
+    const parsed = runInputSchema.parse(input);
+    const run = this.requireRun(parsed.workspaceId, parsed.runId);
+
+    if (
+      isTerminalRunStatus(run.status) ||
+      this.stopIntents.has(parsed.runId) ||
+      !this.runtimeBridge.input(parsed.runId, parsed.input)
+    ) {
+      throw new Error(`Run not accepting input: ${parsed.runId}`);
+    }
+
+    return { ok: true };
+  }
+
+  public stopRun(input: RunStopInput): RunRecord {
+    const parsed = runStopSchema.parse(input);
+    const run = this.requireRun(parsed.workspaceId, parsed.runId);
+
+    if (isTerminalRunStatus(run.status)) {
+      return run;
+    }
+    if (this.stopIntents.has(parsed.runId)) {
+      return run;
+    }
+
+    if (!this.runtimeBridge.stop(parsed.runId)) {
+      throw new Error(`Run not active: ${parsed.runId}`);
+    }
+
+    this.stopIntents.add(parsed.runId);
+    this.pruneStoredRuns();
+    return run;
   }
 
   public disposeWorkspaceRuns(workspaceId: string): void {
@@ -289,6 +339,7 @@ class InMemoryRunsService {
 
     for (const runId of runIds) {
       this.runs.delete(runId);
+      this.stopIntents.delete(runId);
     }
   }
 
@@ -315,9 +366,10 @@ class InMemoryRunsService {
       return;
     }
 
-    const status: RunStatusInput = event.code === 0 ? 'completed' : 'failed';
+    const stopRequested = this.stopIntents.delete(event.runId);
+    const status = deriveExitStatus(event, stopRequested);
     const tailLog = event.tail.length > 0 ? appendTailLog('', event.tail) : run.tailLog;
-    const summary = buildSummary(tailLog);
+    const summary = status === 'stopped' ? STOPPED_RUN_SUMMARY : buildSummary(tailLog);
     this.storeRun({
       ...run,
       status,
@@ -353,6 +405,17 @@ class InMemoryRunsService {
     this.runs.set(run.id, run);
     this.onRunUpdated?.(run);
   }
+
+  private requireRun(workspaceId: string, runId: string): RunRecord {
+    const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+    this.assertWorkspaceExists(parsedWorkspaceId);
+
+    const run = this.runs.get(runId);
+    if (!run || run.workspaceId !== parsedWorkspaceId) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+    return run;
+  }
 }
 
 export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandlers => {
@@ -380,6 +443,14 @@ export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandler
     listRuns: async (_event: IpcMainInvokeEvent, input: RunListInput) => {
       return {
         runs: service.listRuns(input)
+      };
+    },
+    inputRun: async (_event: IpcMainInvokeEvent, input: RunInputInput) => {
+      return service.inputRun(input);
+    },
+    stopRun: async (_event: IpcMainInvokeEvent, input: RunStopInput) => {
+      return {
+        run: service.stopRun(input)
       };
     },
     disposeWorkspaceRuns: (workspaceId: string): void => {
@@ -555,15 +626,31 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
           repository.listRunsByNode(parsed.nodeId).slice(0, MAX_LISTED_RUNS)
         )
       };
+    },
+    inputRun: async (_event: IpcMainInvokeEvent, input: RunInputInput) => {
+      const parsed = runInputSchema.parse(input);
+      assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      return context.service.inputRun(parsed);
+    },
+    stopRun: async (_event: IpcMainInvokeEvent, input: RunStopInput) => {
+      const parsed = runStopSchema.parse(input);
+      assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      return {
+        run: context.service.stopRun(parsed)
+      };
     }
   };
 
   ipcMain.removeHandler(IPC_CHANNELS.runStart);
   ipcMain.removeHandler(IPC_CHANNELS.runGet);
   ipcMain.removeHandler(IPC_CHANNELS.runList);
+  ipcMain.removeHandler(IPC_CHANNELS.runInput);
+  ipcMain.removeHandler(IPC_CHANNELS.runStop);
   ipcMain.handle(IPC_CHANNELS.runStart, handlers.startRun);
   ipcMain.handle(IPC_CHANNELS.runGet, handlers.getRun);
   ipcMain.handle(IPC_CHANNELS.runList, handlers.listRuns);
+  ipcMain.handle(IPC_CHANNELS.runInput, handlers.inputRun);
+  ipcMain.handle(IPC_CHANNELS.runStop, handlers.stopRun);
 };
 
 export const disposeRunsForWorkspace = (workspaceId: string): void => {

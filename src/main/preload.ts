@@ -13,8 +13,10 @@ import type {
   PortalLoadInput,
   PortalStructureInput,
   RunGetInput,
+  RunInputInput,
   RunListInput,
   RunStartInput,
+  RunStopInput,
   WorkspaceBranchCreateInput,
   WorkspaceCreateInput,
   WorkspaceDeleteInput,
@@ -49,7 +51,9 @@ const shellBridge: OpenWeaveShellBridge = {
   runs: {
     startRun: (input: RunStartInput) => ipcRenderer.invoke(IPC_CHANNELS.runStart, input),
     getRun: (input: RunGetInput) => ipcRenderer.invoke(IPC_CHANNELS.runGet, input),
-    listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input)
+    listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input),
+    inputRun: (input: RunInputInput) => ipcRenderer.invoke(IPC_CHANNELS.runInput, input),
+    stopRun: (input: RunStopInput) => ipcRenderer.invoke(IPC_CHANNELS.runStop, input)
   },
   files: {
     loadFileTree: (input: FileTreeLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.fileTreeLoad, input)

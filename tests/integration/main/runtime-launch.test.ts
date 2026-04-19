@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IpcMainInvokeEvent } from 'electron';
 import {
   createRunsIpcHandlers,
@@ -13,7 +13,7 @@ import {
 import { IPC_CHANNELS } from '../../../src/shared/ipc/contracts';
 import { createRegistryRepository } from '../../../src/main/db/registry';
 import { RuntimeWorkerError } from '../../../src/worker/runtime-worker';
-import type { RuntimeBridge, RuntimeStartRequest } from '../../../src/main/runtime/runtime-bridge';
+import { createRuntimeBridge, type RuntimeBridge, type RuntimeStartRequest } from '../../../src/main/runtime/runtime-bridge';
 
 class HoldRuntimeBridge extends EventEmitter implements RuntimeBridge {
   public readonly startRequests: RuntimeStartRequest[] = [];
@@ -26,6 +26,10 @@ class HoldRuntimeBridge extends EventEmitter implements RuntimeBridge {
       agentsExists: fs.existsSync(path.join(cwd, 'AGENTS.md')),
       skillExists: fs.existsSync(path.join(cwd, '.opencode', 'skills', 'openweave-workspace.md'))
     });
+  }
+
+  public input(_runId: string, _input: string): boolean {
+    return true;
   }
 
   public stop(_runId: string): boolean {
@@ -176,6 +180,132 @@ describe('runtime launch', () => {
     expect(preflightCalls).toEqual(['opencode']);
     expect(runtimeBridge.startRequests).toHaveLength(1);
     expect(runtimeBridge.startRequests[0]?.runtime).toBe('opencode');
+  });
+
+  it('keeps managed-runtime exclusivity during the stop grace window until exit finalizes', async () => {
+    const preflightCalls: string[] = [];
+    const runtimeBridge = new HoldRuntimeBridge();
+    const handlers = createRunsIpcHandlers({
+      assertWorkspaceExists: () => undefined,
+      resolveWorkspaceRootDir: () => '/tmp/runtime-launch-workspace',
+      runtimeBridge,
+      prepareRuntimeLaunch: (input) => {
+        preflightCalls.push(input.runtime);
+      }
+    });
+
+    const firstRun = await handlers.startRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-runtime-stop-window',
+      nodeId: 'terminal-1',
+      runtime: 'opencode',
+      command: 'run --help'
+    });
+    runtimeBridge.emit('started', {
+      runId: firstRun.run.id,
+      pid: 4242
+    });
+
+    const stopResult = await handlers.stopRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-runtime-stop-window',
+      runId: firstRun.run.id
+    });
+    expect(stopResult.run.status).toBe('running');
+
+    const blockedRun = await handlers.startRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-runtime-stop-window',
+      nodeId: 'terminal-2',
+      runtime: 'claude',
+      command: 'run --help'
+    });
+    expect(blockedRun.run.status).toBe('failed');
+    expect(blockedRun.run.summary).toContain('Managed runtime launch blocked');
+
+    runtimeBridge.emit('exit', {
+      runId: firstRun.run.id,
+      code: 130,
+      signal: null,
+      tail: 'stopped\n'
+    });
+
+    const nextRun = await handlers.startRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-runtime-stop-window',
+      nodeId: 'terminal-3',
+      runtime: 'claude',
+      command: 'run --help'
+    });
+    expect(nextRun.run.status).toBe('queued');
+    expect(preflightCalls).toEqual(['opencode', 'claude']);
+    expect(runtimeBridge.startRequests).toHaveLength(2);
+    expect(runtimeBridge.startRequests[1]?.runtime).toBe('claude');
+  });
+
+
+  it('keeps PTY worker control inside the bridge worker boundary and preserves SystemRoot', async () => {
+    const postedMessages: unknown[] = [];
+    const kill = vi.fn();
+    const originalSystemRoot = process.env.SystemRoot;
+    process.env.SystemRoot = 'C:\\Windows';
+
+    try {
+      let capturedEnv: NodeJS.ProcessEnv | null = null;
+      const bridge = createRuntimeBridge({
+        spawnWorker: (_request, env) => {
+          capturedEnv = env;
+          return {
+            postMessage: (message) => {
+              postedMessages.push(message);
+            },
+            onMessage: () => undefined,
+            onExit: () => undefined,
+            kill
+          };
+        }
+      });
+
+      bridge.start({
+        runId: 'run-worker-boundary',
+        runtime: 'shell',
+        command: 'echo hello',
+        cwd: '/tmp/runtime-launch-workspace',
+        env: {
+          OPENWEAVE_FLAG: '1'
+        }
+      });
+
+      expect(capturedEnv).toMatchObject({
+        OPENWEAVE_FLAG: '1',
+        SystemRoot: 'C:\\Windows'
+      });
+      expect(postedMessages[0]).toMatchObject({
+        type: 'start',
+        runId: 'run-worker-boundary',
+        runtime: 'shell',
+        command: 'echo hello',
+        cwd: '/tmp/runtime-launch-workspace'
+      });
+
+      expect(bridge.input('run-worker-boundary', 'status\n')).toBe(true);
+      expect(bridge.stop('run-worker-boundary')).toBe(true);
+      expect(bridge.input('missing-run', 'status\n')).toBe(false);
+      expect(bridge.stop('missing-run')).toBe(false);
+      expect(postedMessages.slice(1)).toEqual([
+        {
+          type: 'input',
+          runId: 'run-worker-boundary',
+          input: 'status\n'
+        },
+        {
+          type: 'stop',
+          runId: 'run-worker-boundary'
+        }
+      ]);
+      expect(kill).not.toHaveBeenCalled();
+
+      bridge.dispose();
+      expect(kill).toHaveBeenCalledTimes(1);
+    } finally {
+      process.env.SystemRoot = originalSystemRoot;
+    }
   });
 
   it('preserves coded runtime worker errors in failed run summaries and tails', async () => {

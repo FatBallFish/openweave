@@ -54,12 +54,15 @@ export const noteNodeSchema = z.object({
   contentMd: z.string()
 });
 
+export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude', 'opencode']);
+
 export const terminalNodeSchema = z.object({
   id: z.string().trim().min(1),
   type: z.literal('terminal'),
   x: z.number().finite(),
   y: z.number().finite(),
-  command: z.string()
+  command: z.string(),
+  runtime: runRuntimeSchema.default('shell')
 });
 
 export const fileTreeNodeSchema = z.object({
@@ -246,9 +249,7 @@ export const componentUninstallSchema = z.object({
   version: componentVersionSchema.optional()
 });
 
-export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude', 'opencode']);
-
-export const runStatusSchema = z.enum(['queued', 'running', 'completed', 'failed']);
+export const runStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'stopped']);
 
 export const runStartSchema = z.object({
   workspaceId: workspaceIdSchema,
@@ -258,6 +259,17 @@ export const runStartSchema = z.object({
 });
 
 export const runGetSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  runId: z.string().trim().min(1)
+});
+
+export const runInputSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  runId: z.string().trim().min(1),
+  input: z.string().min(1)
+});
+
+export const runStopSchema = z.object({
   workspaceId: workspaceIdSchema,
   runId: z.string().trim().min(1)
 });
@@ -350,6 +362,8 @@ export type RunRuntimeInput = z.infer<typeof runRuntimeSchema>;
 export type RunStatusInput = z.infer<typeof runStatusSchema>;
 export type RunStartInput = z.infer<typeof runStartSchema>;
 export type RunGetInput = z.infer<typeof runGetSchema>;
+export type RunInputInput = z.infer<typeof runInputSchema>;
+export type RunStopInput = z.infer<typeof runStopSchema>;
 export type RunListInput = z.infer<typeof runListSchema>;
 export type FileTreeLoadInput = z.infer<typeof fileTreeLoadSchema>;
 export type PortalLoadInput = z.infer<typeof portalLoadSchema>;

@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { OpenWeaveShellBridge, RunRecord } from '../../../../shared/ipc/contracts';
-import type { TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import type { RunRuntimeInput, RunStartInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
 
 interface TerminalNodeProps {
   workspaceId: string;
   node: TerminalNodeInput;
-  onChange: (patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command'>>) => void;
+  onChange: (patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>) => void;
   onOpenRun: (runId: string) => void;
 }
+
+const runtimeLabelByValue: Record<RunRuntimeInput, string> = {
+  shell: 'Shell',
+  codex: 'Codex',
+  claude: 'Claude',
+  opencode: 'OpenCode'
+};
+
+export const TERMINAL_NODE_RUNTIME_OPTIONS = Object.keys(runtimeLabelByValue) as RunRuntimeInput[];
 
 const getShellBridge = (): OpenWeaveShellBridge => {
   const shell = (window as Window & { openweaveShell?: OpenWeaveShellBridge }).openweaveShell;
@@ -23,6 +32,18 @@ const parseNumberOrUndefined = (value: string): number | undefined => {
     return undefined;
   }
   return parsed;
+};
+
+export const buildTerminalRunStartInput = (input: {
+  workspaceId: string;
+  node: Pick<TerminalNodeInput, 'id' | 'command'> & { runtime?: RunRuntimeInput };
+}): RunStartInput => {
+  return {
+    workspaceId: input.workspaceId,
+    nodeId: input.node.id,
+    runtime: input.node.runtime ?? 'shell',
+    command: input.node.command
+  };
 };
 
 export const TerminalNode = ({
@@ -91,6 +112,21 @@ export const TerminalNode = ({
         />
       </label>
 
+      <label style={{ display: 'grid', gap: '4px' }}>
+        Runtime
+        <select
+          data-testid={`terminal-node-runtime-${node.id}`}
+          onChange={(event) => onChange({ runtime: event.currentTarget.value as RunRuntimeInput })}
+          value={node.runtime}
+        >
+          {TERMINAL_NODE_RUNTIME_OPTIONS.map((runtime) => (
+            <option key={runtime} value={runtime}>
+              {runtimeLabelByValue[runtime]}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div style={{ display: 'flex', gap: '8px' }}>
         <label style={{ display: 'grid', gap: '4px' }}>
           X
@@ -130,12 +166,7 @@ export const TerminalNode = ({
           onClick={() => {
             setIsStarting(true);
             void getShellBridge()
-              .runs.startRun({
-                workspaceId,
-                nodeId: node.id,
-                runtime: 'shell',
-                command: node.command
-              })
+              .runs.startRun(buildTerminalRunStartInput({ workspaceId, node }))
               .then((response) => {
                 setRuns((currentRuns) => [response.run, ...currentRuns]);
                 onOpenRun(response.run.id);

@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { IpcMainInvokeEvent } from 'electron';
 import { describe, expect, it } from 'vitest';
 import { IPC_CHANNELS } from '../../../src/shared/ipc/contracts';
+import { runStatusSchema } from '../../../src/shared/ipc/schemas';
 import { createRegistryRepository } from '../../../src/main/db/registry';
 import {
   createRunsIpcHandlers,
@@ -113,9 +114,15 @@ class FallbackExitRuntimeBridge extends EventEmitter implements RuntimeBridge {
 class HoldRuntimeBridge extends EventEmitter implements RuntimeBridge {
   public readonly stopCalls: string[] = [];
   public readonly startRequests: RuntimeStartRequest[] = [];
+  public readonly inputCalls: Array<{ runId: string; input: string }> = [];
 
   public start(request: RuntimeStartRequest): void {
     this.startRequests.push(request);
+  }
+
+  public input(runId: string, input: string): boolean {
+    this.inputCalls.push({ runId, input });
+    return true;
   }
 
   public stop(runId: string): boolean {
@@ -149,6 +156,10 @@ class IpcMainStub {
 }
 
 describe('runs IPC flow', () => {
+  it('accepts stopped as a first-class run status', () => {
+    expect(runStatusSchema.parse('stopped')).toBe('stopped');
+  });
+
   it('transitions a run from queued to completed and stores the summary', async () => {
     const handlers: RunsIpcHandlers = createRunsIpcHandlers({
       runtimeBridge: new CompletingRuntimeBridge(),
@@ -234,6 +245,61 @@ describe('runs IPC flow', () => {
     expect(stored.run.summary).toContain('partial output');
   });
 
+  it('waits for confirmed exit before finalizing stopped and keeps late tail output', async () => {
+    const runtimeBridge = new HoldRuntimeBridge();
+    const handlers: RunsIpcHandlers = createRunsIpcHandlers({
+      runtimeBridge,
+      assertWorkspaceExists: assertWorkspaceExists(['ws-1'])
+    });
+
+    const started = await handlers.startRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      nodeId: 'term-1',
+      runtime: 'shell',
+      command: 'cat'
+    });
+
+    runtimeBridge.emit('started', {
+      runId: started.run.id,
+      pid: 4242
+    });
+
+    const stopping = await handlers.stopRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id
+    });
+    expect(stopping.run.status).toBe('running');
+    expect(runtimeBridge.stopCalls).toEqual([started.run.id]);
+
+    runtimeBridge.emit('stdout', {
+      runId: started.run.id,
+      chunk: 'shutdown tail\n'
+    } satisfies RuntimeStreamEvent);
+
+    const beforeExit = await handlers.getRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id
+    });
+    expect(beforeExit.run.status).toBe('running');
+    expect(beforeExit.run.tailLog).toContain('shutdown tail');
+
+    runtimeBridge.emit('exit', {
+      runId: started.run.id,
+      code: 130,
+      signal: null,
+      tail: 'shutdown tail\n'
+    } satisfies RuntimeExitEvent);
+
+    const finalized = await handlers.getRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id
+    });
+    expect(finalized.run.status).toBe('stopped');
+    expect(finalized.run.summary).toBe('Run stopped');
+    expect(finalized.run.tailLog).toContain('shutdown tail');
+    expect(finalized.run.completedAtMs).toBeTypeOf('number');
+  });
+
   it('cleans workspace runs and stops active workers on workspace deletion', async () => {
     const runtimeBridge = new HoldRuntimeBridge();
     const handlers: RunsIpcHandlers = createRunsIpcHandlers({
@@ -297,6 +363,60 @@ describe('runs IPC flow', () => {
         runId: started.run.id
       })
     ).rejects.toThrow(`Run not found: ${started.run.id}`);
+  });
+
+  it('routes interactive input and stop commands through the run handlers', async () => {
+    const runtimeBridge = new HoldRuntimeBridge();
+    const handlers: RunsIpcHandlers = createRunsIpcHandlers({
+      runtimeBridge,
+      assertWorkspaceExists: assertWorkspaceExists(['ws-1'])
+    });
+
+    const started = await handlers.startRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      nodeId: 'term-1',
+      runtime: 'shell',
+      command: 'cat'
+    });
+
+    runtimeBridge.emit('started', { runId: started.run.id, pid: 4242 });
+
+    const inputResult = await handlers.inputRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id,
+      input: 'status\n'
+    });
+    expect(inputResult).toEqual({ ok: true });
+    expect(runtimeBridge.inputCalls).toEqual([{ runId: started.run.id, input: 'status\n' }]);
+
+    const stopped = await handlers.stopRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id
+    });
+    expect(stopped.run.status).toBe('running');
+    expect(runtimeBridge.stopCalls).toEqual([started.run.id]);
+
+    await expect(
+      handlers.inputRun({} as IpcMainInvokeEvent, {
+        workspaceId: 'ws-1',
+        runId: started.run.id,
+        input: 'after-stop\n'
+      })
+    ).rejects.toThrow(`Run not accepting input: ${started.run.id}`);
+
+    runtimeBridge.emit('exit', {
+      runId: started.run.id,
+      code: 130,
+      signal: null,
+      tail: ''
+    } satisfies RuntimeExitEvent);
+
+    const stored = await handlers.getRun({} as IpcMainInvokeEvent, {
+      workspaceId: 'ws-1',
+      runId: started.run.id
+    });
+    expect(stored.run.status).toBe('stopped');
+    expect(stored.run.summary).toBe('Run stopped');
   });
 
   it('passes workspace root as cwd when starting runs via registered IPC handlers', async () => {

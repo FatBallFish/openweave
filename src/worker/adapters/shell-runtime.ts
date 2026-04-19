@@ -1,19 +1,11 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  launchPtyRuntime,
+  type RuntimeAdapterInput,
+  type RuntimeAdapterProcess
+} from './pty-runtime';
 
-export interface RuntimeAdapterInput {
-  command: string;
-  cwd?: string;
-  env: NodeJS.ProcessEnv;
-}
-
-export type RuntimeAdapterProcess = ChildProcessWithoutNullStreams;
+export type { RuntimeAdapterInput, RuntimeAdapterProcess } from './pty-runtime';
 
 export const launchShellRuntime = (input: RuntimeAdapterInput): RuntimeAdapterProcess => {
-  return spawn(input.command, {
-    cwd: input.cwd,
-    env: input.env,
-    shell: true,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  });
+  return launchPtyRuntime(input);
 };

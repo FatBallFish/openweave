@@ -73,7 +73,8 @@ const createTerminalNode = (): TerminalNodeInput => {
     type: 'terminal',
     x: 160,
     y: 120,
-    command: 'echo hello'
+    command: 'echo hello',
+    runtime: 'shell'
   };
 };
 
@@ -269,7 +270,7 @@ export const canvasStore = {
   },
   updateTerminalNode: async (
     nodeId: string,
-    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command'>>
+    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>
   ): Promise<void> => {
     if (!state.workspaceId) {
       return;

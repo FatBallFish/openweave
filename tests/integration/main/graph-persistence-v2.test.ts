@@ -154,4 +154,36 @@ describe('workspace repository graph v2 persistence', () => {
     expect(repository.loadGraphSnapshot().schemaVersion).toBe(2);
     expect(repository.loadGraphSnapshot().nodes).toHaveLength(2);
   });
+
+  it('persists selected terminal runtimes in legacy canvas state', () => {
+    repository = createRepository();
+
+    repository.saveCanvasState({
+      nodes: [
+        {
+          id: 'legacy-terminal-1',
+          type: 'terminal',
+          x: 20,
+          y: 30,
+          command: 'pwd',
+          runtime: 'opencode'
+        } as never
+      ],
+      edges: []
+    });
+
+    expect(repository.loadCanvasState()).toEqual({
+      nodes: [
+        {
+          id: 'legacy-terminal-1',
+          type: 'terminal',
+          x: 20,
+          y: 30,
+          command: 'pwd',
+          runtime: 'opencode'
+        }
+      ],
+      edges: []
+    });
+  });
 });

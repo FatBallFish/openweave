@@ -13,6 +13,22 @@ interface RuntimeStartWorkerMessage {
   env: Record<string, string | undefined>;
 }
 
+interface RuntimeInputWorkerMessage {
+  type: 'input';
+  runId: string;
+  input: string;
+}
+
+interface RuntimeStopWorkerMessage {
+  type: 'stop';
+  runId: string;
+}
+
+type RuntimeWorkerMessage =
+  | RuntimeStartWorkerMessage
+  | RuntimeInputWorkerMessage
+  | RuntimeStopWorkerMessage;
+
 interface RuntimeStartedWorkerEvent {
   type: 'started';
   runId: string;
@@ -61,14 +77,20 @@ export interface RuntimeExitEvent {
 }
 
 interface RuntimeWorkerHandle {
-  postMessage: (message: RuntimeStartWorkerMessage) => void;
+  postMessage: (message: RuntimeWorkerMessage) => void;
   onMessage: (listener: (message: RuntimeWorkerEvent) => void) => void;
   onExit: (listener: (code: number | null, signal: string | null) => void) => void;
   kill: () => void;
 }
 
+interface ActiveWorkerRecord {
+  handle: RuntimeWorkerHandle;
+  stopTimer: NodeJS.Timeout | null;
+}
+
 export interface RuntimeBridge {
   start: (request: RuntimeStartRequest) => void;
+  input: (runId: string, input: string) => boolean;
   stop: (runId: string) => boolean;
   dispose: () => void;
   on: {
@@ -94,6 +116,8 @@ export interface ResolveRuntimeWorkerPathOptions {
   cwd?: string;
   pathExists?: (candidate: string) => boolean;
 }
+
+const STOP_WORKER_TIMEOUT_MS = 1000;
 
 export const resolveRuntimeWorkerPath = (
   options: ResolveRuntimeWorkerPathOptions = {}
@@ -162,7 +186,7 @@ const createUtilityProcessWorker = (
     });
 
     return {
-      postMessage: (message: RuntimeStartWorkerMessage): void => {
+      postMessage: (message: RuntimeWorkerMessage): void => {
         utilityProcess.postMessage(message);
       },
       onMessage: (listener: (message: RuntimeWorkerEvent) => void): void => {
@@ -205,7 +229,7 @@ const createForkedWorker = (
   });
 
   return {
-    postMessage: (message: RuntimeStartWorkerMessage): void => {
+    postMessage: (message: RuntimeWorkerMessage): void => {
       child.send(message);
     },
     onMessage: (listener: (message: RuntimeWorkerEvent) => void): void => {
@@ -240,7 +264,7 @@ const createDefaultSpawnWorker = (
 };
 
 class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
-  private readonly workers = new Map<string, RuntimeWorkerHandle>();
+  private readonly workers = new Map<string, ActiveWorkerRecord>();
 
   private readonly spawnWorker: (request: RuntimeStartRequest, env: NodeJS.ProcessEnv) => RuntimeWorkerHandle;
 
@@ -284,6 +308,7 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
           return;
         case 'exit':
           exitReported = true;
+          this.clearStopTimer(message.runId);
           this.emit('exit', {
             runId: message.runId,
             code: message.code,
@@ -300,6 +325,7 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
         return;
       }
 
+      this.clearStopTimer(request.runId);
       this.emit('exit', {
         runId: request.runId,
         code,
@@ -309,7 +335,10 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
       this.workers.delete(request.runId);
     });
 
-    this.workers.set(request.runId, worker);
+    this.workers.set(request.runId, {
+      handle: worker,
+      stopTimer: null
+    });
     worker.postMessage({
       type: 'start',
       runId: request.runId,
@@ -320,23 +349,63 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
     });
   }
 
+  public input(runId: string, input: string): boolean {
+    const worker = this.workers.get(runId);
+    if (!worker) {
+      return false;
+    }
+
+    worker.handle.postMessage({
+      type: 'input',
+      runId,
+      input
+    });
+    return true;
+  }
+
   public stop(runId: string): boolean {
     const worker = this.workers.get(runId);
     if (!worker) {
       return false;
     }
 
-    worker.kill();
-    this.workers.delete(runId);
+    worker.handle.postMessage({
+      type: 'stop',
+      runId
+    });
+
+    if (!worker.stopTimer) {
+      worker.stopTimer = setTimeout(() => {
+        const activeWorker = this.workers.get(runId);
+        if (!activeWorker || activeWorker.handle !== worker.handle) {
+          return;
+        }
+        activeWorker.handle.kill();
+      }, STOP_WORKER_TIMEOUT_MS);
+    }
+
     return true;
   }
 
   public dispose(): void {
-    for (const worker of this.workers.values()) {
-      worker.kill();
+    for (const [runId, worker] of this.workers.entries()) {
+      if (worker.stopTimer) {
+        clearTimeout(worker.stopTimer);
+      }
+      worker.handle.kill();
+      this.workers.delete(runId);
     }
-    this.workers.clear();
     this.removeAllListeners();
+  }
+
+  private clearStopTimer(runId: string): void {
+    const worker = this.workers.get(runId);
+    if (!worker?.stopTimer) {
+      return;
+    }
+
+    clearTimeout(worker.stopTimer);
+    worker.stopTimer = null;
   }
 }
 
