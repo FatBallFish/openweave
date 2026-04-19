@@ -1,8 +1,11 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+  vi.unmock('node-pty');
+  vi.unmock('../../../src/worker/adapters/pty-runtime');
   vi.unmock('../../../src/worker/adapters/shell-runtime');
   vi.unmock('../../../src/worker/adapters/codex-runtime');
   vi.unmock('../../../src/worker/adapters/claude-runtime');
@@ -17,28 +20,110 @@ describe('runtime adapters', () => {
     expect(runRuntimeSchema.parse('opencode')).toBe('opencode');
   });
 
-  it('launchShellRuntime spawns a shell process with the provided cwd and env', async () => {
-    const spawn = vi.fn(() => ({ pid: 1 }));
-    vi.doMock('node:child_process', () => ({
+  it('launchShellRuntime starts a PTY shell with the provided cwd and env', async () => {
+    const ptyProcess = {
+      pid: 1,
+      write: vi.fn(),
+      kill: vi.fn(),
+      onData: vi.fn(),
+      onExit: vi.fn()
+    };
+    const spawn = vi.fn(() => ptyProcess);
+    vi.doMock('node-pty', () => ({
       spawn
     }));
 
     const { launchShellRuntime } = await import('../../../src/worker/adapters/shell-runtime');
-    const env = { PATH: '/usr/bin' } as NodeJS.ProcessEnv;
+    const env = { PATH: '/usr/bin', SystemRoot: 'C:\\Windows' } as NodeJS.ProcessEnv;
     const processRef = launchShellRuntime({
       command: 'echo hello',
       cwd: '/tmp/workspace',
       env
     });
 
-    expect(processRef).toEqual({ pid: 1 });
-    expect(spawn).toHaveBeenCalledWith('echo hello', {
-      cwd: '/tmp/workspace',
-      env,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+    expect(processRef.pid).toBe(1);
+    expect(processRef.write).toEqual(expect.any(Function));
+    expect(processRef.kill).toEqual(expect.any(Function));
+    expect(processRef.stdout).toBeInstanceOf(EventEmitter);
+    expect(processRef.stderr).toBeInstanceOf(EventEmitter);
+
+    if (process.platform === 'win32') {
+      expect(spawn).toHaveBeenCalledWith(
+        env.ComSpec ?? 'cmd.exe',
+        ['/d', '/s', '/c', 'echo hello'],
+        {
+          cwd: '/tmp/workspace',
+          env,
+          name: 'xterm-color'
+        }
+      );
+    } else {
+      expect(spawn).toHaveBeenCalledWith(
+        env.SHELL ?? process.env.SHELL ?? '/bin/sh',
+        ['-lc', 'echo hello'],
+        {
+          cwd: '/tmp/workspace',
+          env,
+          name: 'xterm-color'
+        }
+      );
+    }
+  });
+
+  it('falls back to child_process spawn when node-pty cannot launch the shell', async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      stdin: { write: ReturnType<typeof vi.fn> };
+      pid: number;
+      kill: ReturnType<typeof vi.fn>;
+    };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = {
+      write: vi.fn()
+    };
+    child.pid = 22;
+    child.kill = vi.fn();
+
+    const spawnPty = vi.fn(() => {
+      throw new Error('posix_spawnp failed.');
     });
+    const spawnProcess = vi.fn(() => child);
+
+    vi.doMock('node-pty', () => ({
+      spawn: spawnPty
+    }));
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnProcess
+    }));
+
+    const { launchShellRuntime } = await import('../../../src/worker/adapters/shell-runtime');
+    const env = { PATH: '/usr/bin', SystemRoot: 'C:\\Windows' } as NodeJS.ProcessEnv;
+    const processRef = launchShellRuntime({
+      command: 'echo hello',
+      cwd: '/tmp/workspace',
+      env
+    });
+
+    expect(processRef.pid).toBe(22);
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+    expect(spawnProcess).toHaveBeenCalledWith(
+      process.platform === 'win32'
+        ? env.ComSpec ?? 'cmd.exe'
+        : env.SHELL ?? process.env.SHELL ?? '/bin/sh',
+      process.platform === 'win32' ? ['/d', '/s', '/c', 'echo hello'] : ['-lc', 'echo hello'],
+      {
+        cwd: '/tmp/workspace',
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      }
+    );
+
+    processRef.write('status\n');
+    processRef.kill('SIGTERM');
+    expect(child.stdin.write).toHaveBeenCalledWith('status\n');
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
   });
 
   it('prefixes codex, claude, and opencode commands and rejects empty commands', async () => {
@@ -78,7 +163,7 @@ describe('runtime adapters', () => {
     );
   });
 
-  it('routes opencode through the runtime worker launcher matrix', async () => {
+  it('routes shell, codex, claude, and opencode through the runtime worker launcher matrix', async () => {
     const launchShellRuntime = vi.fn(() => ({ pid: 3 }));
     const launchCodexRuntime = vi.fn(() => ({ pid: 4 }));
     const launchClaudeRuntime = vi.fn(() => ({ pid: 5 }));
@@ -98,21 +183,16 @@ describe('runtime adapters', () => {
     vi.spyOn(process, 'on').mockImplementation(() => process);
 
     const { resolveRuntimeLauncher } = await import('../../../src/worker/runtime-worker');
-    const launcher = resolveRuntimeLauncher('opencode');
 
-    const runtimeProcess = launcher({
-      command: 'run --help',
-      env: {}
-    });
+    expect(resolveRuntimeLauncher('shell')({ command: 'echo hello', env: {} })).toEqual({ pid: 3 });
+    expect(resolveRuntimeLauncher('codex')({ command: 'exec', env: {} })).toEqual({ pid: 4 });
+    expect(resolveRuntimeLauncher('claude')({ command: 'run', env: {} })).toEqual({ pid: 5 });
+    expect(resolveRuntimeLauncher('opencode')({ command: 'run --help', env: {} })).toEqual({ pid: 6 });
 
-    expect(runtimeProcess).toEqual({ pid: 6 });
-    expect(launchOpenCodeRuntime).toHaveBeenCalledWith({
-      command: 'run --help',
-      env: {}
-    });
-    expect(launchShellRuntime).not.toHaveBeenCalled();
-    expect(launchCodexRuntime).not.toHaveBeenCalled();
-    expect(launchClaudeRuntime).not.toHaveBeenCalled();
+    expect(launchShellRuntime).toHaveBeenCalledWith({ command: 'echo hello', env: {} });
+    expect(launchCodexRuntime).toHaveBeenCalledWith({ command: 'exec', env: {} });
+    expect(launchClaudeRuntime).toHaveBeenCalledWith({ command: 'run', env: {} });
+    expect(launchOpenCodeRuntime).toHaveBeenCalledWith({ command: 'run --help', env: {} });
   });
 
   it('surfaces a stable coded error for invalid runtime kinds', async () => {

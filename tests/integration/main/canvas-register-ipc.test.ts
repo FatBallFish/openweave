@@ -75,7 +75,12 @@ describe('registered canvas IPC handlers', () => {
       ipcMain
     });
 
-    expect(ipcMain.removed).toEqual([IPC_CHANNELS.canvasLoad, IPC_CHANNELS.canvasSave]);
+    expect(ipcMain.removed).toEqual([
+      IPC_CHANNELS.canvasLoad,
+      IPC_CHANNELS.canvasSave,
+      IPC_CHANNELS.graphLoad,
+      IPC_CHANNELS.graphSave
+    ]);
 
     await ipcMain.invoke(IPC_CHANNELS.canvasSave, {
       workspaceId: workspaceIds[0],
@@ -139,5 +144,45 @@ describe('registered canvas IPC handlers', () => {
       workspaceId: secondWorkspaceId
     });
     expect(secondLoaded.state.nodes[0]).toMatchObject({ id: 'note-b', contentMd: 'b' });
+
+    await ipcMain.invoke(IPC_CHANNELS.graphSave, {
+      workspaceId: secondWorkspaceId,
+      graphSnapshot: {
+        schemaVersion: 2,
+        nodes: [
+          {
+            id: 'graph-file-tree-1',
+            componentType: 'builtin.file-tree',
+            componentVersion: '1.0.0',
+            title: 'Repo',
+            bounds: {
+              x: 12,
+              y: 16,
+              width: 360,
+              height: 280
+            },
+            config: {
+              rootDir: '/tmp/outside-root'
+            },
+            state: {},
+            capabilities: ['read', 'listChildren'],
+            createdAtMs: 10,
+            updatedAtMs: 11
+          }
+        ],
+        edges: []
+      }
+    });
+
+    const graphLoaded = await ipcMain.invoke(IPC_CHANNELS.graphLoad, {
+      workspaceId: secondWorkspaceId
+    });
+    expect(graphLoaded.graphSnapshot.nodes[0]).toMatchObject({
+      id: 'graph-file-tree-1',
+      componentType: 'builtin.file-tree',
+      config: {
+        rootDir: fs.realpathSync(secondRootDir)
+      }
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
 } from '../../../src/main/ipc/branch-workspaces';
 import { createPortalSessionService } from '../../../src/main/portal/portal-session-service';
 import { createWorkspaceIpcHandlers, type WorkspaceIpcHandlers } from '../../../src/main/ipc/workspaces';
+import type { GraphSnapshotV2Input } from '../../../src/shared/ipc/schemas';
 
 let testDir = '';
 let workspaceDbDir = '';
@@ -64,6 +65,73 @@ const createFixtureRepo = (rootDir: string): void => {
   runGit(rootDir, ['add', '.']);
   runGit(rootDir, ['commit', '-m', 'init']);
 };
+
+const createGraphSnapshot = (workspaceRootDir: string): GraphSnapshotV2Input => ({
+  schemaVersion: 2,
+  nodes: [
+    {
+      id: 'portal-1',
+      componentType: 'builtin.portal',
+      componentVersion: '1.0.0',
+      title: 'Portal',
+      bounds: {
+        x: 120,
+        y: 80,
+        width: 420,
+        height: 320
+      },
+      config: {
+        url: 'http://127.0.0.1:3010/demo'
+      },
+      state: {},
+      capabilities: ['navigate', 'capture', 'input'],
+      createdAtMs: 1,
+      updatedAtMs: 2
+    },
+    {
+      id: 'terminal-1',
+      componentType: 'builtin.terminal',
+      componentVersion: '1.0.0',
+      title: 'Terminal',
+      bounds: {
+        x: 200,
+        y: 80,
+        width: 420,
+        height: 260
+      },
+      config: {
+        command: 'echo source',
+        runtime: 'shell'
+      },
+      state: {
+        activeSessionId: null
+      },
+      capabilities: ['read', 'write', 'execute', 'stream'],
+      createdAtMs: 3,
+      updatedAtMs: 4
+    },
+    {
+      id: 'file-tree-1',
+      componentType: 'builtin.file-tree',
+      componentVersion: '1.0.0',
+      title: 'File tree',
+      bounds: {
+        x: 300,
+        y: 80,
+        width: 360,
+        height: 280
+      },
+      config: {
+        rootDir: path.join(workspaceRootDir, 'src')
+      },
+      state: {},
+      capabilities: ['read', 'listChildren'],
+      createdAtMs: 5,
+      updatedAtMs: 6
+    }
+  ],
+  edges: []
+});
 
 const branchExists = (repoRootDir: string, branchName: string): boolean => {
   try {
@@ -121,6 +189,7 @@ beforeEach(() => {
     ],
     edges: []
   });
+  sourceRepository.saveGraphSnapshot(createGraphSnapshot(sourceWorkspaceRootDir));
   sourceRepository.saveRun({
     id: 'run-source-1',
     workspaceId: sourceWorkspaceId,
@@ -184,12 +253,25 @@ describe('branch workspace flow', () => {
       dbFilePath: toWorkspaceDbPath(created.workspace.id)
     });
     const targetCanvas = targetRepository.loadCanvasState();
+    const targetGraph = targetRepository.loadGraphSnapshot();
     const portalNode = targetCanvas.nodes.find((node) => node.type === 'portal');
     const fileTreeNode = targetCanvas.nodes.find((node) => node.type === 'file-tree');
+    const graphPortalNode = targetGraph.nodes.find((node) => node.componentType === 'builtin.portal');
+    const graphFileTreeNode = targetGraph.nodes.find(
+      (node) => node.componentType === 'builtin.file-tree'
+    );
     expect(portalNode?.type === 'portal' ? portalNode.url : null).toBe('http://127.0.0.1:3010/demo');
     expect(fileTreeNode?.type === 'file-tree' ? fileTreeNode.rootDir : '').toBe(
       path.join(created.workspace.rootDir, 'src')
     );
+    expect(graphPortalNode?.componentType === 'builtin.portal' ? graphPortalNode.config.url : null).toBe(
+      'http://127.0.0.1:3010/demo'
+    );
+    expect(
+      graphFileTreeNode?.componentType === 'builtin.file-tree'
+        ? graphFileTreeNode.config.rootDir
+        : ''
+    ).toBe(path.join(created.workspace.rootDir, 'src'));
     expect(targetRepository.listRuns()).toHaveLength(0);
     targetRepository.close();
 

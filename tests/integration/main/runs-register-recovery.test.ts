@@ -40,10 +40,16 @@ class IpcMainStub {
 class HoldRuntimeBridge extends EventEmitter implements RuntimeBridge {
   public readonly startRequests: RuntimeStartRequest[] = [];
   public readonly stopCalls: string[] = [];
+  public readonly inputCalls: Array<{ runId: string; input: string }> = [];
   public disposed = false;
 
   public start(request: RuntimeStartRequest): void {
     this.startRequests.push(request);
+  }
+
+  public input(runId: string, input: string): boolean {
+    this.inputCalls.push({ runId, input });
+    return true;
   }
 
   public stop(runId: string): boolean {
@@ -109,7 +115,9 @@ describe('registered runs IPC handlers', () => {
     expect(ipcMain.removed).toEqual([
       IPC_CHANNELS.runStart,
       IPC_CHANNELS.runGet,
-      IPC_CHANNELS.runList
+      IPC_CHANNELS.runList,
+      IPC_CHANNELS.runInput,
+      IPC_CHANNELS.runStop
     ]);
 
     const started = await ipcMain.invoke(IPC_CHANNELS.runStart, {
@@ -143,6 +151,43 @@ describe('registered runs IPC handlers', () => {
     expect(reloadedRepository.listRuns()).toEqual([]);
     expect(reloadedRepository.listAuditLogs()).toEqual([]);
     reloadedRepository.close();
+  });
+
+  it('persists user-stopped runs as stopped and does not recover them as failed', async () => {
+    const bridge = new HoldRuntimeBridge();
+    const { workspace, workspaceDbDir, ipcMain } = setupRegisteredRuns(bridge, {
+      enableCrashRecoveryOnOpen: true
+    });
+
+    const started = await ipcMain.invoke(IPC_CHANNELS.runStart, {
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'cat'
+    });
+
+    const stopped = await ipcMain.invoke(IPC_CHANNELS.runStop, {
+      workspaceId: workspace.id,
+      runId: started.run.id
+    });
+    expect(stopped.run.status).toBe('queued');
+    expect(bridge.stopCalls).toEqual([started.run.id]);
+
+    bridge.emit('exit', {
+      runId: started.run.id,
+      code: 130,
+      signal: null,
+      tail: 'stopped\n'
+    });
+
+    recoverRunsForWorkspace(workspace.id);
+
+    const repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    expect(repository.getRun(started.run.id)?.status).toBe('stopped');
+    expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toEqual([]);
+    repository.close();
   });
 
   it('recovers persisted runs once when crash recovery is enabled and skips recovery when disabled', () => {

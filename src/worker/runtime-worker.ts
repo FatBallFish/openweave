@@ -6,6 +6,9 @@ import { launchShellRuntime } from './adapters/shell-runtime';
 
 type RuntimeKind = 'shell' | 'codex' | 'claude' | 'opencode';
 const RUNTIME_KINDS = new Set<RuntimeKind>(['shell', 'codex', 'claude', 'opencode']);
+const MAX_TAIL_LENGTH = 4096;
+const INTERRUPT_INPUT = '\u0003';
+const STOP_KILL_DELAY_MS = 250;
 
 interface StartRunMessage {
   type: 'start';
@@ -16,7 +19,18 @@ interface StartRunMessage {
   env: Record<string, string | undefined>;
 }
 
-type IncomingMessage = StartRunMessage;
+interface InputRunMessage {
+  type: 'input';
+  runId: string;
+  input: string;
+}
+
+interface StopRunMessage {
+  type: 'stop';
+  runId: string;
+}
+
+type IncomingMessage = StartRunMessage | InputRunMessage | StopRunMessage;
 
 interface StartedEvent {
   type: 'started';
@@ -45,7 +59,12 @@ interface ParentPortLike {
   postMessage: (message: unknown) => void;
 }
 
-const MAX_TAIL_LENGTH = 4096;
+interface ActiveRunState {
+  runId: string;
+  runtimeProcess: RuntimeAdapterProcess;
+  tail: string;
+  stopTimer: NodeJS.Timeout | null;
+}
 
 const getParentPort = (): ParentPortLike | null => {
   const maybeParentPort = (process as NodeJS.Process & { parentPort?: ParentPortLike }).parentPort;
@@ -118,6 +137,40 @@ const isRuntimeKind = (value: string): value is RuntimeKind => {
 };
 
 let hasStartedRun = false;
+let activeRun: ActiveRunState | null = null;
+
+const exitWorker = (code: number): void => {
+  setTimeout(() => {
+    process.exit(code);
+  }, 0);
+};
+
+const clearStopTimer = (): void => {
+  if (!activeRun?.stopTimer) {
+    return;
+  }
+
+  clearTimeout(activeRun.stopTimer);
+  activeRun.stopTimer = null;
+};
+
+const handleRuntimeExit = (
+  runId: string,
+  tail: string,
+  code: number | null,
+  signal: NodeJS.Signals | null
+): void => {
+  clearStopTimer();
+  sendMessage({
+    type: 'exit',
+    runId,
+    code,
+    signal: signal ?? null,
+    tail
+  });
+  activeRun = null;
+  exitWorker(code === 0 ? 0 : 1);
+};
 
 const handleStartMessage = (message: StartRunMessage): void => {
   if (hasStartedRun) {
@@ -135,6 +188,13 @@ const handleStartMessage = (message: StartRunMessage): void => {
       env: toRuntimeEnv(message.env)
     });
 
+    activeRun = {
+      runId: message.runId,
+      runtimeProcess,
+      tail,
+      stopTimer: null
+    };
+
     sendMessage({
       type: 'started',
       runId: message.runId,
@@ -144,6 +204,9 @@ const handleStartMessage = (message: StartRunMessage): void => {
     runtimeProcess.stdout.on('data', (chunk: Buffer | string) => {
       const value = chunk.toString();
       tail = appendTail(tail, value);
+      if (activeRun?.runId === message.runId) {
+        activeRun.tail = tail;
+      }
       sendMessage({
         type: 'stdout',
         runId: message.runId,
@@ -154,6 +217,9 @@ const handleStartMessage = (message: StartRunMessage): void => {
     runtimeProcess.stderr.on('data', (chunk: Buffer | string) => {
       const value = chunk.toString();
       tail = appendTail(tail, value);
+      if (activeRun?.runId === message.runId) {
+        activeRun.tail = tail;
+      }
       sendMessage({
         type: 'stderr',
         runId: message.runId,
@@ -164,6 +230,9 @@ const handleStartMessage = (message: StartRunMessage): void => {
     runtimeProcess.on('error', (error: Error) => {
       const chunk = `${error.message}\n`;
       tail = appendTail(tail, chunk);
+      if (activeRun?.runId === message.runId) {
+        activeRun.tail = tail;
+      }
       sendMessage({
         type: 'stderr',
         runId: message.runId,
@@ -172,16 +241,7 @@ const handleStartMessage = (message: StartRunMessage): void => {
     });
 
     runtimeProcess.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
-      sendMessage({
-        type: 'exit',
-        runId: message.runId,
-        code,
-        signal: signal ?? null,
-        tail
-      });
-      setTimeout(() => {
-        process.exit(0);
-      }, 0);
+      handleRuntimeExit(message.runId, tail, code, signal);
     });
   } catch (error) {
     const chunk = error instanceof Error ? `${error.message}\n` : 'Runtime launch failed\n';
@@ -198,10 +258,50 @@ const handleStartMessage = (message: StartRunMessage): void => {
       signal: null,
       tail
     });
-    setTimeout(() => {
-      process.exit(1);
-    }, 0);
+    activeRun = null;
+    exitWorker(1);
   }
+};
+
+const handleInputMessage = (message: InputRunMessage): void => {
+  if (!activeRun || activeRun.runId !== message.runId) {
+    return;
+  }
+
+  try {
+    activeRun.runtimeProcess.write(message.input);
+  } catch (error) {
+    const chunk = error instanceof Error ? `${error.message}\n` : 'Runtime input failed\n';
+    activeRun.tail = appendTail(activeRun.tail, chunk);
+    sendMessage({
+      type: 'stderr',
+      runId: message.runId,
+      chunk
+    });
+  }
+};
+
+const handleStopMessage = (message: StopRunMessage): void => {
+  if (!activeRun || activeRun.runId !== message.runId) {
+    return;
+  }
+  if (activeRun.stopTimer) {
+    return;
+  }
+
+  try {
+    activeRun.runtimeProcess.write(INTERRUPT_INPUT);
+  } catch {
+    // Fall through to the timed kill below when the PTY cannot accept Ctrl-C.
+  }
+
+  activeRun.stopTimer = setTimeout(() => {
+    try {
+      activeRun?.runtimeProcess.kill('SIGTERM');
+    } catch {
+      // Best-effort stop; the bridge will still tear down the worker if it lingers.
+    }
+  }, STOP_KILL_DELAY_MS);
 };
 
 const handleMessage = (message: unknown): void => {
@@ -209,40 +309,52 @@ const handleMessage = (message: unknown): void => {
     return;
   }
 
-  const maybeStartMessage = message as Partial<StartRunMessage>;
+  const typedMessage = message as Partial<IncomingMessage>;
+  if (typedMessage.type === 'input') {
+    if (typeof typedMessage.runId === 'string' && typeof typedMessage.input === 'string') {
+      handleInputMessage(typedMessage as InputRunMessage);
+    }
+    return;
+  }
+
+  if (typedMessage.type === 'stop') {
+    if (typeof typedMessage.runId === 'string') {
+      handleStopMessage(typedMessage as StopRunMessage);
+    }
+    return;
+  }
+
   if (
-    maybeStartMessage.type !== 'start' ||
-    typeof maybeStartMessage.runId !== 'string' ||
-    typeof maybeStartMessage.runtime !== 'string' ||
-    typeof maybeStartMessage.command !== 'string' ||
-    !maybeStartMessage.env
+    typedMessage.type !== 'start' ||
+    typeof typedMessage.runId !== 'string' ||
+    typeof typedMessage.runtime !== 'string' ||
+    typeof typedMessage.command !== 'string' ||
+    !typedMessage.env
   ) {
     return;
   }
 
-  if (!isRuntimeKind(maybeStartMessage.runtime)) {
-    const chunk = `${createUnsupportedRuntimeError(maybeStartMessage.runtime).message}\n`;
+  if (!isRuntimeKind(typedMessage.runtime)) {
+    const chunk = `${createUnsupportedRuntimeError(typedMessage.runtime).message}\n`;
     sendMessage({
       type: 'stderr',
-      runId: maybeStartMessage.runId,
+      runId: typedMessage.runId,
       chunk
     });
     sendMessage({
       type: 'exit',
-      runId: maybeStartMessage.runId,
+      runId: typedMessage.runId,
       code: 1,
       signal: null,
       tail: chunk
     });
-    setTimeout(() => {
-      process.exit(1);
-    }, 0);
+    exitWorker(1);
     return;
   }
 
   handleStartMessage({
-    ...maybeStartMessage,
-    runtime: maybeStartMessage.runtime
+    ...typedMessage,
+    runtime: typedMessage.runtime
   } as StartRunMessage);
 };
 

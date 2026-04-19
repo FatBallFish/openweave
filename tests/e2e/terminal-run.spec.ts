@@ -21,7 +21,7 @@ const resolveElectronLaunchOptions = (
   };
 };
 
-test('runs a terminal command and shows queued to completed status', async () => {
+test('runs an interactive terminal session, accepts follow-up input, and stops cleanly', async () => {
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-terminal-run-${uniqueSuffix}`);
   const workspaceName = `Terminal-${uniqueSuffix}`;
@@ -41,21 +41,39 @@ test('runs a terminal command and shows queued to completed status', async () =>
     await page.getByTestId('canvas-add-terminal').click();
 
     const terminalCommand = page.locator('[data-testid^="terminal-node-command-"]').first();
+    const terminalRuntime = page.locator('[data-testid^="terminal-node-runtime-"]').first();
     const terminalRunButton = page.locator('[data-testid^="terminal-node-run-"]').first();
     const lastStatus = page.locator('[data-testid^="terminal-node-last-status-"]').first();
 
-    await terminalCommand.fill('echo hello && sleep 0.2');
+    await terminalRuntime.selectOption('shell');
+    await terminalCommand.fill("/bin/sh -lc 'echo ready; while read line; do echo $line; done'");
     await terminalRunButton.click();
 
-    await expect(lastStatus).toContainText(/queued|running|completed/);
-    await expect(lastStatus).toContainText('completed', { timeout: 10000 });
+    await expect(lastStatus).toContainText(/queued|running/);
 
     await expect(page.getByTestId('run-drawer')).toBeVisible();
-    await expect(page.getByTestId('run-drawer-status')).toContainText('completed', {
+    await expect(page.getByTestId('terminal-session-output')).toContainText('ready', {
       timeout: 10000
     });
-    await expect(page.getByTestId('run-drawer-summary')).toContainText('hello');
-    await expect(page.getByTestId('run-drawer-tail-log')).toContainText('hello');
+
+    const sessionInput = page.getByTestId('terminal-session-input');
+    await sessionInput.fill('hello from playwright');
+    await page.getByTestId('terminal-session-send').click();
+
+    await expect(page.getByTestId('terminal-session-output')).toContainText(
+      'hello from playwright',
+      {
+        timeout: 10000
+      }
+    );
+
+    await page.getByTestId('terminal-session-stop').click();
+
+    await expect(lastStatus).toContainText('stopped', { timeout: 10000 });
+    await expect(page.getByTestId('run-drawer-status')).toContainText('stopped', {
+      timeout: 10000
+    });
+    await expect(page.getByTestId('terminal-session-state')).toContainText('Session stopped.');
   } finally {
     await app.close();
   }

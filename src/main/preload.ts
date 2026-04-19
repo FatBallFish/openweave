@@ -7,14 +7,18 @@ import type {
   ComponentListInput,
   ComponentUninstallInput,
   FileTreeLoadInput,
+  GraphLoadV2Input,
+  GraphSaveV2Input,
   PortalCaptureInput,
   PortalClickInput,
   PortalInputInput,
   PortalLoadInput,
   PortalStructureInput,
   RunGetInput,
+  RunInputInput,
   RunListInput,
   RunStartInput,
+  RunStopInput,
   WorkspaceBranchCreateInput,
   WorkspaceCreateInput,
   WorkspaceDeleteInput,
@@ -46,10 +50,16 @@ const shellBridge: OpenWeaveShellBridge = {
     loadCanvasState: (input: CanvasLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasLoad, input),
     saveCanvasState: (input: CanvasSaveInput) => ipcRenderer.invoke(IPC_CHANNELS.canvasSave, input)
   },
+  graph: {
+    loadGraphSnapshot: (input: GraphLoadV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphLoad, input),
+    saveGraphSnapshot: (input: GraphSaveV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphSave, input)
+  },
   runs: {
     startRun: (input: RunStartInput) => ipcRenderer.invoke(IPC_CHANNELS.runStart, input),
     getRun: (input: RunGetInput) => ipcRenderer.invoke(IPC_CHANNELS.runGet, input),
-    listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input)
+    listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input),
+    inputRun: (input: RunInputInput) => ipcRenderer.invoke(IPC_CHANNELS.runInput, input),
+    stopRun: (input: RunStopInput) => ipcRenderer.invoke(IPC_CHANNELS.runStop, input)
   },
   files: {
     loadFileTree: (input: FileTreeLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.fileTreeLoad, input)

@@ -19,6 +19,7 @@ import {
   toManagedWorktreeTargetDir,
   type GitWorktreeService
 } from '../../worker/git/worktree-service';
+import type { GraphSnapshotV2Input } from '../../shared/ipc/schemas';
 
 interface BranchWorkspaceIpcMain {
   handle: (channel: string, listener: (...args: any[]) => unknown) => void;
@@ -86,6 +87,38 @@ const remapFileTreeRootDir = (
   return relative.length === 0 ? targetWorkspaceRootDir : path.join(targetWorkspaceRootDir, relative);
 };
 
+const remapGraphSnapshotForBranchWorkspace = (
+  graphSnapshot: GraphSnapshotV2Input,
+  sourceWorkspaceRootDir: string,
+  targetWorkspaceRootDir: string
+): GraphSnapshotV2Input => {
+  return {
+    ...graphSnapshot,
+    nodes: graphSnapshot.nodes.map((node) => {
+      if (node.componentType !== 'builtin.file-tree') {
+        return node;
+      }
+
+      const rootDir =
+        typeof node.config.rootDir === 'string'
+          ? remapFileTreeRootDir(
+              node.config.rootDir,
+              sourceWorkspaceRootDir,
+              targetWorkspaceRootDir
+            )
+          : targetWorkspaceRootDir;
+
+      return {
+        ...node,
+        config: {
+          ...node.config,
+          rootDir
+        }
+      };
+    })
+  };
+};
+
 const cloneCanvasLayout = (options: {
   workspaceDbDir: string;
   sourceWorkspaceId: string;
@@ -102,6 +135,7 @@ const cloneCanvasLayout = (options: {
 
   try {
     const sourceCanvas = sourceRepository.loadCanvasState();
+    const sourceGraphSnapshot = sourceRepository.loadGraphSnapshot();
     targetRepository.saveCanvasState({
       nodes: sourceCanvas.nodes.map((node) => {
         if (node.type !== 'file-tree') {
@@ -119,6 +153,13 @@ const cloneCanvasLayout = (options: {
       }),
       edges: sourceCanvas.edges
     });
+    targetRepository.saveGraphSnapshot(
+      remapGraphSnapshotForBranchWorkspace(
+        sourceGraphSnapshot,
+        options.sourceWorkspaceRootDir,
+        options.targetWorkspaceRootDir
+      )
+    );
   } finally {
     sourceRepository.close();
     targetRepository.close();

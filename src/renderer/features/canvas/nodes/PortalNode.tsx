@@ -148,6 +148,11 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
       style={{
         border: '1px solid #f79009',
         borderRadius: '8px',
+        boxSizing: 'border-box',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        overflow: 'auto',
         padding: '12px',
         display: 'grid',
         gap: '8px',

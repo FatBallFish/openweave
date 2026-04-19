@@ -21,9 +21,11 @@ import type {
   PortalLoadInput,
   PortalStructureInput,
   RunGetInput,
+  RunInputInput,
   RunListInput,
   RunRuntimeInput,
   RunStartInput,
+  RunStopInput,
   RunStatusInput,
   WorkspaceInfoInput,
   WorkspaceCreateInput,
@@ -53,9 +55,13 @@ export const IPC_CHANNELS = {
   componentUninstall: 'component:uninstall',
   canvasLoad: 'canvas:load',
   canvasSave: 'canvas:save',
+  graphLoad: 'graph:load-v2',
+  graphSave: 'graph:save-v2',
   runStart: 'run:start',
   runGet: 'run:get',
   runList: 'run:list',
+  runInput: 'run:input',
+  runStop: 'run:stop',
   fileTreeLoad: 'file-tree:load',
   portalLoad: 'portal:load',
   portalCapture: 'portal:capture',
@@ -136,6 +142,10 @@ export interface RunGetResponse {
 
 export interface RunListResponse {
   runs: RunRecord[];
+}
+
+export interface RunInputResponse {
+  ok: true;
 }
 
 export type GitFileStatusCode = 'M' | 'A' | 'D' | 'R' | 'C' | 'U' | '?' | '!';
@@ -304,6 +314,8 @@ export interface RunsBridgeApi {
   startRun: (input: RunStartInput) => Promise<RunMutationResponse>;
   getRun: (input: RunGetInput) => Promise<RunGetResponse>;
   listRuns: (input: RunListInput) => Promise<RunListResponse>;
+  inputRun: (input: RunInputInput) => Promise<RunInputResponse>;
+  stopRun: (input: RunStopInput) => Promise<RunMutationResponse>;
 }
 
 export interface FilesBridgeApi {
@@ -342,6 +354,7 @@ export interface OpenWeaveShellBridge {
   workspaces: WorkspaceBridgeApi;
   components: AgentComponentBridgeApi;
   canvas: CanvasBridgeApi;
+  graph: GraphBridgeApiV2;
   runs: RunsBridgeApi;
   files: FilesBridgeApi;
   portal: PortalBridgeApi;

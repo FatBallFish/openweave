@@ -39,7 +39,9 @@ const getFirstTerminalNodeId = (workspaceDbPath: string): string => {
   const workspaceDb = new DatabaseSync(workspaceDbPath);
   try {
     const row = workspaceDb
-      .prepare("SELECT id FROM canvas_nodes WHERE node_type = 'terminal' ORDER BY updated_at_ms ASC LIMIT 1")
+      .prepare(
+        "SELECT id FROM graph_nodes WHERE component_type = 'builtin.terminal' ORDER BY updated_at_ms ASC LIMIT 1"
+      )
       .get() as { id?: unknown } | undefined;
     if (!row || typeof row.id !== 'string') {
       throw new Error('Terminal node not found');
