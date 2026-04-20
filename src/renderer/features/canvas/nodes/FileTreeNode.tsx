@@ -14,14 +14,6 @@ interface FileTreeNodeProps {
   onCreateBranchWorkspace?: () => void;
 }
 
-const parseNumberOrUndefined = (value: string): number | undefined => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  return parsed;
-};
-
 const getFilesBridge = (): OpenWeaveShellBridge['files'] => {
   const shell = (window as Window & { openweaveShell?: OpenWeaveShellBridge }).openweaveShell;
   if (!shell) {
@@ -58,7 +50,6 @@ const MAX_RENDERED_ENTRIES = 120;
 export const FileTreeNode = ({
   workspaceId,
   node,
-  onChange,
   onCreateBranchWorkspace
 }: FileTreeNodeProps): JSX.Element => {
   const [tree, setTree] = useState<FileTreeLoadResponse>(emptyTreeState);
@@ -103,70 +94,38 @@ export const FileTreeNode = ({
   }, [node.rootDir, workspaceId]);
 
   return (
-    <article
-      data-testid={`file-tree-node-${node.id}`}
-      style={{
-        border: '1px solid #12b76a',
-        borderRadius: '8px',
-        boxSizing: 'border-box',
-        width: '100%',
-        height: '100%',
-        minWidth: 0,
-        overflow: 'hidden',
-        padding: '12px',
-        display: 'grid',
-        gap: '8px',
-        backgroundColor: '#ecfdf3'
-      }}
-    >
-      <h3 style={{ margin: 0 }}>File tree</h3>
-      <p
-        data-testid={`file-tree-root-${node.id}`}
-        style={{ margin: 0, color: '#344054', overflowWrap: 'anywhere' }}
-      >
-        Root: {node.rootDir}
-      </p>
+    <section className="ow-file-tree-node" data-testid={`file-tree-node-${node.id}`}>
+      <div className="ow-file-tree-node__root-card">
+        <span className="ow-file-tree-node__label">Workspace root</span>
+        <p data-testid={`file-tree-root-${node.id}`}>{node.rootDir}</p>
+      </div>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <label style={{ display: 'grid', gap: '4px' }}>
-          X
-          <input
-            data-testid={`file-tree-node-x-${node.id}`}
-            onChange={(event) => {
-              const nextX = parseNumberOrUndefined(event.currentTarget.value);
-              if (nextX !== undefined) {
-                onChange({ x: nextX });
-              }
+      <div className="ow-file-tree-node__actions">
+        <div className="ow-file-tree-node__action-buttons">
+          <button
+            className="nodrag nopan"
+            data-testid={`file-tree-refresh-${node.id}`}
+            disabled={loading}
+            onClick={() => {
+              void loadTree(node.rootDir);
             }}
-            type="number"
-            value={node.x}
-          />
-        </label>
-        <label style={{ display: 'grid', gap: '4px' }}>
-          Y
-          <input
-            data-testid={`file-tree-node-y-${node.id}`}
-            onChange={(event) => {
-              const nextY = parseNumberOrUndefined(event.currentTarget.value);
-              if (nextY !== undefined) {
-                onChange({ y: nextY });
-              }
-            }}
-            type="number"
-            value={node.y}
-          />
-        </label>
-        <button
-          data-testid={`file-tree-refresh-${node.id}`}
-          disabled={loading}
-          onClick={() => {
-            void loadTree(node.rootDir);
-          }}
-          style={{ alignSelf: 'end' }}
-          type="button"
-        >
-          Refresh
-        </button>
+            type="button"
+          >
+            Refresh
+          </button>
+          {onCreateBranchWorkspace ? (
+            <button
+              className="nodrag nopan"
+              data-testid={`file-tree-branch-workspace-${node.id}`}
+              disabled={loading}
+              onClick={onCreateBranchWorkspace}
+              type="button"
+            >
+              Branch workspace
+            </button>
+          ) : null}
+        </div>
+        <span>{loading ? 'Refreshing tree' : 'Repo context synced'}</span>
       </div>
 
       <GitPanel
@@ -179,17 +138,17 @@ export const FileTreeNode = ({
       />
 
       {errorMessage ? (
-        <p data-testid={`file-tree-error-${node.id}`} style={{ color: '#b42318', margin: 0 }}>
+        <p className="ow-file-tree-node__error" data-testid={`file-tree-error-${node.id}`}>
           {errorMessage}
         </p>
       ) : null}
 
       {loading ? (
-        <p data-testid={`file-tree-loading-${node.id}`} style={{ margin: 0 }}>
+        <p className="ow-file-tree-node__loading" data-testid={`file-tree-loading-${node.id}`}>
           Loading file tree...
         </p>
       ) : (
-        <ul data-testid={`file-tree-node-list-${node.id}`} style={{ margin: 0, paddingLeft: '18px' }}>
+        <ul className="ow-file-tree-node__list" data-testid={`file-tree-node-list-${node.id}`}>
           {tree.entries.length === 0 ? (
             <li>(empty)</li>
           ) : (
@@ -204,6 +163,6 @@ export const FileTreeNode = ({
           )}
         </ul>
       )}
-    </article>
+    </section>
   );
 };

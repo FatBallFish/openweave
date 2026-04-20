@@ -91,6 +91,7 @@ describe('renderer static components', () => {
     expect(topBar).toContain('Add text');
     expect(topBar).toContain('Search');
     expect(topBar).toContain('Command menu');
+    expect(portalToolbar).toContain('Open page');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');
     expect(portalToolbar).toContain('portal-url-input-portal-1');
@@ -133,8 +134,8 @@ describe('renderer static components', () => {
     expect(html).toContain('Modified: 1');
     expect(html).toContain('Added: 2');
     expect(html).toContain('Untracked: 3');
-    expect(html).toContain('Read-only mode');
-    expect(html).toContain('Create branch workspace');
+    expect(html).toContain('Read-only repo surface');
+    expect(html).toContain('Branch workspace');
     expect(html).toContain('disabled=""');
   });
 });

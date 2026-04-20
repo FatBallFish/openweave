@@ -1148,3 +1148,162 @@ select {
 .ow-run-drawer__content p {
   width: fit-content;
 }
+
+
+.ow-file-tree-node,
+.ow-file-tree-node__actions,
+.ow-file-tree-node__action-buttons,
+.ow-git-panel__header,
+.ow-portal-toolbar__actions,
+.ow-portal-node__viewport-header {
+  display: flex;
+}
+
+.ow-file-tree-node,
+.ow-portal-node,
+.ow-git-panel,
+.ow-portal-toolbar,
+.ow-portal-toolbar__grid,
+.ow-portal-node__viewport {
+  display: grid;
+  gap: 10px;
+}
+
+.ow-file-tree-node__root-card,
+.ow-portal-node__session,
+.ow-git-panel,
+.ow-portal-node__viewport {
+  border: 1px solid var(--ow-color-border);
+  border-radius: 14px;
+  background: rgba(var(--ow-surface-rgb), 0.7);
+}
+
+.ow-file-tree-node__root-card,
+.ow-portal-node__session,
+.ow-portal-node__viewport,
+.ow-git-panel {
+  padding: 12px;
+}
+
+.ow-file-tree-node__label,
+.ow-git-panel__header span,
+.ow-file-tree-node__actions span,
+.ow-portal-node__viewport-header span {
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-file-tree-node__root-card p,
+.ow-file-tree-node__loading,
+.ow-file-tree-node__error,
+.ow-git-panel p,
+.ow-portal-node__viewport p,
+.ow-portal-node__error {
+  margin: 0;
+}
+
+.ow-file-tree-node__root-card p,
+.ow-portal-node__session,
+.ow-portal-node__viewport strong,
+.ow-git-panel__header strong {
+  color: var(--ow-color-text-strong);
+}
+
+.ow-file-tree-node__actions,
+.ow-git-panel__header,
+.ow-portal-toolbar__actions,
+.ow-portal-node__viewport-header {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ow-file-tree-node__actions button,
+.ow-git-panel button,
+.ow-portal-toolbar button {
+  min-height: 34px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background: rgba(var(--ow-surface-rgb), 0.9);
+  color: var(--ow-color-text-strong);
+  padding: 0 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ow-file-tree-node button,
+.ow-git-panel button,
+.ow-portal-toolbar button,
+.ow-portal-toolbar input {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.ow-file-tree-node__actions button,
+.ow-git-panel button,
+.ow-portal-toolbar__actions button:first-child {
+  background: rgba(var(--ow-accent-rgb), 0.12);
+  border-color: rgba(var(--ow-accent-rgb), 0.26);
+}
+
+.ow-file-tree-node__list,
+.ow-git-panel__summary,
+.ow-portal-node__structure {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ow-color-text-default);
+}
+
+.ow-file-tree-node__list li,
+.ow-git-panel__summary li,
+.ow-portal-node__structure li {
+  margin: 0 0 6px;
+}
+
+.ow-git-panel__readonly,
+.ow-file-tree-node__loading,
+.ow-file-tree-node__error,
+.ow-portal-node__error {
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-file-tree-node__error,
+.ow-portal-node__error {
+  color: var(--ow-state-failed);
+}
+
+.ow-portal-toolbar__field {
+  display: grid;
+  gap: 6px;
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-portal-toolbar__field input {
+  min-height: 38px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background: rgba(var(--ow-surface-rgb), 0.9);
+  color: var(--ow-color-text-strong);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.ow-portal-toolbar__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.ow-portal-node__session,
+.ow-portal-node__viewport p {
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .ow-portal-toolbar__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

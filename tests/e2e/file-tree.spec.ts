@@ -67,7 +67,7 @@ test('shows file tree and git status as read-only surfaces', async () => {
 
     const gitPanel = page.locator('[data-testid^="git-panel-"]').first();
     await expect(gitPanel).toContainText('Modified: 1');
-    await expect(gitPanel).toContainText('Read-only mode');
+    await expect(gitPanel).toContainText('Read-only repo surface');
   } finally {
     await app.close();
   }
@@ -105,7 +105,7 @@ test('loads non-git directories while keeping git panel read-only', async () => 
 
     const gitPanel = page.locator('[data-testid^="git-panel-"]').first();
     await expect(gitPanel).toContainText('Git repository not detected');
-    await expect(gitPanel).toContainText('Read-only mode');
+    await expect(gitPanel).toContainText('Read-only repo surface');
   } finally {
     await app.close();
   }

@@ -18,14 +18,6 @@ const getPortalBridge = (): OpenWeaveShellBridge['portal'] => {
   return shell.portal;
 };
 
-const parseNumberOrUndefined = (value: string): number | undefined => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  return parsed;
-};
-
 const toErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -143,57 +135,10 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
   }, [workspaceId, node.id]);
 
   return (
-    <article
-      data-testid={`portal-node-${node.id}`}
-      style={{
-        border: '1px solid #f79009',
-        borderRadius: '8px',
-        boxSizing: 'border-box',
-        width: '100%',
-        height: '100%',
-        minWidth: 0,
-        overflow: 'auto',
-        padding: '12px',
-        display: 'grid',
-        gap: '8px',
-        backgroundColor: '#fffaeb'
-      }}
-    >
-      <h3 style={{ margin: 0 }}>Portal</h3>
-      <p data-testid={`portal-session-${node.id}`} style={{ margin: 0, color: '#344054' }}>
+    <section className="ow-portal-node" data-testid={`portal-node-${node.id}`}>
+      <p className="ow-portal-node__session" data-testid={`portal-session-${node.id}`}>
         Session: {portalId ?? 'pending'}
       </p>
-
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <label style={{ display: 'grid', gap: '4px' }}>
-          X
-          <input
-            data-testid={`portal-node-x-${node.id}`}
-            onChange={(event) => {
-              const nextX = parseNumberOrUndefined(event.currentTarget.value);
-              if (nextX !== undefined) {
-                onChange({ x: nextX });
-              }
-            }}
-            type="number"
-            value={node.x}
-          />
-        </label>
-        <label style={{ display: 'grid', gap: '4px' }}>
-          Y
-          <input
-            data-testid={`portal-node-y-${node.id}`}
-            onChange={(event) => {
-              const nextY = parseNumberOrUndefined(event.currentTarget.value);
-              if (nextY !== undefined) {
-                onChange({ y: nextY });
-              }
-            }}
-            type="number"
-            value={node.y}
-          />
-        </label>
-      </div>
 
       <PortalToolbar
         clickSelector={clickSelector}
@@ -266,30 +211,32 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
       />
 
       {errorMessage ? (
-        <p data-testid={`portal-error-${node.id}`} style={{ margin: 0, color: '#b42318' }}>
+        <p className="ow-portal-node__error" data-testid={`portal-error-${node.id}`}>
           {errorMessage}
         </p>
       ) : null}
 
-      <p data-testid={`portal-action-status-${node.id}`} style={{ margin: 0 }}>
-        Status: {actionMessage}
-      </p>
+      <div className="ow-portal-node__viewport">
+        <div className="ow-portal-node__viewport-header">
+          <strong>Managed viewport</strong>
+          <span>{loading ? 'Loading' : 'Live'}</span>
+        </div>
 
-      <p data-testid={`portal-screenshot-path-${node.id}`} style={{ margin: 0 }}>
-        Screenshot: {screenshotPath ?? 'none'}
-      </p>
+        <p data-testid={`portal-action-status-${node.id}`}>Status: {actionMessage}</p>
+        <p data-testid={`portal-screenshot-path-${node.id}`}>Screenshot: {screenshotPath ?? 'none'}</p>
 
-      <ul data-testid={`portal-structure-list-${node.id}`} style={{ margin: 0, paddingLeft: '18px' }}>
-        {structureElements.length === 0 ? (
-          <li>(no structure)</li>
-        ) : (
-          structureElements.map((element, index) => (
-            <li data-testid={`portal-structure-item-${node.id}-${index}`} key={`${element.tag}-${index}`}>
-              {element.tag}: {element.text || '(empty)'}
-            </li>
-          ))
-        )}
-      </ul>
-    </article>
+        <ul className="ow-portal-node__structure" data-testid={`portal-structure-list-${node.id}`}>
+          {structureElements.length === 0 ? (
+            <li>(no structure)</li>
+          ) : (
+            structureElements.map((element, index) => (
+              <li data-testid={`portal-structure-item-${node.id}-${index}`} key={`${element.tag}-${index}`}>
+                {element.tag}: {element.text || '(empty)'}
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+    </section>
   );
 };
