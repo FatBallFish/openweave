@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useCanvasStore, canvasStore } from './canvas.store';
-import { NodeToolbar } from './nodes/NodeToolbar';
+import { CanvasShell } from '../canvas-shell/CanvasShell';
 import { RunDrawer } from '../runs/RunDrawer';
 import { workspacesStore } from '../workspaces/workspaces.store';
-import { CanvasShell } from '../canvas-shell/CanvasShell';
+import { useCanvasStore, canvasStore } from './canvas.store';
+import { NodeToolbar } from './nodes/NodeToolbar';
 
 interface WorkspaceCanvasPageProps {
   workspaceId: string;
@@ -44,7 +44,6 @@ export const WorkspaceCanvasPage = ({
 
       <NodeToolbar />
 
-
       {errorMessage ? (
         <p className="ow-workspace-canvas-page__error" data-testid="canvas-error">
           {errorMessage}
@@ -53,8 +52,6 @@ export const WorkspaceCanvasPage = ({
 
       {loading ? (
         <p data-testid="canvas-loading">Loading canvas...</p>
-      ) : graphSnapshot.nodes.length === 0 ? (
-        <p data-testid="canvas-empty">No nodes yet.</p>
       ) : (
         <CanvasShell
           workspaceId={workspaceId}
@@ -62,6 +59,21 @@ export const WorkspaceCanvasPage = ({
           graphSnapshot={graphSnapshot}
           onOpenRun={openRun}
           onCreateBranchWorkspace={openBranchDialog}
+          onAddTerminal={() => {
+            void canvasStore.addTerminalNode();
+          }}
+          onAddNote={() => {
+            void canvasStore.addNoteNode();
+          }}
+          onAddPortal={() => {
+            void canvasStore.addPortalNode();
+          }}
+          onAddFileTree={() => {
+            void canvasStore.addFileTreeNode(workspaceRootDir);
+          }}
+          onAddText={() => {
+            void canvasStore.addTextNode();
+          }}
           onMoveNode={(nodeId, position) => {
             void canvasStore.updateNodePosition(nodeId, position);
           }}

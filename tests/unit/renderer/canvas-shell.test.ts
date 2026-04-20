@@ -104,12 +104,17 @@ describe('canvas shell', () => {
     ]);
   });
 
-  it('renders a real canvas-shell container around builtin hosts', () => {
+  it('renders workbench canvas chrome around builtin hosts', () => {
     const html = renderToStaticMarkup(
       createElement(CanvasShell, {
         workspaceId: 'ws-1',
         workspaceRootDir: '/tmp/ws-1',
         graphSnapshot: createGraphSnapshot(),
+        onAddTerminal: vi.fn(),
+        onAddNote: vi.fn(),
+        onAddPortal: vi.fn(),
+        onAddFileTree: vi.fn(),
+        onAddText: vi.fn(),
         onOpenRun: vi.fn(),
         onCreateBranchWorkspace: vi.fn(),
         onMoveNode: vi.fn()
@@ -117,6 +122,8 @@ describe('canvas shell', () => {
     );
 
     expect(html).toContain('canvas-shell');
-    expect(html).toContain('canvas-shell-flow');
+    expect(html).toContain('canvas-shell-grid');
+    expect(html).toContain('canvas-shell-minimap');
+    expect(html).toContain('canvas-selection-hud');
   });
 });
