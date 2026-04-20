@@ -34,13 +34,11 @@ export const PortalToolbar = ({
   onInputText
 }: PortalToolbarProps): JSX.Element => {
   return (
-    <section
-      data-testid={`portal-toolbar-${nodeId}`}
-      style={{ display: 'grid', gap: '8px', borderTop: '1px solid #d0d5dd', paddingTop: '8px' }}
-    >
-      <label style={{ display: 'grid', gap: '4px' }}>
+    <section className="ow-portal-toolbar" data-testid={`portal-toolbar-${nodeId}`}>
+      <label className="ow-portal-toolbar__field">
         URL
         <input
+          className="nodrag nopan"
           data-testid={`portal-url-input-${nodeId}`}
           disabled={disabled}
           onChange={(event) => onUrlChange(event.currentTarget.value)}
@@ -49,11 +47,12 @@ export const PortalToolbar = ({
         />
       </label>
 
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <button data-testid={`portal-load-${nodeId}`} disabled={disabled} onClick={onLoad} type="button">
-          Load
+      <div className="ow-portal-toolbar__actions">
+        <button className="nodrag nopan" data-testid={`portal-load-${nodeId}`} disabled={disabled} onClick={onLoad} type="button">
+          Open page
         </button>
         <button
+          className="nodrag nopan"
           data-testid={`portal-capture-${nodeId}`}
           disabled={disabled}
           onClick={onCapture}
@@ -62,6 +61,7 @@ export const PortalToolbar = ({
           Capture screenshot
         </button>
         <button
+          className="nodrag nopan"
           data-testid={`portal-structure-${nodeId}`}
           disabled={disabled}
           onClick={onReadStructure}
@@ -71,53 +71,59 @@ export const PortalToolbar = ({
         </button>
       </div>
 
-      <label style={{ display: 'grid', gap: '4px' }}>
-        Click selector
-        <input
-          data-testid={`portal-click-selector-${nodeId}`}
+      <div className="ow-portal-toolbar__grid">
+        <label className="ow-portal-toolbar__field">
+          Click selector
+          <input
+            className="nodrag nopan"
+            data-testid={`portal-click-selector-${nodeId}`}
+            disabled={disabled}
+            onChange={(event) => onClickSelectorChange(event.currentTarget.value)}
+            type="text"
+            value={clickSelector}
+          />
+        </label>
+        <button
+          className="nodrag nopan"
+          data-testid={`portal-click-${nodeId}`}
           disabled={disabled}
-          onChange={(event) => onClickSelectorChange(event.currentTarget.value)}
-          type="text"
-          value={clickSelector}
-        />
-      </label>
-      <button
-        data-testid={`portal-click-${nodeId}`}
-        disabled={disabled}
-        onClick={onClickElement}
-        type="button"
-      >
-        Click element
-      </button>
-
-      <label style={{ display: 'grid', gap: '4px' }}>
-        Input selector
-        <input
-          data-testid={`portal-input-selector-${nodeId}`}
+          onClick={onClickElement}
+          type="button"
+        >
+          Click element
+        </button>
+        <label className="ow-portal-toolbar__field">
+          Input selector
+          <input
+            className="nodrag nopan"
+            data-testid={`portal-input-selector-${nodeId}`}
+            disabled={disabled}
+            onChange={(event) => onInputSelectorChange(event.currentTarget.value)}
+            type="text"
+            value={inputSelector}
+          />
+        </label>
+        <label className="ow-portal-toolbar__field">
+          Input value
+          <input
+            className="nodrag nopan"
+            data-testid={`portal-input-value-${nodeId}`}
+            disabled={disabled}
+            onChange={(event) => onInputValueChange(event.currentTarget.value)}
+            type="text"
+            value={inputValue}
+          />
+        </label>
+        <button
+          className="nodrag nopan"
+          data-testid={`portal-input-${nodeId}`}
           disabled={disabled}
-          onChange={(event) => onInputSelectorChange(event.currentTarget.value)}
-          type="text"
-          value={inputSelector}
-        />
-      </label>
-      <label style={{ display: 'grid', gap: '4px' }}>
-        Input value
-        <input
-          data-testid={`portal-input-value-${nodeId}`}
-          disabled={disabled}
-          onChange={(event) => onInputValueChange(event.currentTarget.value)}
-          type="text"
-          value={inputValue}
-        />
-      </label>
-      <button
-        data-testid={`portal-input-${nodeId}`}
-        disabled={disabled}
-        onClick={onInputText}
-        type="button"
-      >
-        Input text
-      </button>
+          onClick={onInputText}
+          type="button"
+        >
+          Input text
+        </button>
+      </div>
     </section>
   );
 };

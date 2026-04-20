@@ -46,8 +46,10 @@ const initializeCrashRecoveryMarker = (): boolean => {
 
 const createMainWindow = (): BrowserWindow => {
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: 1440,
+    minWidth: 1280,
+    height: 860,
+    minHeight: 760,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

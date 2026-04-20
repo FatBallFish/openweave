@@ -18,21 +18,21 @@ const isTerminalState = (status: RunRecord['status']): boolean => {
 
 const getSessionStateLabel = (run: RunRecord, isStopping: boolean): string => {
   if (run.status === 'stopped') {
-    return 'Session stopped.';
+    return 'Session stopped';
   }
   if (run.status === 'completed') {
-    return 'Session completed.';
+    return 'Session completed';
   }
   if (run.status === 'failed') {
-    return 'Session failed.';
+    return 'Session failed';
   }
   if (isStopping) {
-    return 'Stopping session...';
+    return 'Stopping session';
   }
   if (run.status === 'queued') {
-    return 'Session is starting...';
+    return 'Session starting';
   }
-  return 'Session is active.';
+  return 'Session active';
 };
 
 export const TerminalSessionPane = ({
@@ -63,38 +63,27 @@ export const TerminalSessionPane = ({
   };
 
   return (
-    <section
-      data-testid="terminal-session-pane"
-      style={{
-        display: 'grid',
-        gap: '8px'
-      }}
-    >
-      <div
-        data-testid="terminal-session-meta"
-        style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '13px', color: '#475467' }}
-      >
-        <span>Runtime: {run.runtime}</span>
-        <span>Command: {run.command}</span>
+    <section className="ow-terminal-session-pane" data-testid="terminal-session-pane">
+      <div className="ow-terminal-session-pane__toolbar" data-testid="terminal-session-toolbar">
+        <span className="ow-terminal-session-pane__chip">{getSessionStateLabel(run, isStopping)}</span>
+        <span className="ow-terminal-session-pane__chip" data-testid="terminal-session-meta">
+          Runtime {run.runtime}
+        </span>
+        <span className="ow-terminal-session-pane__chip">Command {run.command}</span>
       </div>
 
-      <pre
-        data-testid="terminal-session-output"
-        style={{
-          whiteSpace: 'pre-wrap',
-          backgroundColor: '#101828',
-          color: '#f2f4f7',
-          borderRadius: '8px',
-          padding: '8px',
-          margin: 0,
-          minHeight: '160px'
-        }}
-      >
-        {run.tailLog.length > 0 ? run.tailLog : '(no output yet)'}
-      </pre>
+      <div className="ow-terminal-session-pane__output">
+        <div className="ow-terminal-session-pane__output-header">
+          <strong>Live output</strong>
+          <span>Session</span>
+        </div>
+        <pre className="ow-terminal-session-pane__output-surface" data-testid="terminal-session-output">
+          {run.tailLog.length > 0 ? run.tailLog : '(no output yet)'}
+        </pre>
+      </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '8px' }}>
-        <label style={{ display: 'grid', gap: '4px' }}>
+      <form className="ow-terminal-session-pane__form" onSubmit={handleSubmit}>
+        <label className="ow-terminal-session-pane__input-field">
           Send input
           <input
             data-testid="terminal-session-input"
@@ -105,7 +94,7 @@ export const TerminalSessionPane = ({
           />
         </label>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="ow-terminal-session-pane__actions">
           <button data-testid="terminal-session-send" disabled={disableSend} type="submit">
             Send
           </button>
@@ -117,14 +106,14 @@ export const TerminalSessionPane = ({
           >
             Stop
           </button>
-          <span data-testid="terminal-session-state" style={{ color: '#175cd3' }}>
+          <span className="ow-terminal-session-pane__state" data-testid="terminal-session-state">
             {getSessionStateLabel(run, isStopping)}
           </span>
         </div>
       </form>
 
       {inputErrorMessage ? (
-        <p data-testid="terminal-session-error" style={{ color: '#b42318', margin: 0 }}>
+        <p className="ow-terminal-session-pane__error" data-testid="terminal-session-error">
           {inputErrorMessage}
         </p>
       ) : null}

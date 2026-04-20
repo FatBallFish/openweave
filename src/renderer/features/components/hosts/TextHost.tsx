@@ -1,20 +1,29 @@
+import { BuiltinNodeFrame } from '../host-shell/BuiltinNodeFrame';
+import { getBuiltinNodeStateLabel, resolveBuiltinNodeState } from '../host-shell/node-state';
 import type { BuiltinHostProps } from './types';
 
 export const TextHost = ({ node }: BuiltinHostProps): JSX.Element => {
   const content = typeof node.state.content === 'string' ? node.state.content : '';
+  const state = resolveBuiltinNodeState(node);
+  const lineCount = content.length === 0 ? 0 : content.split('\n').length;
 
   return (
-    <article
-      data-testid={`text-host-${node.id}`}
-      style={{
-        border: '1px solid #528bff',
-        borderRadius: '8px',
-        padding: '12px',
-        backgroundColor: '#eef4ff'
-      }}
+    <BuiltinNodeFrame
+      actions={['Copy', 'Expand']}
+      footer={[`${lineCount} lines`, 'Read only', 'Pinned evidence']}
+      iconLabel="TX"
+      nodeId={node.id}
+      state={state}
+      stateLabel={getBuiltinNodeStateLabel(state)}
+      subtitle="Read-only output"
+      title={node.title}
     >
-      <h3 style={{ marginTop: 0, marginBottom: '8px' }}>{node.title}</h3>
-      <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{content || '(empty text)'}</pre>
-    </article>
+      <div className="ow-text-host">
+        <div className="ow-text-host__hint">Read only</div>
+        <pre className="ow-text-host__content" data-testid={`text-host-content-${node.id}`}>
+          {content || '(empty text)'}
+        </pre>
+      </div>
+    </BuiltinNodeFrame>
   );
 };

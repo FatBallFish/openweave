@@ -15,6 +15,8 @@ interface CanvasState {
   workspaceId: string | null;
   graphSnapshot: GraphSnapshotV2Input;
   nodes: CanvasNodeInput[];
+  selectedNodeId: string | null;
+  recentAction: string | null;
   loading: boolean;
   errorMessage: string | null;
 }
@@ -29,6 +31,8 @@ const initialState: CanvasState = {
   workspaceId: null,
   graphSnapshot: emptyGraphSnapshot(),
   nodes: [],
+  selectedNodeId: null,
+  recentAction: null,
   loading: false,
   errorMessage: null
 };
@@ -239,10 +243,41 @@ const createPortalGraphNode = (): GraphNodeRecord => {
   };
 };
 
+const createTextGraphNode = (): GraphNodeRecord => {
+  const manifest = getRequiredBuiltinManifest('builtin.text');
+  const now = Date.now();
+  return {
+    id: createNodeId('text'),
+    componentType: 'builtin.text',
+    componentVersion: manifest.version,
+    title: manifest.node.defaultTitle,
+    bounds: {
+      x: 940,
+      y: 160,
+      width: manifest.node.defaultSize.width,
+      height: manifest.node.defaultSize.height
+    },
+    config: {
+      ...(manifest.schema.config ?? {})
+    },
+    state: {
+      ...(manifest.schema.state ?? {})
+    },
+    capabilities: [...manifest.capabilities],
+    createdAtMs: now,
+    updatedAtMs: now
+  };
+};
+
 const applyGraphSnapshot = (graphSnapshot: GraphSnapshotV2Input): void => {
+  const selectedNodeStillExists = state.selectedNodeId
+    ? graphSnapshot.nodes.some((node) => node.id === state.selectedNodeId)
+    : false;
+
   setState({
     graphSnapshot,
-    nodes: toLegacyCanvasNodes(graphSnapshot)
+    nodes: toLegacyCanvasNodes(graphSnapshot),
+    selectedNodeId: selectedNodeStillExists ? state.selectedNodeId : null
   });
 };
 
@@ -288,6 +323,8 @@ export const canvasStore = {
       workspaceId,
       graphSnapshot: emptyGraphSnapshot(),
       nodes: [],
+      selectedNodeId: null,
+      recentAction: null,
       errorMessage: null
     });
     try {
@@ -310,12 +347,19 @@ export const canvasStore = {
         loading: false,
         graphSnapshot: emptyGraphSnapshot(),
         nodes: [],
+        selectedNodeId: null,
         errorMessage
       });
     }
   },
+  selectNode: (nodeId: string | null): void => {
+    setState({
+      selectedNodeId: nodeId,
+      recentAction: nodeId ? 'Focused node in inspector' : state.recentAction
+    });
+  },
   addNoteNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -325,7 +369,7 @@ export const canvasStore = {
       nodes: [...state.graphSnapshot.nodes, createNoteGraphNode()]
     };
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Added note' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -337,7 +381,7 @@ export const canvasStore = {
     }
   },
   addTerminalNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -347,7 +391,7 @@ export const canvasStore = {
       nodes: [...state.graphSnapshot.nodes, createTerminalGraphNode()]
     };
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Added terminal' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -359,7 +403,7 @@ export const canvasStore = {
     }
   },
   addFileTreeNode: async (rootDir: string): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -369,7 +413,7 @@ export const canvasStore = {
       nodes: [...state.graphSnapshot.nodes, createFileTreeGraphNode(rootDir)]
     };
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Added file tree' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -381,7 +425,7 @@ export const canvasStore = {
     }
   },
   addPortalNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -391,7 +435,7 @@ export const canvasStore = {
       nodes: [...state.graphSnapshot.nodes, createPortalGraphNode()]
     };
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Added portal' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -399,6 +443,28 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to save portal node';
+      setState({ errorMessage });
+    }
+  },
+  addTextNode: async (): Promise<void> => {
+    if (!state.workspaceId || state.loading) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextGraphSnapshot: GraphSnapshotV2Input = {
+      ...state.graphSnapshot,
+      nodes: [...state.graphSnapshot.nodes, createTextGraphNode()]
+    };
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: 'Added text' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save text node';
       setState({ errorMessage });
     }
   },
@@ -432,7 +498,7 @@ export const canvasStore = {
     });
 
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Updated note' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -474,7 +540,7 @@ export const canvasStore = {
     });
 
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Updated terminal' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -511,7 +577,7 @@ export const canvasStore = {
     });
 
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Updated file tree' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -552,7 +618,7 @@ export const canvasStore = {
     });
 
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Updated portal' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {
@@ -586,7 +652,7 @@ export const canvasStore = {
     }));
 
     applyGraphSnapshot(nextGraphSnapshot);
-    setState({ errorMessage: null });
+    setState({ errorMessage: null, recentAction: 'Moved node on canvas' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
     } catch (error) {

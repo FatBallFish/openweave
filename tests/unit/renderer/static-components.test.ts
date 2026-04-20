@@ -1,10 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { BranchWorkspaceDialog } from '../../../src/renderer/features/workspaces/BranchWorkspaceDialog';
 import { NodeToolbar } from '../../../src/renderer/features/canvas/nodes/NodeToolbar';
-import { PortalToolbar } from '../../../src/renderer/features/portal/PortalToolbar';
 import { GitPanel } from '../../../src/renderer/features/git/GitPanel';
+import { PortalToolbar } from '../../../src/renderer/features/portal/PortalToolbar';
+import { WorkbenchContextPanel } from '../../../src/renderer/features/workbench/WorkbenchContextPanel';
+import { WorkbenchTopBar } from '../../../src/renderer/features/workbench/WorkbenchTopBar';
+import { BranchWorkspaceDialog } from '../../../src/renderer/features/workspaces/BranchWorkspaceDialog';
 
 describe('renderer static components', () => {
   it('renders branch workspace dialog only when source workspace exists', () => {
@@ -40,20 +42,33 @@ describe('renderer static components', () => {
     expect(visible).toContain('feature/demo');
   });
 
-  it('renders the node and portal toolbars with their actions', () => {
-    const nodeToolbar = renderToStaticMarkup(
-      createElement(NodeToolbar, {
-        disabled: true,
-        onAddNote: vi.fn(),
+  it('renders an orchestration-first topbar and a secondary canvas guidance strip', () => {
+    const nodeToolbar = renderToStaticMarkup(createElement(NodeToolbar));
+    const topBar = renderToStaticMarkup(
+      createElement(WorkbenchTopBar, {
+        workspaceName: 'Alpha Workspace',
+        commandMenuDisabled: true,
+        searchDisabled: true,
+        disabled: false,
+        fitViewDisabled: true,
         onAddTerminal: vi.fn(),
+        onAddNote: vi.fn(),
+        onAddPortal: vi.fn(),
         onAddFileTree: vi.fn(),
-        onAddPortal: vi.fn()
+        onAddText: vi.fn(),
+        onOpenCommandMenu: vi.fn(),
+        onFitCanvas: vi.fn(),
+        onOpenSettings: vi.fn(),
+        settingsDisabled: true
       })
     );
     const portalToolbar = renderToStaticMarkup(
       createElement(PortalToolbar, {
         nodeId: 'portal-1',
+        commandMenuDisabled: true,
+        searchDisabled: true,
         disabled: false,
+        fitViewDisabled: true,
         url: 'https://example.com',
         clickSelector: '#action',
         inputSelector: '#message',
@@ -70,14 +85,28 @@ describe('renderer static components', () => {
       })
     );
 
-    expect(nodeToolbar).toContain('canvas-add-note');
-    expect(nodeToolbar).toContain('disabled=""');
+    expect(nodeToolbar).toContain('canvas-quick-insert-hint');
+    expect(nodeToolbar).toContain('Cmd/Ctrl+K Command menu');
+    expect(topBar).toContain('Add terminal');
+    expect(topBar).toContain('Add text');
+    expect(topBar).toContain('Search');
+    expect(topBar).toContain('Command menu');
+    expect(portalToolbar).toContain('Open page');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');
     expect(portalToolbar).toContain('portal-url-input-portal-1');
   });
 
-  it('renders git summaries for clean, readonly, and branch-action states', () => {
+  it('renders workspace-and-resource context alongside git summaries', () => {
+    const contextPanel = renderToStaticMarkup(
+      createElement(
+        WorkbenchContextPanel,
+        {
+          workspaceName: 'Alpha Workspace'
+        },
+        createElement('div', null, 'workspace list')
+      )
+    );
     const html = renderToStaticMarkup(
       createElement(GitPanel, {
         nodeId: 'git-1',
@@ -98,11 +127,15 @@ describe('renderer static components', () => {
       })
     );
 
+    expect(contextPanel).toContain('Workspace Registry');
+    expect(contextPanel).toContain('Context + resources');
+    expect(contextPanel).toContain('Terminal');
+    expect(contextPanel).toContain('Text');
     expect(html).toContain('Modified: 1');
     expect(html).toContain('Added: 2');
     expect(html).toContain('Untracked: 3');
-    expect(html).toContain('Read-only mode');
-    expect(html).toContain('Create branch workspace');
+    expect(html).toContain('Read-only repo surface');
+    expect(html).toContain('Branch workspace');
     expect(html).toContain('disabled=""');
   });
 });

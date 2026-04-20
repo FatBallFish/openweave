@@ -49,38 +49,38 @@ export const GitPanel = ({
   const summaryLines = renderSummary(summary);
 
   return (
-    <section
-      data-testid={`git-panel-${nodeId}`}
-      style={{ border: '1px solid #d0d7e2', borderRadius: '8px', padding: '8px', backgroundColor: '#f8fafc' }}
-    >
-      <h4 style={{ margin: 0 }}>Git status</h4>
+    <section className="ow-git-panel" data-testid={`git-panel-${nodeId}`}>
+      <div className="ow-git-panel__header">
+        <strong>Git status</strong>
+        <span>{isGitRepo ? 'Repo detected' : 'No repo'}</span>
+      </div>
       {isGitRepo ? (
         summaryLines.length > 0 ? (
-          <ul style={{ margin: '8px 0', paddingLeft: '18px' }}>
+          <ul className="ow-git-panel__summary">
             {summaryLines.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
         ) : (
-          <p style={{ margin: '8px 0 0' }}>Working tree clean.</p>
+          <p>Working tree clean.</p>
         )
       ) : (
-        <p style={{ margin: '8px 0 0' }}>Git repository not detected.</p>
+        <p>Git repository not detected.</p>
       )}
       {readOnly ? (
-        <p data-testid={`git-panel-readonly-${nodeId}`} style={{ margin: '8px 0 0', color: '#344054' }}>
-          Read-only mode: status and branch workspace creation are available.
+        <p className="ow-git-panel__readonly" data-testid={`git-panel-readonly-${nodeId}`}>
+          Read-only repo surface
         </p>
       ) : null}
       {isGitRepo && onCreateBranchWorkspace ? (
         <button
+          className="nodrag nopan"
           data-testid={`git-panel-branch-workspace-${nodeId}`}
           disabled={!canCreateBranchWorkspace}
           onClick={onCreateBranchWorkspace}
-          style={{ marginTop: '8px' }}
           type="button"
         >
-          Create branch workspace
+          Branch workspace
         </button>
       ) : null}
     </section>

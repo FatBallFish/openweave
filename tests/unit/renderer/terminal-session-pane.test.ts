@@ -31,11 +31,12 @@ describe('terminal session pane', () => {
     );
 
     expect(html).toContain('terminal-session-pane');
+    expect(html).toContain('terminal-session-toolbar');
     expect(html).toContain('terminal-session-output');
     expect(html).toContain('terminal-session-input');
     expect(html).toContain('terminal-session-send');
     expect(html).toContain('terminal-session-stop');
-    expect(html).toContain('Session is active.');
+    expect(html).toContain('Session active');
   });
 
   it('treats stopped as a terminal renderer state', () => {
@@ -64,7 +65,7 @@ describe('terminal session pane', () => {
       })
     );
 
-    expect(html).toContain('Session stopped.');
+    expect(html).toContain('Session stopped');
     expect(html).toContain('disabled=""');
   });
 });

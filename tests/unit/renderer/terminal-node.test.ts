@@ -24,6 +24,8 @@ describe('terminal node', () => {
     );
 
     expect(html).toContain(`terminal-node-runtime-${terminalNode.id}`);
+    expect(html).toContain(`terminal-node-session-${terminalNode.id}`);
+    expect(html).toContain(`terminal-node-open-run-${terminalNode.id}`);
     expect(html).toContain('<option value="shell">Shell</option>');
     expect(html).toContain('<option value="codex" selected="">Codex</option>');
     expect(html).toContain('<option value="claude">Claude</option>');

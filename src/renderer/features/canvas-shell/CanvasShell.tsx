@@ -11,8 +11,10 @@ import {
   type Node,
   type NodeProps
 } from '@xyflow/react';
-import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
+import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
+import { CanvasEmptyState } from './CanvasEmptyState';
+import { CanvasSelectionHud } from './CanvasSelectionHud';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -44,7 +46,15 @@ export interface ProjectGraphToCanvasShellInput {
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
+  onOpenCommandPalette: () => void;
+  onOpenQuickAdd: () => void;
+  onSelectNode: (nodeId: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
+  onAddTerminal: () => void;
+  onAddNote: () => void;
+  onAddPortal: () => void;
+  onAddFileTree: () => void;
+  onAddText: () => void;
 }
 
 const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element => {
@@ -116,9 +126,17 @@ export const CanvasShell = ({
   workspaceId,
   workspaceRootDir,
   graphSnapshot,
+  onOpenCommandPalette,
+  onOpenQuickAdd,
+  onSelectNode,
   onOpenRun,
   onCreateBranchWorkspace,
-  onMoveNode
+  onMoveNode,
+  onAddTerminal,
+  onAddNote,
+  onAddPortal,
+  onAddFileTree,
+  onAddText
 }: CanvasShellProps): JSX.Element => {
   const model = useMemo(
     () =>
@@ -133,6 +151,7 @@ export const CanvasShell = ({
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(model.edges);
+  const isEmpty = model.nodes.length === 0;
 
   useEffect(() => {
     setNodes(model.nodes);
@@ -143,18 +162,37 @@ export const CanvasShell = ({
   }, [model.edges, setEdges]);
 
   return (
-    <section data-testid="canvas-shell" style={{ marginTop: '12px' }}>
-      <div
-        data-testid="canvas-shell-flow"
-        style={{
-          height: '720px',
-          border: '1px solid #d0d5dd',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          background:
-            'radial-gradient(circle at top left, rgba(82, 139, 255, 0.08), transparent 28%), #f8fafc'
-        }}
-      >
+    <section className="ow-canvas-shell" data-testid="canvas-shell">
+      <div className="ow-canvas-shell__header">
+        <div>
+          <p className="ow-canvas-shell__eyebrow">Infinite canvas</p>
+          <h3>Blueprint canvas surface</h3>
+        </div>
+        <div className="ow-canvas-shell__actions">
+          <button
+            className="ow-toolbar-button"
+            data-testid="command-palette-trigger"
+            onClick={onOpenCommandPalette}
+            type="button"
+          >
+            Command palette
+          </button>
+          <button
+            className="ow-toolbar-button ow-toolbar-button--primary"
+            data-testid="canvas-quick-add-trigger"
+            onClick={onOpenQuickAdd}
+            type="button"
+          >
+            Quick add
+          </button>
+          <div className="ow-canvas-shell__meta">Pan, zoom, connect, inspect</div>
+        </div>
+      </div>
+
+      <CanvasSelectionHud edgeCount={model.edges.length} nodeCount={model.nodes.length} />
+
+      <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
+        <div className="ow-canvas-shell__grid" data-testid="canvas-shell-grid" />
         <ReactFlowProvider>
           <ReactFlow
             defaultViewport={DEFAULT_CANVAS_VIEWPORT}
@@ -163,6 +201,9 @@ export const CanvasShell = ({
             nodeTypes={nodeTypes}
             nodes={nodes}
             onEdgesChange={onEdgesChange}
+            onNodeClick={(_event, node) => {
+              onSelectNode(node.id);
+            }}
             onNodeDragStop={(_event, node) => {
               onMoveNode(node.id, {
                 x: node.position.x,
@@ -170,12 +211,30 @@ export const CanvasShell = ({
               });
             }}
             onNodesChange={onNodesChange}
+            onPaneClick={() => {
+              onSelectNode(null);
+            }}
+            proOptions={{ hideAttribution: true }}
           >
             <Background gap={24} size={1} />
-            <MiniMap pannable zoomable style={{ pointerEvents: 'none' }} />
+            <div data-testid="canvas-shell-minimap">
+              <MiniMap pannable zoomable style={{ pointerEvents: 'none' }} />
+            </div>
             <Controls />
           </ReactFlow>
         </ReactFlowProvider>
+
+        {isEmpty ? (
+          <CanvasEmptyState
+            actions={[
+              { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
+              { label: 'Note', hotkey: '2', onClick: onAddNote },
+              { label: 'Portal', hotkey: '3', onClick: onAddPortal },
+              { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
+              { label: 'Text', hotkey: '5', onClick: onAddText }
+            ]}
+          />
+        ) : null}
       </div>
     </section>
   );

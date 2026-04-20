@@ -42,12 +42,11 @@ test('runs an interactive terminal session, accepts follow-up input, and stops c
 
     const terminalCommand = page.locator('[data-testid^="terminal-node-command-"]').first();
     const terminalRuntime = page.locator('[data-testid^="terminal-node-runtime-"]').first();
-    const terminalRunButton = page.locator('[data-testid^="terminal-node-run-"]').first();
     const lastStatus = page.locator('[data-testid^="terminal-node-last-status-"]').first();
 
     await terminalRuntime.selectOption('shell');
     await terminalCommand.fill("/bin/sh -lc 'echo ready; while read line; do echo $line; done'");
-    await terminalRunButton.click();
+    await terminalCommand.press('Enter');
 
     await expect(lastStatus).toContainText(/queued|running/);
 
@@ -73,7 +72,7 @@ test('runs an interactive terminal session, accepts follow-up input, and stops c
     await expect(page.getByTestId('run-drawer-status')).toContainText('stopped', {
       timeout: 10000
     });
-    await expect(page.getByTestId('terminal-session-state')).toContainText('Session stopped.');
+    await expect(page.getByTestId('terminal-session-state')).toContainText('Session stopped');
   } finally {
     await app.close();
   }

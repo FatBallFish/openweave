@@ -62,9 +62,15 @@ describe('builtin hosts', () => {
       updatedAtMs: 4
     });
 
-    expect(noteHtml).toContain('note-node-content-node-note-1');
+    expect(noteHtml).toContain('builtin-node-frame-node-note-1');
+    expect(noteHtml).toContain('note-host-editor-node-note-1');
+    expect(noteHtml).toContain('Editable markdown');
     expect(noteHtml).toContain('# hello');
+    expect(terminalHtml).toContain('builtin-node-frame-node-terminal-1');
     expect(terminalHtml).toContain('terminal-node-runtime-node-terminal-1');
+    expect(terminalHtml).toContain('terminal-node-session-node-terminal-1');
+    expect(terminalHtml).toContain('Open run');
+    expect(terminalHtml).toContain('cwd');
     expect(terminalHtml).toContain('<option value=\"codex\" selected=\"\">Codex</option>');
     expect(terminalHtml).toContain('terminal-node-command-node-terminal-1');
   });
@@ -109,8 +115,14 @@ describe('builtin hosts', () => {
       updatedAtMs: 8
     });
 
+    expect(fileTreeHtml).toContain('builtin-node-frame-node-file-tree-1');
+    expect(fileTreeHtml).toContain('Workspace root');
+    expect(fileTreeHtml).toContain('Branch workspace');
     expect(fileTreeHtml).toContain('file-tree-root-node-file-tree-1');
     expect(fileTreeHtml).toContain('/tmp/ws-1');
+    expect(portalHtml).toContain('builtin-node-frame-node-portal-1');
+    expect(portalHtml).toContain('Open page');
+    expect(portalHtml).toContain('Read structure');
     expect(portalHtml).toContain('portal-url-input-node-portal-1');
     expect(portalHtml).toContain('Capture screenshot');
   });
@@ -169,7 +181,9 @@ describe('builtin hosts', () => {
       updatedAtMs: 12
     });
 
-    expect(textHtml).toContain('text-host-node-text-1');
+    expect(textHtml).toContain('builtin-node-frame-node-text-1');
+    expect(textHtml).toContain('text-host-content-node-text-1');
+    expect(textHtml).toContain('Read only');
     expect(textHtml).toContain('hello text');
     expect(attachmentHtml).toContain('attachment-host-node-attachment-1');
     expect(attachmentHtml).toContain('design.pdf');

@@ -90,40 +90,28 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
   }
 
   return (
-    <aside
-      data-testid="run-drawer"
-      style={{
-        border: '1px solid #d0d7e2',
-        borderRadius: '10px',
-        padding: '12px',
-        marginTop: '16px',
-        backgroundColor: '#f8fafc'
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>Run details</h3>
+    <aside className="ow-run-drawer" data-testid="run-drawer">
+      <div className="ow-run-drawer__header">
+        <div>
+          <p className="ow-run-drawer__eyebrow">Run drawer</p>
+          <h3>Session details</h3>
+        </div>
         <button data-testid="run-drawer-close" onClick={onClose} type="button">
           Close
         </button>
       </div>
 
       {errorMessage ? (
-        <p data-testid="run-drawer-error" style={{ color: '#b42318', marginBottom: 0 }}>
+        <p className="ow-run-drawer__error" data-testid="run-drawer-error">
           {errorMessage}
         </p>
       ) : null}
 
       {run ? (
-        <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
-          <p data-testid="run-drawer-id" style={{ margin: 0 }}>
-            Run: {run.id}
-          </p>
-          <p data-testid="run-drawer-status" style={{ margin: 0 }}>
-            Status: {run.status}
-          </p>
-          <p data-testid="run-drawer-summary" style={{ margin: 0 }}>
-            Summary: {run.summary ?? '(pending)'}
-          </p>
+        <div className="ow-run-drawer__content">
+          <p data-testid="run-drawer-id">Run: {run.id}</p>
+          <p data-testid="run-drawer-status">Status: {run.status}</p>
+          <p data-testid="run-drawer-summary">Summary: {run.summary ?? '(pending)'}</p>
           <TerminalSessionPane
             inputErrorMessage={inputErrorMessage}
             inputValue={inputValue}
@@ -179,26 +167,21 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
             }}
             run={run}
           />
-          <pre
-            data-testid="run-drawer-tail-log"
-            style={{
-              display: 'none'
-            }}
-          >
+          <pre data-testid="run-drawer-tail-log" style={{ display: 'none' }}>
             {run.tailLog.length > 0 ? run.tailLog : '(no output yet)'}
           </pre>
           {isTerminalState(run.status) ? (
-            <p data-testid="run-drawer-terminal" style={{ margin: 0, color: '#175cd3' }}>
+            <p className="ow-run-drawer__status" data-testid="run-drawer-terminal">
               Run finished.
             </p>
           ) : (
-            <p data-testid="run-drawer-progress" style={{ margin: 0, color: '#175cd3' }}>
+            <p className="ow-run-drawer__status" data-testid="run-drawer-progress">
               Run is still active...
             </p>
           )}
         </div>
       ) : (
-        <p data-testid="run-drawer-loading" style={{ marginBottom: 0 }}>
+        <p className="ow-run-drawer__loading" data-testid="run-drawer-loading">
           Loading run...
         </p>
       )}

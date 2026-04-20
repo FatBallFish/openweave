@@ -158,7 +158,16 @@ describe('canvas store', () => {
 
     await canvasStore.addNoteNode();
     await canvasStore.addTerminalNode();
+    await (canvasStore as unknown as { addTextNode: () => Promise<void> }).addTextNode();
     expect(canvasStore.getState().nodes).toHaveLength(4);
+    expect(canvasStore.getState().graphSnapshot.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          componentType: 'builtin.text',
+          title: 'Text'
+        })
+      ])
+    );
 
     const noteId = canvasStore.getState().nodes.find((node) => node.type === 'note')?.id ?? '';
     const terminalId =
@@ -264,6 +273,31 @@ describe('canvas store', () => {
     await canvasStore.loadCanvasState('ws-1');
     await canvasStore.addNoteNode();
     expect(canvasStore.getState().errorMessage).toBe('save failed');
+  });
+
+
+
+  it('ignores add-node mutations while a graph load is in progress', async () => {
+    let resolveLoad: ((value: { graphSnapshot: GraphSnapshotV2Input }) => void) | null = null;
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockImplementation(
+        () =>
+          new Promise<{ graphSnapshot: GraphSnapshotV2Input }>((resolve) => {
+            resolveLoad = resolve;
+          })
+      ),
+      saveGraphSnapshot: vi.fn()
+    });
+
+    const { canvasStore } = await importStore();
+    const loadPromise = canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addNoteNode();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(0);
+
+    resolveLoad?.({ graphSnapshot: createGraphSnapshot() });
+    await loadPromise;
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(2);
   });
 
   it('persists generic graph-node position updates without dropping metadata', async () => {

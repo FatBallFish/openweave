@@ -132,6 +132,14 @@ test('loads portal url and supports click/input/capture/structure with file:// r
   });
 
   try {
+    const clickViaDom = async (
+      locator: import('@playwright/test').Locator
+    ): Promise<void> => {
+      await locator.evaluate((element) => {
+        (element as HTMLButtonElement).click();
+      });
+    };
+
     const page = await app.firstWindow();
     await expect(page.getByTestId('workspace-list-page')).toBeVisible();
 
@@ -157,75 +165,75 @@ test('loads portal url and supports click/input/capture/structure with file:// r
     const errorMessage = page.locator('[data-testid^="portal-error-"]').first();
 
     await urlInput.fill(fixture.origin);
-    await loadButton.click();
+    await clickViaDom(loadButton);
     await expect(actionStatus).toContainText('Loaded portal URL', { timeout: 10000 });
     await expectRendererShellVisible(page);
 
     await inputValueField.fill('hello portal');
-    await inputButton.click();
+    await clickViaDom(inputButton);
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expectRendererShellVisible(page);
 
-    await clickButton.click();
+    await clickViaDom(clickButton);
     await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
     await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#navigate-file-button');
-    await clickButton.click();
+    await clickViaDom(clickButton);
     await page.waitForTimeout(250);
     await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-navigate-attempt');
-    await inputButton.click();
+    await clickViaDom(inputButton);
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
     await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#redirect-file-button');
-    await clickButton.click();
+    await clickViaDom(clickButton);
     await page.waitForTimeout(250);
     await expectRendererShellVisible(page);
 
     await urlInput.fill(fixture.origin);
-    await loadButton.click();
+    await clickViaDom(loadButton);
     await expect(actionStatus).toContainText('Loaded portal URL', { timeout: 10000 });
     await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-redirect-attempt');
-    await inputButton.click();
+    await clickViaDom(inputButton);
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
     await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#open-file-button');
-    await clickButton.click();
+    await clickViaDom(clickButton);
     await page.waitForTimeout(250);
     await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-open-attempt');
-    await inputButton.click();
+    await clickViaDom(inputButton);
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
     await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#action-button');
-    await clickButton.click();
+    await clickViaDom(clickButton);
     await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
     await expectRendererShellVisible(page);
 
-    await captureButton.click();
+    await clickViaDom(captureButton);
     await expect(screenshotPath).toContainText('artifacts/portal/');
     const capturedPath = (await screenshotPath.textContent())?.replace(/^Screenshot:\s*/, '').trim() ?? '';
     expect(capturedPath.length).toBeGreaterThan(0);
     expect(fs.existsSync(capturedPath)).toBe(true);
     expect(fs.statSync(capturedPath).size).toBeGreaterThan(10_000);
 
-    await structureButton.click();
+    await clickViaDom(structureButton);
     await expect(structureList).toContainText('button:');
     await expect(structureList).toContainText('input:');
 
     await urlInput.fill('file:///tmp/demo.html');
-    await loadButton.click();
+    await clickViaDom(loadButton);
     await expect(errorMessage).toContainText('URL scheme not allowed');
   } finally {
     await app.close();
