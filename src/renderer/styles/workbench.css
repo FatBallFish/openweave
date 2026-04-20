@@ -2513,3 +2513,459 @@ select:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.ow-canvas-shell__header {
+  align-items: center;
+}
+
+.ow-canvas-shell__meta {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--ow-color-border);
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.9), rgba(var(--ow-surface-rgb), 0.74)),
+    var(--ow-color-bg-panel-muted);
+  box-shadow: var(--ow-shadow-inset);
+  font-weight: 600;
+}
+
+.ow-canvas-selection-hud {
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.86), rgba(var(--ow-surface-rgb), 0.74)),
+    var(--ow-color-bg-panel-muted);
+  box-shadow: var(--ow-shadow-inset);
+}
+
+.ow-canvas-selection-hud > div {
+  min-width: 94px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.92), rgba(var(--ow-surface-rgb), 0.74)),
+    var(--ow-color-bg-panel-strong);
+  box-shadow: var(--ow-shadow-inset);
+}
+
+.ow-canvas-selection-hud > div:last-child {
+  background:
+    linear-gradient(180deg, rgba(var(--ow-running-rgb), 0.14), rgba(var(--ow-running-rgb), 0.04)),
+    rgba(var(--ow-surface-rgb), 0.88);
+}
+
+.ow-canvas-shell__flow {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 24px 40px rgba(var(--ow-shadow-rgb), 0.08);
+}
+
+.ow-canvas-shell__flow .react-flow,
+.ow-canvas-shell__flow .react-flow__renderer,
+.ow-canvas-shell__flow .react-flow__container {
+  background: transparent;
+}
+
+.ow-canvas-shell__flow .react-flow__pane {
+  cursor: grab;
+}
+
+.ow-canvas-shell__flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.ow-canvas-shell__flow .react-flow__selection {
+  border: 1px solid rgba(var(--ow-accent-rgb), 0.32);
+  background: rgba(var(--ow-accent-rgb), 0.08);
+}
+
+.ow-canvas-shell__flow .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.94), rgba(var(--ow-surface-rgb), 0.82)),
+    var(--ow-color-bg-panel-strong);
+  box-shadow: var(--ow-shadow-floating);
+}
+
+.ow-canvas-shell__flow .react-flow__controls-button {
+  width: 38px;
+  height: 38px;
+  border-bottom: 1px solid var(--ow-color-border);
+  background: transparent;
+  color: var(--ow-color-text-strong);
+}
+
+.ow-canvas-shell__flow .react-flow__controls-button:hover {
+  background: rgba(var(--ow-accent-rgb), 0.08);
+}
+
+.ow-canvas-shell__flow .react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.ow-canvas-shell__flow .react-flow__controls-button svg {
+  max-width: 16px;
+  max-height: 16px;
+  fill: currentColor;
+}
+
+.ow-canvas-shell__flow .react-flow__minimap {
+  border: 1px solid var(--ow-color-border);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.92), rgba(var(--ow-surface-rgb), 0.8)),
+    var(--ow-color-bg-panel-muted);
+  box-shadow: var(--ow-shadow-floating);
+}
+
+.ow-canvas-shell__flow .react-flow__edge-path {
+  stroke: rgba(var(--ow-shadow-rgb), 0.36);
+  stroke-width: 1.8;
+}
+
+.ow-canvas-shell__flow .react-flow__edge.selected .react-flow__edge-path,
+.ow-canvas-shell__flow .react-flow__edge:focus .react-flow__edge-path {
+  stroke: rgba(var(--ow-accent-rgb), 0.82);
+}
+
+.ow-canvas-shell__flow .react-flow__edge-textbg {
+  fill: rgba(var(--ow-surface-rgb), 0.94);
+  stroke: rgba(var(--ow-accent-rgb), 0.08);
+}
+
+.ow-canvas-shell__flow .react-flow__edge-text {
+  fill: var(--ow-color-text-soft);
+  font-family: var(--ow-font-mono);
+  font-size: 11px;
+}
+
+.ow-canvas-shell__flow .react-flow__node {
+  transition: transform var(--ow-transition-medium), filter var(--ow-transition-fast);
+}
+
+.ow-canvas-shell__flow .react-flow__node:hover {
+  z-index: 3;
+}
+
+.ow-canvas-shell__flow .react-flow__node:hover .ow-builtin-node-frame {
+  transform: translateY(-1px);
+}
+
+.ow-canvas-shell__flow .react-flow__node.selected .ow-builtin-node-frame {
+  border-color: rgba(var(--ow-node-kind-rgb), 0.42);
+  box-shadow:
+    0 0 0 1px rgba(var(--ow-node-kind-rgb), 0.18),
+    var(--ow-shadow-node);
+  transform: translateY(-2px);
+}
+
+.ow-canvas-shell__flow .react-flow__node.selected .ow-builtin-node-header {
+  background:
+    linear-gradient(180deg, rgba(var(--ow-node-kind-rgb), 0.14), rgba(var(--ow-surface-rgb), 0.88)),
+    var(--ow-color-bg-panel-strong);
+}
+
+.ow-canvas-shell__flow .react-flow__node.selected .ow-builtin-node-header__copy span {
+  color: var(--ow-color-text-default);
+}
+
+.ow-builtin-node-frame {
+  --ow-node-kind-rgb: var(--ow-accent-rgb);
+  transition:
+    transform var(--ow-transition-medium),
+    border-color var(--ow-transition-fast),
+    box-shadow var(--ow-transition-fast);
+}
+
+.ow-builtin-node-frame[data-node-kind='terminal'] {
+  --ow-node-kind-rgb: var(--ow-node-terminal-rgb);
+}
+
+.ow-builtin-node-frame[data-node-kind='note'] {
+  --ow-node-kind-rgb: var(--ow-node-note-rgb);
+}
+
+.ow-builtin-node-frame[data-node-kind='portal'] {
+  --ow-node-kind-rgb: var(--ow-node-portal-rgb);
+}
+
+.ow-builtin-node-frame[data-node-kind='file-tree'] {
+  --ow-node-kind-rgb: var(--ow-node-file-tree-rgb);
+}
+
+.ow-builtin-node-frame[data-node-kind='text'] {
+  --ow-node-kind-rgb: var(--ow-node-text-rgb);
+}
+
+.ow-builtin-node-frame::before {
+  background: linear-gradient(90deg, rgba(var(--ow-node-kind-rgb), 0.92), transparent 78%);
+}
+
+.ow-builtin-node-header__icon {
+  border-color: rgba(var(--ow-node-kind-rgb), 0.26);
+  background:
+    linear-gradient(180deg, rgba(var(--ow-node-kind-rgb), 0.22), rgba(var(--ow-node-kind-rgb), 0.06)),
+    rgba(var(--ow-surface-rgb), 0.9);
+  color: rgb(var(--ow-node-kind-rgb));
+}
+
+.ow-builtin-node-header__copy strong {
+  letter-spacing: 0.01em;
+}
+
+.ow-builtin-node-header__copy span {
+  color: var(--ow-color-text-muted);
+}
+
+.ow-builtin-node-header__actions span {
+  color: var(--ow-color-text-soft);
+}
+
+.ow-builtin-node-footer span:first-child {
+  border-color: rgba(var(--ow-node-kind-rgb), 0.24);
+  background: rgba(var(--ow-node-kind-rgb), 0.12);
+  color: var(--ow-color-text-strong);
+}
+
+.ow-note-host__toolbar span:first-child,
+.ow-text-host__hint {
+  border-color: rgba(var(--ow-node-note-rgb), 0.22);
+  background: rgba(var(--ow-node-note-rgb), 0.12);
+  color: var(--ow-color-text-strong);
+}
+
+.ow-text-host__hint {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  box-shadow: var(--ow-shadow-inset);
+}
+
+.ow-command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: 88px 24px 24px;
+  background: rgba(var(--ow-shadow-rgb), 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.ow-command-palette {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(760px, calc(100dvh - 120px));
+  transform: none;
+  overflow: auto;
+}
+
+.ow-command-palette__search {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px 18px;
+}
+
+.ow-command-palette__search-field {
+  display: grid;
+  gap: 8px;
+}
+
+.ow-command-palette__search-field > span,
+.ow-command-palette__section-header span,
+.ow-command-palette__search-meta span,
+.ow-command-palette__item-copy small {
+  color: var(--ow-color-text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ow-command-palette__search-input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.98), rgba(var(--ow-surface-rgb), 0.84)),
+    var(--ow-color-bg-panel-sunken);
+  box-shadow: var(--ow-shadow-inset);
+  color: var(--ow-color-text-strong);
+  padding: 0 14px;
+  font: inherit;
+}
+
+.ow-command-palette__search-meta,
+.ow-command-palette__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ow-command-palette__search-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-surface-rgb), 0.84);
+}
+
+.ow-command-palette__section {
+  padding-top: 14px;
+}
+
+.ow-command-palette__item {
+  align-items: flex-start;
+}
+
+.ow-command-palette__item-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.ow-command-palette__item-copy strong {
+  color: var(--ow-color-text-strong);
+}
+
+.ow-command-palette__item span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-surface-rgb), 0.78);
+}
+
+.ow-command-palette__empty {
+  display: grid;
+  gap: 6px;
+  margin: 0 20px 20px;
+  padding: 18px;
+  border: 1px dashed var(--ow-color-border-strong);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.86), rgba(var(--ow-surface-rgb), 0.72)),
+    var(--ow-color-bg-panel-muted);
+}
+
+.ow-command-palette__empty strong {
+  color: var(--ow-color-text-strong);
+}
+
+.ow-command-palette__empty p {
+  margin: 0;
+  color: var(--ow-color-text-soft);
+}
+
+@keyframes ow-fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ow-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ow-scale-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ow-workbench-topbar,
+.ow-workbench-context-panel,
+.ow-workbench-stage,
+.ow-workbench-inspector,
+.ow-workbench-status-island {
+  animation: ow-fade-slide-in var(--ow-transition-slow) both;
+}
+
+.ow-workbench-context-panel {
+  animation-delay: 30ms;
+}
+
+.ow-workbench-stage {
+  animation-delay: 60ms;
+}
+
+.ow-workbench-inspector {
+  animation-delay: 90ms;
+}
+
+.ow-workbench-status-island {
+  animation-delay: 120ms;
+}
+
+.ow-command-palette-backdrop {
+  animation: ow-fade-in 180ms both;
+}
+
+.ow-command-palette {
+  animation: ow-scale-up 220ms both;
+}
+
+@media (max-width: 860px) {
+  .ow-command-palette-backdrop {
+    padding: 72px 14px 14px;
+  }
+
+  .ow-command-palette {
+    width: min(100%, calc(100vw - 28px));
+    max-height: calc(100dvh - 90px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-workbench-topbar,
+  .ow-workbench-context-panel,
+  .ow-workbench-stage,
+  .ow-workbench-inspector,
+  .ow-workbench-status-island,
+  .ow-command-palette-backdrop,
+  .ow-command-palette {
+    animation: none;
+  }
+
+  .ow-toolbar-button,
+  .ow-builtin-node-frame,
+  .ow-canvas-shell__flow .react-flow__node {
+    transition: none;
+  }
+}

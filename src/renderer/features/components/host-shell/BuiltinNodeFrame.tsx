@@ -3,11 +3,20 @@ import { BuiltinNodeFooter } from './BuiltinNodeFooter';
 import { BuiltinNodeHeader } from './BuiltinNodeHeader';
 import type { BuiltinNodeState } from './node-state';
 
+export type BuiltinNodeKind =
+  | 'terminal'
+  | 'note'
+  | 'portal'
+  | 'file-tree'
+  | 'text'
+  | 'generic';
+
 interface BuiltinNodeFrameProps {
   nodeId: string;
   title: string;
   subtitle: string;
   iconLabel: string;
+  kind?: BuiltinNodeKind;
   state: BuiltinNodeState;
   stateLabel: string;
   footer: string | string[];
@@ -20,6 +29,7 @@ export const BuiltinNodeFrame = ({
   title,
   subtitle,
   iconLabel,
+  kind = 'generic',
   state,
   stateLabel,
   footer,
@@ -29,10 +39,12 @@ export const BuiltinNodeFrame = ({
   return (
     <article
       className="ow-builtin-node-frame"
+      data-node-kind={kind}
       data-node-state={state}
       data-testid={`builtin-node-frame-${nodeId}`}
     >
       <BuiltinNodeHeader
+        kind={kind}
         nodeId={nodeId}
         title={title}
         subtitle={subtitle}

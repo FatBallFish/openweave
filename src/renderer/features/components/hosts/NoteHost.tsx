@@ -13,6 +13,7 @@ export const NoteHost = ({ node }: BuiltinHostProps): JSX.Element => {
       actions={['Checklist', 'Heading']}
       footer={[`${wordCount} words`, 'Editable markdown', 'Canvas-linked note']}
       iconLabel="NT"
+      kind="note"
       nodeId={node.id}
       state={state}
       stateLabel={getBuiltinNodeStateLabel(state)}

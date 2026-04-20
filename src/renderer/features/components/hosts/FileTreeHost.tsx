@@ -17,6 +17,7 @@ export const FileTreeHost = ({
     <BuiltinNodeFrame
       footer={['Workspace root linked', 'Read-only repo surface', rootDir]}
       iconLabel="FT"
+      kind="file-tree"
       nodeId={node.id}
       state={state}
       stateLabel={getBuiltinNodeStateLabel(state)}

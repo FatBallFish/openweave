@@ -24,6 +24,7 @@ export const PortalHost = ({ workspaceId, node }: BuiltinHostProps): JSX.Element
         'Read structure quickly'
       ]}
       iconLabel="PT"
+      kind="portal"
       nodeId={node.id}
       state={state}
       stateLabel={getBuiltinNodeStateLabel(state)}

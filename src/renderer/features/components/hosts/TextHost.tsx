@@ -12,6 +12,7 @@ export const TextHost = ({ node }: BuiltinHostProps): JSX.Element => {
       actions={['Copy', 'Expand']}
       footer={[`${lineCount} lines`, 'Read only', 'Pinned evidence']}
       iconLabel="TX"
+      kind="text"
       nodeId={node.id}
       state={state}
       stateLabel={getBuiltinNodeStateLabel(state)}

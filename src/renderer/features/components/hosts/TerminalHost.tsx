@@ -29,6 +29,7 @@ export const TerminalHost = ({
         'Session drawer linked'
       ]}
       iconLabel="TR"
+      kind="terminal"
       nodeId={node.id}
       state={state}
       stateLabel={getBuiltinNodeStateLabel(state)}

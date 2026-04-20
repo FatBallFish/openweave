@@ -1,10 +1,12 @@
 import type { BuiltinNodeState } from './node-state';
+import type { BuiltinNodeKind } from './BuiltinNodeFrame';
 
 interface BuiltinNodeHeaderProps {
   nodeId: string;
   title: string;
   subtitle: string;
   iconLabel: string;
+  kind?: BuiltinNodeKind;
   state: BuiltinNodeState;
   stateLabel: string;
   actions?: string[];
@@ -15,6 +17,7 @@ export const BuiltinNodeHeader = ({
   title,
   subtitle,
   iconLabel,
+  kind = 'generic',
   state,
   stateLabel,
   actions = []
@@ -22,6 +25,7 @@ export const BuiltinNodeHeader = ({
   return (
     <header
       className="ow-builtin-node-header"
+      data-node-kind={kind}
       data-node-state={state}
       data-testid={`builtin-node-header-${nodeId}`}
     >

@@ -33,6 +33,11 @@
   --ow-color-failed-wash: rgba(var(--ow-failed-rgb), 0.12);
   --ow-color-grid-minor: rgba(var(--ow-accent-rgb), 0.045);
   --ow-color-grid-major: rgba(var(--ow-accent-rgb), 0.09);
+  --ow-node-terminal-rgb: 9, 113, 166;
+  --ow-node-note-rgb: 168, 118, 30;
+  --ow-node-portal-rgb: 44, 108, 156;
+  --ow-node-file-tree-rgb: 24, 124, 96;
+  --ow-node-text-rgb: 84, 101, 120;
 
   --ow-state-running: #0d7f6f;
   --ow-state-warning: #b57912;
@@ -73,6 +78,11 @@
   --ow-dark-color-failed-wash: rgba(var(--ow-dark-failed-rgb), 0.14);
   --ow-dark-color-grid-minor: rgba(var(--ow-dark-accent-rgb), 0.04);
   --ow-dark-color-grid-major: rgba(var(--ow-dark-accent-rgb), 0.08);
+  --ow-dark-node-terminal-rgb: 72, 168, 222;
+  --ow-dark-node-note-rgb: 220, 169, 62;
+  --ow-dark-node-portal-rgb: 103, 171, 229;
+  --ow-dark-node-file-tree-rgb: 77, 183, 134;
+  --ow-dark-node-text-rgb: 142, 160, 182;
   --ow-dark-state-running: #3fb950;
   --ow-dark-state-warning: #d29922;
   --ow-dark-state-failed: #f85149;
@@ -123,6 +133,11 @@
   --ow-color-failed-wash: var(--ow-dark-color-failed-wash);
   --ow-color-grid-minor: var(--ow-dark-color-grid-minor);
   --ow-color-grid-major: var(--ow-dark-color-grid-major);
+  --ow-node-terminal-rgb: var(--ow-dark-node-terminal-rgb);
+  --ow-node-note-rgb: var(--ow-dark-node-note-rgb);
+  --ow-node-portal-rgb: var(--ow-dark-node-portal-rgb);
+  --ow-node-file-tree-rgb: var(--ow-dark-node-file-tree-rgb);
+  --ow-node-text-rgb: var(--ow-dark-node-text-rgb);
   --ow-state-running: var(--ow-dark-state-running);
   --ow-state-warning: var(--ow-dark-state-warning);
   --ow-state-failed: var(--ow-dark-state-failed);
