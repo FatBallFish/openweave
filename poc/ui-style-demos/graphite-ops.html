@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Graphite Ops / OpenWeave UI Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="shared.css" />
+  </head>
+  <body class="theme-graphite">
+    <div class="demo-shell">
+      <div class="product-shell">
+        <header class="topbar">
+          <div class="brand-block">
+            <div class="brand-mark">OW</div>
+            <div>
+              <p class="product-title">Graphite Ops</p>
+              <p class="product-subtitle">Minimal operator shell / primer discipline / workflow first</p>
+            </div>
+          </div>
+          <div class="global-search">
+            <span>Search nodes, runs, prompts, or workspaces</span>
+            <span class="kbd">/</span>
+          </div>
+          <div class="topbar-actions">
+            <span class="pill">Local runtime healthy</span>
+            <span class="pill primary">2 active runs</span>
+            <span class="pill">Portal isolation green</span>
+          </div>
+        </header>
+
+        <div class="body-grid">
+          <aside class="rail">
+            <div class="rail-stack">
+              <section class="rail-section">
+                <div class="panel-header">
+                  <h3 class="section-title">Workspace rail</h3>
+                  <span class="nav-badge">4</span>
+                </div>
+                <p class="small-copy">A sober rail for active workspaces, QA slices, and branch experiments.</p>
+                <ul class="nav-list">
+                  <li class="nav-item active"><span>Release hardening</span><span class="nav-badge">live</span></li>
+                  <li class="nav-item"><span>Multi-agent prompt lab</span><span class="nav-badge">draft</span></li>
+                  <li class="nav-item"><span>Portal automation sandbox</span><span class="nav-badge">qa</span></li>
+                  <li class="nav-item"><span>Branch workspace smoke</span><span class="nav-badge">2</span></li>
+                </ul>
+              </section>
+
+              <section class="workspace-card active-card">
+                <div class="workspace-card-header">
+                  <div>
+                    <h4 class="workspace-name">openweave / feat-phase3-followup</h4>
+                    <p class="workspace-path">/Projects/openweave</p>
+                  </div>
+                  <span class="pill primary">active</span>
+                </div>
+                <div class="status-pills">
+                  <span class="pill"><span class="status-dot status-running"></span> build running</span>
+                  <span class="pill"><span class="status-dot status-warning"></span> 1 review note</span>
+                </div>
+              </section>
+
+              <section class="rail-section">
+                <div class="panel-header">
+                  <h3 class="section-title">Signals</h3>
+                  <span class="nav-badge">today</span>
+                </div>
+                <div class="metric-row">
+                  <div class="metric"><span class="metric-label">Nodes</span><strong>18</strong></div>
+                  <div class="metric"><span class="metric-label">Runs</span><strong>7</strong></div>
+                  <div class="metric"><span class="metric-label">Alerts</span><strong>1</strong></div>
+                </div>
+              </section>
+            </div>
+          </aside>
+
+          <main class="main-column">
+            <div class="canvas-main">
+              <section class="toolbar-shelf">
+                <div class="canvas-hero">
+                  <div>
+                    <span class="eyebrow">Canvas / operational graph</span>
+                    <h2>AI workflow orchestration, optimized for operators.</h2>
+                    <p>A steady, neutral shell for long sessions. Dense enough for real work, restrained enough to preserve signal over decoration.</p>
+                  </div>
+                  <div class="canvas-toolbar">
+                    <span class="btn primary">Run selected path</span>
+                    <span class="btn">Branch workspace</span>
+                    <span class="btn">Capture portal state</span>
+                  </div>
+                </div>
+                <div class="legend">
+                  <span class="pill"><span class="status-dot status-running"></span> Running</span>
+                  <span class="pill"><span class="status-dot status-warning"></span> Needs review</span>
+                  <span class="pill"><span class="status-dot status-error"></span> Failed</span>
+                  <span class="pill">Graph v2 persisted</span>
+                </div>
+              </section>
+
+              <section class="canvas-board">
+                <svg class="canvas-edge" viewBox="0 0 1200 760" preserveAspectRatio="none">
+                  <path d="M 380 170 C 430 150, 460 150, 520 170" />
+                  <path class="active" d="M 620 310 C 620 380, 520 420, 420 450" />
+                  <path d="M 720 320 C 780 350, 820 390, 830 430" />
+                </svg>
+                <span class="edge-label" style="top: 126px; left: 442px;">prompt context</span>
+                <span class="edge-label" style="top: 392px; left: 520px;">runtime output</span>
+                <span class="edge-label" style="top: 410px; left: 760px;">workspace source</span>
+
+                <article class="node-card note">
+                  <div class="node-card-headerline"></div>
+                  <div class="node-header">
+                    <div>
+                      <h3 class="node-title">Planning note</h3>
+                      <p class="node-subtitle">Human intent and acceptance gates</p>
+                    </div>
+                    <span class="node-badge">builtin.note</span>
+                  </div>
+                  <div class="note-body">
+                    Tighten portal containment, preserve shell interaction guardrails, and keep branch workspace verification green. The canvas is the control plane, not decoration.
+                  </div>
+                  <div class="meta-list">
+                    <span class="note-chip"><span class="status-dot status-warning"></span> awaiting sign-off</span>
+                    <span class="note-chip">owner: design system</span>
+                  </div>
+                </article>
+
+                <article class="node-card terminal selected">
+                  <div class="node-card-headerline"></div>
+                  <div class="node-header">
+                    <div>
+                      <h3 class="node-title">Focused verification</h3>
+                      <p class="node-subtitle">Terminal node / runtime shell</p>
+                    </div>
+                    <span class="node-badge">builtin.terminal</span>
+                  </div>
+                  <div class="terminal-output">$ npm run build
+$ npx playwright test tests/e2e/portal-node.spec.ts
+[pass] portal containment stayed on file:// shell
+[pass] branch-workspace remained isolated
+stream attached...</div>
+                  <div class="status-pills">
+                    <span class="pill primary"><span class="status-dot status-running"></span> running</span>
+                    <span class="pill">runtime: shell</span>
+                    <span class="pill">session: tty-24</span>
+                  </div>
+                </article>
+
+                <article class="node-card portal">
+                  <div class="node-card-headerline"></div>
+                  <div class="node-header">
+                    <div>
+                      <h3 class="node-title">Portal audit</h3>
+                      <p class="node-subtitle">Containment, click flow, file scheme rejection</p>
+                    </div>
+                    <span class="node-badge">builtin.portal</span>
+                  </div>
+                  <div class="portal-preview">
+                    <div class="portal-preview-card">
+                      <strong style="display:block; color:var(--text-strong); margin-bottom:8px;">Portal fixture live</strong>
+                      <div class="small-copy">Action target, input field, redirect rejection, and screenshot capture are all visible without leaking into the renderer shell.</div>
+                    </div>
+                    <div class="status-pills">
+                      <span class="pill"><span class="status-dot status-running"></span> loaded</span>
+                      <span class="pill">origin allowlist enforced</span>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="node-card files">
+                  <div class="node-card-headerline"></div>
+                  <div class="node-header">
+                    <div>
+                      <h3 class="node-title">Workspace files</h3>
+                      <p class="node-subtitle">Graph v2 source + git status</p>
+                    </div>
+                    <span class="node-badge">builtin.file-tree</span>
+                  </div>
+                  <div class="file-list">
+                    <div class="file-row"><span>src/main/portal/portal-manager.ts</span><span>M</span></div>
+                    <div class="file-row"><span>src/renderer/features/canvas-shell/CanvasShell.tsx</span><span>M</span></div>
+                    <div class="file-row"><span>tests/e2e/portal-node.spec.ts</span><span>M</span></div>
+                    <div class="file-row"><span>docs/plans/2026-04-19-openweave-v2-phase3-phase4-risk-log.md</span><span>M</span></div>
+                  </div>
+                  <div class="status-pills">
+                    <span class="pill"><span class="status-dot status-warning"></span> 4 modified files</span>
+                    <span class="pill">branch workspace safe</span>
+                  </div>
+                </article>
+              </section>
+            </div>
+          </main>
+
+          <aside class="inspector">
+            <div class="inspector-stack">
+              <section class="inspector-panel">
+                <div class="panel-header">
+                  <h3 class="inspector-title">Inspector</h3>
+                  <span class="pill primary">selected node</span>
+                </div>
+                <div>
+                  <h2 class="product-title" style="font-size: 20px;">Terminal / Focused verification</h2>
+                  <p class="small-copy">This panel defines the editable, inspectable, and operational properties for the active graph node.</p>
+                </div>
+                <div class="inspector-meta">
+                  <div class="inspector-item"><span class="meta-key">Component</span><span class="meta-value">builtin.terminal</span></div>
+                  <div class="inspector-item"><span class="meta-key">Runtime</span><span class="meta-value">shell</span></div>
+                  <div class="inspector-item"><span class="meta-key">State</span><span class="meta-value">running</span></div>
+                  <div class="inspector-item"><span class="meta-key">Persistence</span><span class="meta-value">Graph Schema V2</span></div>
+                </div>
+                <div class="inspector-form">
+                  <div class="form-field">
+                    <span class="small-copy">Command</span>
+                    <div class="fake-input">npx playwright test -c playwright.config.ts tests/e2e/portal-node.spec.ts</div>
+                  </div>
+                  <div class="form-field">
+                    <span class="small-copy">Execution policy</span>
+                    <div class="fake-select">Focused verification / guarded shell interactions</div>
+                  </div>
+                  <div class="form-field">
+                    <span class="small-copy">Notes</span>
+                    <div class="fake-textarea">Keep host interaction deterministic. Avoid overlay regressions. Preserve portal isolation. Keep branch-workspace flow green.</div>
+                  </div>
+                </div>
+                <div class="inspector-actions">
+                  <span class="btn primary">Save node</span>
+                  <span class="btn">Duplicate</span>
+                  <span class="btn">Reveal logs</span>
+                </div>
+              </section>
+
+              <section class="inspector-panel">
+                <div class="panel-header">
+                  <h3 class="inspector-title">Operational health</h3>
+                  <span class="pill">risk-aware</span>
+                </div>
+                <div class="status-pills">
+                  <span class="pill"><span class="status-dot status-running"></span> 2 active runs</span>
+                  <span class="pill"><span class="status-dot status-warning"></span> 1 pending review</span>
+                  <span class="pill"><span class="status-dot status-idle"></span> 3 idle nodes</span>
+                </div>
+              </section>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="drawer">
+          <section class="drawer-panel">
+            <div class="drawer-header">
+              <div>
+                <h3 class="drawer-title">Run drawer</h3>
+                <p class="small-copy">Active run details, tail output, and gating signals stay close to the canvas without taking it over.</p>
+              </div>
+              <div class="drawer-actions">
+                <span class="btn">Stop run</span>
+                <span class="btn primary">Open session</span>
+              </div>
+            </div>
+            <div class="run-stream">
+              <div class="stream-block">
+                <div class="run-header">
+                  <div>
+                    <h4 class="section-title">Live stream</h4>
+                    <p class="small-copy">run_2026_04_20_portal_guardrail</p>
+                  </div>
+                  <span class="pill primary"><span class="status-dot status-running"></span> streaming</span>
+                </div>
+                <pre>[01:12:14] load portal fixture
+[01:12:18] assert renderer shell visibility
+[01:12:22] click action path ok
+[01:12:27] blocked file redirect recovered
+[01:12:29] branch workspace remains interactive</pre>
+              </div>
+              <div class="stream-block">
+                <div class="run-header">
+                  <div>
+                    <h4 class="section-title">Decision gates</h4>
+                    <p class="small-copy">What an operator needs before closing the slice.</p>
+                  </div>
+                  <span class="pill"><span class="status-dot status-warning"></span> review open</span>
+                </div>
+                <pre>- portal host owned by hidden window
+- renderer url remains file:// after actions
+- minimap no longer intercepts host clicks
+- risk log updated with residual shell caution</pre>
+              </div>
+            </div>
+          </section>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

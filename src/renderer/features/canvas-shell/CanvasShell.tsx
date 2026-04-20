@@ -172,7 +172,7 @@ export const CanvasShell = ({
             onNodesChange={onNodesChange}
           >
             <Background gap={24} size={1} />
-            <MiniMap pannable zoomable />
+            <MiniMap pannable zoomable style={{ pointerEvents: 'none' }} />
             <Controls />
           </ReactFlow>
         </ReactFlowProvider>

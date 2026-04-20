@@ -6,6 +6,7 @@ import { assertPortalUrlAllowed } from '../../shared/portal/types';
 import type { PortalScreenshotResult, PortalStructureResult } from '../../shared/portal/types';
 
 interface ManagedPortalEntry {
+  hostWindow: BrowserWindow;
   view: WebContentsView;
   loadedUrl: string | null;
 }
@@ -148,7 +149,17 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       return existing;
     }
 
+    const hostWindow = new BrowserWindow({
+      width: PORTAL_CAPTURE_WIDTH,
+      height: PORTAL_CAPTURE_HEIGHT,
+      show: false,
+      paintWhenInitiallyHidden: true,
+      webPreferences: {
+        sandbox: false
+      }
+    });
     const created: ManagedPortalEntry = {
+      hostWindow,
       view: new WebContentsView({
         webPreferences: {
           sandbox: true,
@@ -159,6 +170,13 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       }),
       loadedUrl: null
     };
+    created.view.setBounds({
+      x: 0,
+      y: 0,
+      width: PORTAL_CAPTURE_WIDTH,
+      height: PORTAL_CAPTURE_HEIGHT
+    });
+    created.hostWindow.contentView.addChildView(created.view);
     created.view.webContents.setAudioMuted(true);
     attachPortalNavigationGuards(created, () => created.loadedUrl);
     entries.set(portalId, created);
@@ -179,8 +197,22 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       return;
     }
     try {
+      if (!entry.hostWindow.isDestroyed()) {
+        entry.hostWindow.contentView.removeChildView(entry.view);
+      }
+    } catch {
+      // Keep disposal best-effort.
+    }
+    try {
       if (!entry.view.webContents.isDestroyed()) {
         entry.view.webContents.close();
+      }
+    } catch {
+      // Keep disposal best-effort.
+    }
+    try {
+      if (!entry.hostWindow.isDestroyed()) {
+        entry.hostWindow.destroy();
       }
     } catch {
       // Keep disposal best-effort.
@@ -189,36 +221,16 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
   };
 
   const captureFromAttachedHostWindow = async (entry: ManagedPortalEntry): Promise<Buffer> => {
-    const hostWindow = new BrowserWindow({
+    entry.view.setBounds({
+      x: 0,
+      y: 0,
       width: PORTAL_CAPTURE_WIDTH,
-      height: PORTAL_CAPTURE_HEIGHT,
-      show: false,
-      paintWhenInitiallyHidden: true,
-      webPreferences: {
-        sandbox: false
-      }
+      height: PORTAL_CAPTURE_HEIGHT
     });
-
-    try {
-      entry.view.setBounds({
-        x: 0,
-        y: 0,
-        width: PORTAL_CAPTURE_WIDTH,
-        height: PORTAL_CAPTURE_HEIGHT
-      });
-      hostWindow.contentView.addChildView(entry.view);
-      await wait(PORTAL_CAPTURE_SETTLE_MS);
-      const image = await entry.view.webContents.capturePage();
-      const buffer = image.toPNG();
-      return buffer.length > 0 ? buffer : FALLBACK_PNG_BUFFER;
-    } finally {
-      try {
-        hostWindow.contentView.removeChildView(entry.view);
-      } catch {
-        // Keep cleanup best-effort.
-      }
-      hostWindow.destroy();
-    }
+    await wait(PORTAL_CAPTURE_SETTLE_MS);
+    const image = await entry.view.webContents.capturePage();
+    const buffer = image.toPNG();
+    return buffer.length > 0 ? buffer : FALLBACK_PNG_BUFFER;
   };
 
   return {
@@ -229,10 +241,7 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
         entry.loadedUrl = url;
       } catch (error) {
         // loadURL failed; remove transient runtime state for this portal ID.
-        if (!entry.view.webContents.isDestroyed()) {
-          entry.view.webContents.close();
-        }
-        entries.delete(portalId);
+        disposePortalEntry(portalId);
         throw error;
       }
     },

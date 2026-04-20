@@ -117,6 +117,11 @@ test('loads portal url and supports click/input/capture/structure with file:// r
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-portal-${uniqueSuffix}`);
   const workspaceName = `Portal-${uniqueSuffix}`;
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-portal-'));
+  const expectRendererShellVisible = async (page: import('@playwright/test').Page): Promise<void> => {
+    expect(page.url().startsWith('file:')).toBe(true);
+    await expect(page.getByTestId('workspace-canvas-page')).toBeVisible();
+    await expect(page.getByTestId('canvas-workspace-name')).toContainText(workspaceName);
+  };
 
   const app = await electron.launch({
     args: [path.resolve(__dirname, '../../dist/main/main.js')],
@@ -154,48 +159,59 @@ test('loads portal url and supports click/input/capture/structure with file:// r
     await urlInput.fill(fixture.origin);
     await loadButton.click();
     await expect(actionStatus).toContainText('Loaded portal URL', { timeout: 10000 });
+    await expectRendererShellVisible(page);
 
     await inputValueField.fill('hello portal');
     await inputButton.click();
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
+    await expectRendererShellVisible(page);
 
     await clickButton.click();
     await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
+    await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#navigate-file-button');
     await clickButton.click();
     await page.waitForTimeout(250);
+    await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-navigate-attempt');
     await inputButton.click();
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
+    await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#redirect-file-button');
     await clickButton.click();
     await page.waitForTimeout(250);
+    await expectRendererShellVisible(page);
 
     await urlInput.fill(fixture.origin);
     await loadButton.click();
     await expect(actionStatus).toContainText('Loaded portal URL', { timeout: 10000 });
+    await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-redirect-attempt');
     await inputButton.click();
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
+    await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#open-file-button');
     await clickButton.click();
     await page.waitForTimeout(250);
+    await expectRendererShellVisible(page);
 
     await inputValueField.fill('after-open-attempt');
     await inputButton.click();
     await expect(actionStatus).toContainText('Input applied', { timeout: 10000 });
     await expect(errorMessage).toHaveCount(0);
+    await expectRendererShellVisible(page);
 
     await clickSelectorField.fill('#action-button');
     await clickButton.click();
     await expect(actionStatus).toContainText('Clicked element', { timeout: 10000 });
+    await expectRendererShellVisible(page);
 
     await captureButton.click();
     await expect(screenshotPath).toContainText('artifacts/portal/');
