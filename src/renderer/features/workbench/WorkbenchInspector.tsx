@@ -24,13 +24,24 @@ export const WorkbenchInspector = ({
   collapsed = false,
   onToggle
 }: WorkbenchInspectorProps): JSX.Element => {
+  const focusLabel = selectedNode
+    ? 'Node focus'
+    : workspaceName
+      ? 'Workspace overview'
+      : 'Idle shell';
+
   if (collapsed) {
     return (
       <aside
         className="ow-workbench-inspector ow-workbench-inspector--collapsed"
         data-testid="workbench-inspector"
       >
-        <button data-testid="workbench-inspector-toggle" onClick={onToggle} type="button">
+        <button
+          className="ow-toolbar-button"
+          data-testid="workbench-inspector-toggle"
+          onClick={onToggle}
+          type="button"
+        >
           Expand
         </button>
         <div data-testid="workbench-inspector-collapsed" className="ow-workbench-inspector__collapsed-badge">
@@ -49,9 +60,25 @@ export const WorkbenchInspector = ({
             {selectedNode?.title ?? workspaceName ?? 'Nothing selected'}
           </h2>
         </div>
-        <button data-testid="workbench-inspector-toggle" onClick={onToggle} type="button">
+        <button
+          className="ow-toolbar-button"
+          data-testid="workbench-inspector-toggle"
+          onClick={onToggle}
+          type="button"
+        >
           Collapse
         </button>
+      </div>
+
+      <div className="ow-workbench-inspector__summary">
+        <article className="ow-workbench-inspector__summary-card">
+          <span>Focus</span>
+          <strong>{focusLabel}</strong>
+        </article>
+        <article className="ow-workbench-inspector__summary-card">
+          <span>Last change</span>
+          <strong>{recentAction ?? 'No actions yet'}</strong>
+        </article>
       </div>
 
       <section className="ow-workbench-inspector__section">
@@ -97,11 +124,11 @@ export const WorkbenchInspector = ({
 
       <section className="ow-workbench-inspector__section">
         <h3>Quick actions</h3>
-        <ul>
-          <li>/ Quick add</li>
-          <li>Cmd/Ctrl+K Command palette</li>
-          <li>Cmd/Ctrl+Shift+I Toggle inspector</li>
-        </ul>
+        <div className="ow-workbench-inspector__quick-actions">
+          <span>/ Quick add</span>
+          <span>Cmd/Ctrl+K Command palette</span>
+          <span>Cmd/Ctrl+Shift+I Toggle inspector</span>
+        </div>
       </section>
     </aside>
   );

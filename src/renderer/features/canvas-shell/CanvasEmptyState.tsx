@@ -26,7 +26,9 @@ export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Elemen
       <div className="ow-canvas-empty-state__card" data-testid="canvas-empty">
         <p className="ow-canvas-empty-state__eyebrow">Workflow kickoff</p>
         <h3>Start with a terminal</h3>
-        <p>Then add context around it with notes, files, portals, and pinned results.</p>
+        <p className="ow-canvas-empty-state__lede">
+          Then add context around it with notes, files, portals, and pinned results.
+        </p>
         <div className="ow-canvas-empty-state__actions">
           {actions.map((action) => (
             <button
@@ -40,6 +42,20 @@ export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Elemen
               <span>{action.hotkey}</span>
             </button>
           ))}
+        </div>
+        <div className="ow-canvas-empty-state__signal-strip">
+          <div>
+            <span>Primary surface</span>
+            <strong>Canvas first</strong>
+          </div>
+          <div>
+            <span>Starter flow</span>
+            <strong>Terminal + context</strong>
+          </div>
+          <div>
+            <span>Hotkeys</span>
+            <strong>1-5 and /</strong>
+          </div>
         </div>
         <div className="ow-canvas-empty-state__recipes">
           <article>

@@ -11,16 +11,28 @@
   --ow-shadow-rgb: 14, 42, 74;
 
   --ow-color-bg-app: #edf4fb;
+  --ow-color-bg-app-alt: #f8fbff;
   --ow-color-bg-canvas: #e8f0f8;
   --ow-color-bg-panel: rgba(var(--ow-surface-rgb), 0.62);
   --ow-color-bg-panel-strong: rgba(var(--ow-strong-surface-rgb), 0.9);
+  --ow-color-bg-panel-muted: rgba(240, 246, 252, 0.86);
+  --ow-color-bg-panel-sunken: rgba(229, 238, 247, 0.92);
   --ow-color-text-strong: #10253d;
   --ow-color-text-default: #26445f;
   --ow-color-text-soft: #5f7790;
+  --ow-color-text-muted: #8197ab;
   --ow-color-border: rgba(33, 74, 120, 0.18);
   --ow-color-border-strong: rgba(33, 74, 120, 0.32);
+  --ow-color-border-accent: rgba(var(--ow-accent-rgb), 0.3);
   --ow-color-accent: #0d6efd;
   --ow-color-accent-strong: #0056c9;
+  --ow-color-accent-soft: rgba(var(--ow-accent-rgb), 0.12);
+  --ow-color-selection-wash: rgba(var(--ow-accent-rgb), 0.1);
+  --ow-color-running-wash: rgba(var(--ow-running-rgb), 0.12);
+  --ow-color-warning-wash: rgba(var(--ow-warning-rgb), 0.12);
+  --ow-color-failed-wash: rgba(var(--ow-failed-rgb), 0.12);
+  --ow-color-grid-minor: rgba(var(--ow-accent-rgb), 0.045);
+  --ow-color-grid-major: rgba(var(--ow-accent-rgb), 0.09);
 
   --ow-state-running: #0d7f6f;
   --ow-state-warning: #b57912;
@@ -39,24 +51,44 @@
   --ow-dark-shadow-rgb: 2, 8, 14;
 
   --ow-dark-color-bg-app: #0d1217;
+  --ow-dark-color-bg-app-alt: #111821;
   --ow-dark-color-bg-canvas: #0b1014;
   --ow-dark-color-bg-panel: rgba(var(--ow-dark-surface-rgb), 0.82);
   --ow-dark-color-bg-panel-strong: rgba(var(--ow-dark-strong-surface-rgb), 0.96);
+  --ow-dark-color-bg-panel-muted: rgba(24, 34, 41, 0.92);
+  --ow-dark-color-bg-panel-sunken: rgba(17, 24, 30, 0.96);
   --ow-dark-color-text-strong: #ebf2f7;
   --ow-dark-color-text-default: #c5d2dd;
   --ow-dark-color-text-soft: #91a4b3;
+  --ow-dark-color-text-muted: #72889a;
   --ow-dark-color-border: rgba(91, 114, 131, 0.22);
   --ow-dark-color-border-strong: rgba(91, 114, 131, 0.38);
+  --ow-dark-color-border-accent: rgba(var(--ow-dark-accent-rgb), 0.32);
   --ow-dark-color-accent: #58a6ff;
   --ow-dark-color-accent-strong: #9dcbff;
+  --ow-dark-color-accent-soft: rgba(var(--ow-dark-accent-rgb), 0.16);
+  --ow-dark-color-selection-wash: rgba(var(--ow-dark-accent-rgb), 0.14);
+  --ow-dark-color-running-wash: rgba(var(--ow-dark-running-rgb), 0.14);
+  --ow-dark-color-warning-wash: rgba(var(--ow-dark-warning-rgb), 0.14);
+  --ow-dark-color-failed-wash: rgba(var(--ow-dark-failed-rgb), 0.14);
+  --ow-dark-color-grid-minor: rgba(var(--ow-dark-accent-rgb), 0.04);
+  --ow-dark-color-grid-major: rgba(var(--ow-dark-accent-rgb), 0.08);
   --ow-dark-state-running: #3fb950;
   --ow-dark-state-warning: #d29922;
   --ow-dark-state-failed: #f85149;
   --ow-dark-state-danger: var(--ow-dark-state-failed);
 
-  --ow-radius-panel: 18px;
+  --ow-radius-panel: 20px;
+  --ow-radius-card: 16px;
+  --ow-radius-control: 14px;
   --ow-radius-chip: 999px;
-  --ow-shadow-panel: 0 18px 40px rgba(var(--ow-shadow-rgb), 0.08);
+  --ow-shadow-panel: 0 20px 48px rgba(var(--ow-shadow-rgb), 0.1), 0 4px 12px rgba(var(--ow-shadow-rgb), 0.06);
+  --ow-shadow-floating: 0 28px 56px rgba(var(--ow-shadow-rgb), 0.12), 0 6px 18px rgba(var(--ow-shadow-rgb), 0.08);
+  --ow-shadow-node: 0 20px 42px rgba(var(--ow-shadow-rgb), 0.12), 0 3px 12px rgba(var(--ow-shadow-rgb), 0.08);
+  --ow-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --ow-transition-fast: 160ms ease;
+  --ow-transition-medium: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ow-transition-slow: 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 [data-theme='dark'] {
@@ -69,16 +101,28 @@
   --ow-shadow-rgb: var(--ow-dark-shadow-rgb);
 
   --ow-color-bg-app: var(--ow-dark-color-bg-app);
+  --ow-color-bg-app-alt: var(--ow-dark-color-bg-app-alt);
   --ow-color-bg-canvas: var(--ow-dark-color-bg-canvas);
   --ow-color-bg-panel: var(--ow-dark-color-bg-panel);
   --ow-color-bg-panel-strong: var(--ow-dark-color-bg-panel-strong);
+  --ow-color-bg-panel-muted: var(--ow-dark-color-bg-panel-muted);
+  --ow-color-bg-panel-sunken: var(--ow-dark-color-bg-panel-sunken);
   --ow-color-text-strong: var(--ow-dark-color-text-strong);
   --ow-color-text-default: var(--ow-dark-color-text-default);
   --ow-color-text-soft: var(--ow-dark-color-text-soft);
+  --ow-color-text-muted: var(--ow-dark-color-text-muted);
   --ow-color-border: var(--ow-dark-color-border);
   --ow-color-border-strong: var(--ow-dark-color-border-strong);
+  --ow-color-border-accent: var(--ow-dark-color-border-accent);
   --ow-color-accent: var(--ow-dark-color-accent);
   --ow-color-accent-strong: var(--ow-dark-color-accent-strong);
+  --ow-color-accent-soft: var(--ow-dark-color-accent-soft);
+  --ow-color-selection-wash: var(--ow-dark-color-selection-wash);
+  --ow-color-running-wash: var(--ow-dark-color-running-wash);
+  --ow-color-warning-wash: var(--ow-dark-color-warning-wash);
+  --ow-color-failed-wash: var(--ow-dark-color-failed-wash);
+  --ow-color-grid-minor: var(--ow-dark-color-grid-minor);
+  --ow-color-grid-major: var(--ow-dark-color-grid-major);
   --ow-state-running: var(--ow-dark-state-running);
   --ow-state-warning: var(--ow-dark-state-warning);
   --ow-state-failed: var(--ow-dark-state-failed);
@@ -86,4 +130,8 @@
   --ow-state-running-rgb: var(--ow-running-rgb);
   --ow-state-warning-rgb: var(--ow-warning-rgb);
   --ow-state-failed-rgb: var(--ow-failed-rgb);
+  --ow-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --ow-shadow-panel: 0 20px 48px rgba(var(--ow-shadow-rgb), 0.34), 0 4px 12px rgba(var(--ow-shadow-rgb), 0.22);
+  --ow-shadow-floating: 0 28px 64px rgba(var(--ow-shadow-rgb), 0.42), 0 6px 18px rgba(var(--ow-shadow-rgb), 0.28);
+  --ow-shadow-node: 0 22px 52px rgba(var(--ow-shadow-rgb), 0.38), 0 4px 14px rgba(var(--ow-shadow-rgb), 0.24);
 }

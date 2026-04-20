@@ -13,17 +13,25 @@ export const WorkbenchStatusIsland = ({
 }: WorkbenchStatusIslandProps): JSX.Element => {
   return (
     <div className="ow-workbench-status-island" data-testid="workbench-status-island">
-      <div className="ow-workbench-status-island__item" data-testid="status-island-status">
+      <div
+        className="ow-workbench-status-island__item ow-workbench-status-island__item--status"
+        data-state={hasActiveWorkspace ? 'active' : 'idle'}
+        data-testid="status-island-status"
+      >
         <span className="ow-workbench-status-island__label">Status</span>
-        <strong>{statusLabel ?? (hasActiveWorkspace ? 'Ready' : 'Idle')}</strong>
+        <strong className="ow-workbench-status-island__value">
+          {statusLabel ?? (hasActiveWorkspace ? 'Ready' : 'Idle')}
+        </strong>
       </div>
       <div className="ow-workbench-status-island__item" data-testid="status-island-events">
         <span className="ow-workbench-status-island__label">Events</span>
-        <strong>{eventsCount}</strong>
+        <strong className="ow-workbench-status-island__value">{eventsCount}</strong>
       </div>
       <div className="ow-workbench-status-island__item" data-testid="status-island-tasks">
         <span className="ow-workbench-status-island__label">Tasks</span>
-        <strong>{tasksCount ?? (hasActiveWorkspace ? 1 : 0)}</strong>
+        <strong className="ow-workbench-status-island__value">
+          {tasksCount ?? (hasActiveWorkspace ? 1 : 0)}
+        </strong>
       </div>
     </div>
   );

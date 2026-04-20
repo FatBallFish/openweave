@@ -1,9 +1,9 @@
 const railItems = [
-  { id: 'home', label: 'Home', glyph: 'OW', active: true },
-  { id: 'canvas', label: 'Canvas', glyph: 'C', active: true },
-  { id: 'resources', label: 'Resources', glyph: 'R', active: false },
-  { id: 'runs', label: 'Runs', glyph: '▶', active: false },
-  { id: 'events', label: 'Events', glyph: '•', active: false }
+  { id: 'home', label: 'Home', glyph: 'OW', active: false },
+  { id: 'canvas', label: 'Canvas', glyph: 'CN', active: true },
+  { id: 'resources', label: 'Resources', glyph: 'RS', active: false },
+  { id: 'runs', label: 'Runs', glyph: 'RN', active: false },
+  { id: 'events', label: 'Events', glyph: 'EV', active: false }
 ] as const;
 
 export const WorkbenchLeftRail = (): JSX.Element => {
@@ -14,8 +14,10 @@ export const WorkbenchLeftRail = (): JSX.Element => {
           <button
             key={item.id}
             aria-label={item.label}
+            aria-current={item.active ? 'page' : undefined}
             className={`ow-workbench-left-rail__item${item.active ? ' is-active' : ''}`}
             data-testid={`workbench-left-rail-item-${item.id}`}
+            title={item.label}
             type="button"
           >
             <span className="ow-workbench-left-rail__glyph">{item.glyph}</span>
@@ -27,9 +29,10 @@ export const WorkbenchLeftRail = (): JSX.Element => {
           aria-label="Settings"
           className="ow-workbench-left-rail__item"
           data-testid="workbench-left-rail-item-settings"
+          title="Settings"
           type="button"
         >
-          <span className="ow-workbench-left-rail__glyph">⚙</span>
+          <span className="ow-workbench-left-rail__glyph">SY</span>
         </button>
       </div>
     </aside>

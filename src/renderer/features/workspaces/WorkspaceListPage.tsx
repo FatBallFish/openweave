@@ -70,7 +70,10 @@ export const WorkspaceListPage = ({ variant = 'page' }: WorkspaceListPageProps):
 
       <div className="ow-workspace-list__active" data-testid="active-workspace-name">
         <span className="ow-workspace-list__eyebrow">Active workspace</span>
-        <strong>{activeWorkspace?.name ?? 'none'}</strong>
+        <div className="ow-workspace-list__active-body">
+          <strong>{activeWorkspace?.name ?? 'none'}</strong>
+          <span>{activeWorkspace?.rootDir ?? 'Open a workspace to mount repo context.'}</span>
+        </div>
       </div>
 
       {workspaces.length === 0 ? (
@@ -86,12 +89,22 @@ export const WorkspaceListPage = ({ variant = 'page' }: WorkspaceListPageProps):
               data-testid={`workspace-row-${workspace.id}`}
             >
               <div className="ow-workspace-list__item-meta">
-                <strong>{workspace.name}</strong>
-                <div>{workspace.rootDir}</div>
+                <div className="ow-workspace-list__item-heading">
+                  <strong>{workspace.name}</strong>
+                  <span
+                    className={`ow-workspace-list__item-badge${
+                      workspace.id === activeWorkspaceId ? ' is-active' : ''
+                    }`}
+                  >
+                    {workspace.id === activeWorkspaceId ? 'Open' : 'Ready'}
+                  </span>
+                </div>
+                <code className="ow-workspace-list__item-path">{workspace.rootDir}</code>
               </div>
               <div className="ow-workspace-list__item-actions">
                 <button
                   aria-label={`Open ${workspace.name}`}
+                  className="ow-toolbar-button ow-toolbar-button--primary"
                   data-testid={`workspace-open-${workspace.id}`}
                   disabled={loading}
                   onClick={() => void workspacesStore.openWorkspace(workspace.id)}
@@ -101,6 +114,7 @@ export const WorkspaceListPage = ({ variant = 'page' }: WorkspaceListPageProps):
                 </button>
                 <button
                   aria-label={`Branch ${workspace.name}`}
+                  className="ow-toolbar-button"
                   data-testid={`workspace-branch-${workspace.id}`}
                   disabled={loading}
                   onClick={() => workspacesStore.openBranchDialog(workspace.id)}
@@ -110,6 +124,7 @@ export const WorkspaceListPage = ({ variant = 'page' }: WorkspaceListPageProps):
                 </button>
                 <button
                   aria-label={`Delete ${workspace.name}`}
+                  className="ow-toolbar-button ow-toolbar-button--danger"
                   data-testid={`workspace-delete-${workspace.id}`}
                   disabled={loading}
                   onClick={() => void workspacesStore.deleteWorkspace(workspace.id)}
