@@ -46,6 +46,9 @@ export interface ProjectGraphToCanvasShellInput {
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
+  onOpenCommandPalette: () => void;
+  onOpenQuickAdd: () => void;
+  onSelectNode: (nodeId: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
   onAddTerminal: () => void;
   onAddNote: () => void;
@@ -123,6 +126,9 @@ export const CanvasShell = ({
   workspaceId,
   workspaceRootDir,
   graphSnapshot,
+  onOpenCommandPalette,
+  onOpenQuickAdd,
+  onSelectNode,
   onOpenRun,
   onCreateBranchWorkspace,
   onMoveNode,
@@ -162,7 +168,25 @@ export const CanvasShell = ({
           <p className="ow-canvas-shell__eyebrow">Infinite canvas</p>
           <h3>Blueprint canvas surface</h3>
         </div>
-        <div className="ow-canvas-shell__meta">Pan, zoom, connect, inspect</div>
+        <div className="ow-canvas-shell__actions">
+          <button
+            className="ow-toolbar-button"
+            data-testid="command-palette-trigger"
+            onClick={onOpenCommandPalette}
+            type="button"
+          >
+            Command palette
+          </button>
+          <button
+            className="ow-toolbar-button ow-toolbar-button--primary"
+            data-testid="canvas-quick-add-trigger"
+            onClick={onOpenQuickAdd}
+            type="button"
+          >
+            Quick add
+          </button>
+          <div className="ow-canvas-shell__meta">Pan, zoom, connect, inspect</div>
+        </div>
       </div>
 
       <CanvasSelectionHud edgeCount={model.edges.length} nodeCount={model.nodes.length} />
@@ -177,6 +201,9 @@ export const CanvasShell = ({
             nodeTypes={nodeTypes}
             nodes={nodes}
             onEdgesChange={onEdgesChange}
+            onNodeClick={(_event, node) => {
+              onSelectNode(node.id);
+            }}
             onNodeDragStop={(_event, node) => {
               onMoveNode(node.id, {
                 x: node.position.x,
@@ -184,6 +211,9 @@ export const CanvasShell = ({
               });
             }}
             onNodesChange={onNodesChange}
+            onPaneClick={() => {
+              onSelectNode(null);
+            }}
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={24} size={1} />

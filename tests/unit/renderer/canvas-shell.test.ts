@@ -110,6 +110,9 @@ describe('canvas shell', () => {
         workspaceId: 'ws-1',
         workspaceRootDir: '/tmp/ws-1',
         graphSnapshot: createGraphSnapshot(),
+        onOpenCommandPalette: vi.fn(),
+        onOpenQuickAdd: vi.fn(),
+        onSelectNode: vi.fn(),
         onAddTerminal: vi.fn(),
         onAddNote: vi.fn(),
         onAddPortal: vi.fn(),
@@ -125,5 +128,7 @@ describe('canvas shell', () => {
     expect(html).toContain('canvas-shell-grid');
     expect(html).toContain('canvas-shell-minimap');
     expect(html).toContain('canvas-selection-hud');
+    expect(html).toContain('command-palette-trigger');
+    expect(html).toContain('canvas-quick-add-trigger');
   });
 });

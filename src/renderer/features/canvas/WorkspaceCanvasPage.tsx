@@ -9,12 +9,18 @@ interface WorkspaceCanvasPageProps {
   workspaceId: string;
   workspaceName: string;
   workspaceRootDir: string;
+  onOpenCommandPalette: () => void;
+  onOpenQuickAdd: () => void;
+  onSelectNode: (nodeId: string | null) => void;
 }
 
 export const WorkspaceCanvasPage = ({
   workspaceId,
   workspaceName,
-  workspaceRootDir
+  workspaceRootDir,
+  onOpenCommandPalette,
+  onOpenQuickAdd,
+  onSelectNode
 }: WorkspaceCanvasPageProps): JSX.Element => {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const graphSnapshot = useCanvasStore((storeState) => storeState.graphSnapshot);
@@ -57,6 +63,9 @@ export const WorkspaceCanvasPage = ({
           workspaceId={workspaceId}
           workspaceRootDir={workspaceRootDir}
           graphSnapshot={graphSnapshot}
+          onOpenCommandPalette={onOpenCommandPalette}
+          onOpenQuickAdd={onOpenQuickAdd}
+          onSelectNode={onSelectNode}
           onOpenRun={openRun}
           onCreateBranchWorkspace={openBranchDialog}
           onAddTerminal={() => {

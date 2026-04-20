@@ -1,17 +1,29 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
 import { WorkbenchContextPanel } from './WorkbenchContextPanel';
 import { WorkbenchInspector } from './WorkbenchInspector';
 import { WorkbenchLeftRail } from './WorkbenchLeftRail';
 import { WorkbenchStatusIsland } from './WorkbenchStatusIsland';
 import { WorkbenchTopBar } from './WorkbenchTopBar';
 
+export interface WorkbenchSelectedNode {
+  id: string;
+  title: string;
+  componentType: string;
+  capabilities: string[];
+}
+
 interface WorkbenchShellProps {
   workspaceName: string | null;
   workspaceRootDir: string | null;
   contextPanel: ReactNode;
   stage: ReactNode;
+  commandPalette?: ReactNode;
   disabled: boolean;
+  selectedNode: WorkbenchSelectedNode | null;
+  nodeCount: number;
+  edgeCount: number;
+  recentAction: string | null;
+  inspectorCollapsed: boolean;
   onAddTerminal: () => void;
   onAddNote: () => void;
   onAddPortal: () => void;
@@ -20,6 +32,7 @@ interface WorkbenchShellProps {
   onOpenCommandMenu: () => void;
   onFitCanvas: () => void;
   onOpenSettings: () => void;
+  onToggleInspector: () => void;
   searchDisabled: boolean;
   commandMenuDisabled: boolean;
   fitViewDisabled: boolean;
@@ -31,7 +44,13 @@ export const WorkbenchShell = ({
   workspaceRootDir,
   contextPanel,
   stage,
+  commandPalette,
   disabled,
+  selectedNode,
+  nodeCount,
+  edgeCount,
+  recentAction,
+  inspectorCollapsed,
   onAddTerminal,
   onAddNote,
   onAddPortal,
@@ -40,13 +59,14 @@ export const WorkbenchShell = ({
   onOpenCommandMenu,
   onFitCanvas,
   onOpenSettings,
+  onToggleInspector,
   searchDisabled,
   commandMenuDisabled,
   fitViewDisabled,
   settingsDisabled
 }: WorkbenchShellProps): JSX.Element => {
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const hasActiveWorkspace = workspaceName !== null;
+  const statusLabel = !hasActiveWorkspace ? 'Idle' : selectedNode ? 'Focused' : 'Ready';
 
   return (
     <main className="ow-workbench-shell" data-testid="workbench-shell">
@@ -77,13 +97,23 @@ export const WorkbenchShell = ({
         </section>
         <WorkbenchInspector
           collapsed={inspectorCollapsed}
-          onToggle={() => setInspectorCollapsed((value) => !value)}
+          edgeCount={edgeCount}
+          nodeCount={nodeCount}
+          onToggle={onToggleInspector}
+          recentAction={recentAction}
+          selectedNode={selectedNode}
           workspaceName={workspaceName}
           workspaceRootDir={workspaceRootDir}
         />
       </div>
 
-      <WorkbenchStatusIsland hasActiveWorkspace={hasActiveWorkspace} />
+      <WorkbenchStatusIsland
+        eventsCount={recentAction ? 1 : 0}
+        hasActiveWorkspace={hasActiveWorkspace}
+        statusLabel={statusLabel}
+        tasksCount={nodeCount}
+      />
+      {commandPalette}
     </main>
   );
 };

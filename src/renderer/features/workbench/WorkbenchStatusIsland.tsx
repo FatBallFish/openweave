@@ -1,21 +1,29 @@
 interface WorkbenchStatusIslandProps {
   hasActiveWorkspace: boolean;
+  statusLabel?: string;
+  eventsCount?: number;
+  tasksCount?: number;
 }
 
-export const WorkbenchStatusIsland = ({ hasActiveWorkspace }: WorkbenchStatusIslandProps): JSX.Element => {
+export const WorkbenchStatusIsland = ({
+  hasActiveWorkspace,
+  statusLabel,
+  eventsCount = 0,
+  tasksCount
+}: WorkbenchStatusIslandProps): JSX.Element => {
   return (
     <div className="ow-workbench-status-island" data-testid="workbench-status-island">
-      <div className="ow-workbench-status-island__item">
+      <div className="ow-workbench-status-island__item" data-testid="status-island-status">
         <span className="ow-workbench-status-island__label">Status</span>
-        <strong>{hasActiveWorkspace ? 'Ready' : 'Idle'}</strong>
+        <strong>{statusLabel ?? (hasActiveWorkspace ? 'Ready' : 'Idle')}</strong>
       </div>
-      <div className="ow-workbench-status-island__item">
+      <div className="ow-workbench-status-island__item" data-testid="status-island-events">
         <span className="ow-workbench-status-island__label">Events</span>
-        <strong>0</strong>
+        <strong>{eventsCount}</strong>
       </div>
-      <div className="ow-workbench-status-island__item">
+      <div className="ow-workbench-status-island__item" data-testid="status-island-tasks">
         <span className="ow-workbench-status-island__label">Tasks</span>
-        <strong>{hasActiveWorkspace ? '1' : '0'}</strong>
+        <strong>{tasksCount ?? (hasActiveWorkspace ? 1 : 0)}</strong>
       </div>
     </div>
   );
