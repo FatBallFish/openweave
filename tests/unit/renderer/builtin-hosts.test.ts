@@ -62,7 +62,9 @@ describe('builtin hosts', () => {
       updatedAtMs: 4
     });
 
-    expect(noteHtml).toContain('note-node-content-node-note-1');
+    expect(noteHtml).toContain('builtin-node-frame-node-note-1');
+    expect(noteHtml).toContain('note-host-editor-node-note-1');
+    expect(noteHtml).toContain('Editable markdown');
     expect(noteHtml).toContain('# hello');
     expect(terminalHtml).toContain('terminal-node-runtime-node-terminal-1');
     expect(terminalHtml).toContain('<option value=\"codex\" selected=\"\">Codex</option>');
@@ -169,7 +171,9 @@ describe('builtin hosts', () => {
       updatedAtMs: 12
     });
 
-    expect(textHtml).toContain('text-host-node-text-1');
+    expect(textHtml).toContain('builtin-node-frame-node-text-1');
+    expect(textHtml).toContain('text-host-content-node-text-1');
+    expect(textHtml).toContain('Read only');
     expect(textHtml).toContain('hello text');
     expect(attachmentHtml).toContain('attachment-host-node-attachment-1');
     expect(attachmentHtml).toContain('design.pdf');

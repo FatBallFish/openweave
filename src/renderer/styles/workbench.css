@@ -757,3 +757,187 @@ select {
     display: none;
   }
 }
+
+.ow-builtin-node-frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.94), rgba(var(--ow-surface-rgb), 0.82));
+  box-shadow: var(--ow-shadow-panel);
+}
+
+.ow-builtin-node-frame[data-node-state='running'] {
+  border-color: rgba(var(--ow-running-rgb), 0.44);
+}
+
+.ow-builtin-node-frame[data-node-state='warning'] {
+  border-color: rgba(var(--ow-warning-rgb), 0.48);
+}
+
+.ow-builtin-node-frame[data-node-state='failed'] {
+  border-color: rgba(var(--ow-failed-rgb), 0.48);
+}
+
+.ow-builtin-node-frame[data-node-state='disabled'] {
+  opacity: 0.72;
+}
+
+.ow-builtin-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-surface-rgb), 0.9);
+}
+
+.ow-builtin-node-header__identity,
+.ow-builtin-node-header__meta,
+.ow-builtin-node-header__actions,
+.ow-note-host__toolbar,
+.ow-builtin-node-footer {
+  display: flex;
+  align-items: center;
+}
+
+.ow-builtin-node-header__identity {
+  gap: 10px;
+  min-width: 0;
+}
+
+.ow-builtin-node-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background: rgba(var(--ow-accent-rgb), 0.08);
+  color: var(--ow-color-text-strong);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ow-builtin-node-header__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ow-builtin-node-header__copy strong {
+  color: var(--ow-color-text-strong);
+}
+
+.ow-builtin-node-header__copy span,
+.ow-builtin-node-footer span,
+.ow-text-host__hint {
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-builtin-node-header__meta,
+.ow-builtin-node-header__actions {
+  gap: 8px;
+}
+
+.ow-builtin-node-header__state,
+.ow-builtin-node-header__actions span,
+.ow-note-host__toolbar span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 999px;
+  background: rgba(var(--ow-accent-rgb), 0.08);
+  color: var(--ow-color-text-strong);
+  font-size: 12px;
+}
+
+.ow-builtin-node-header[data-node-state='running'] .ow-builtin-node-header__state {
+  background: rgba(var(--ow-running-rgb), 0.12);
+  border-color: rgba(var(--ow-running-rgb), 0.28);
+}
+
+.ow-builtin-node-header[data-node-state='warning'] .ow-builtin-node-header__state {
+  background: rgba(var(--ow-warning-rgb), 0.12);
+  border-color: rgba(var(--ow-warning-rgb), 0.28);
+}
+
+.ow-builtin-node-header[data-node-state='failed'] .ow-builtin-node-header__state {
+  background: rgba(var(--ow-failed-rgb), 0.12);
+  border-color: rgba(var(--ow-failed-rgb), 0.28);
+}
+
+.ow-builtin-node-frame__body {
+  min-height: 0;
+  padding: 12px;
+}
+
+.ow-note-host,
+.ow-text-host {
+  display: grid;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+.ow-note-host__toolbar {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ow-note-host__editor,
+.ow-text-host__content {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 14px;
+  background: var(--ow-color-bg-app);
+  color: var(--ow-color-text-strong);
+  font: inherit;
+}
+
+.ow-note-host__editor {
+  flex: 1 1 auto;
+  height: 100%;
+  resize: none;
+  padding: 14px;
+  line-height: 1.6;
+}
+
+.ow-text-host__hint {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ow-text-host__content {
+  height: 100%;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
+  font-family: var(--ow-font-mono);
+  line-height: 1.55;
+}
+
+.ow-builtin-node-footer {
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-surface-rgb), 0.56);
+}
