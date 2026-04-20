@@ -42,13 +42,8 @@ export const WorkspaceCanvasPage = ({
         <div className="ow-workspace-canvas-page__meta">Graph schema v2 workspace</div>
       </header>
 
-      <NodeToolbar
-        disabled={loading}
-        onAddNote={() => void canvasStore.addNoteNode()}
-        onAddTerminal={() => void canvasStore.addTerminalNode()}
-        onAddFileTree={() => void canvasStore.addFileTreeNode(workspaceRootDir)}
-        onAddPortal={() => void canvasStore.addPortalNode()}
-      />
+      <NodeToolbar />
+
 
       {errorMessage ? (
         <p className="ow-workspace-canvas-page__error" data-testid="canvas-error">

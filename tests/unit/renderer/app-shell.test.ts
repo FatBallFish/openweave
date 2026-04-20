@@ -21,6 +21,10 @@ const workspaceListPageMock = vi.fn(
     createElement('div', { 'data-testid': 'workspace-list-page-stub', 'data-variant': variant }, 'workspace list')
 );
 
+const mockCanvasState = {
+  loading: false
+};
+
 vi.mock('../../../src/renderer/features/workspaces/workspaces.store', () => ({
   useWorkspacesStore: <T,>(selector: (storeState: typeof mockWorkspacesState) => T): T =>
     selector(mockWorkspacesState)
@@ -28,6 +32,17 @@ vi.mock('../../../src/renderer/features/workspaces/workspaces.store', () => ({
 
 vi.mock('../../../src/renderer/features/workspaces/WorkspaceListPage', () => ({
   WorkspaceListPage: (props: { variant?: 'page' | 'panel' }): JSX.Element => workspaceListPageMock(props)
+}));
+
+vi.mock('../../../src/renderer/features/canvas/canvas.store', () => ({
+  useCanvasStore: <T,>(selector: (storeState: typeof mockCanvasState) => T): T => selector(mockCanvasState),
+  canvasStore: {
+    addTerminalNode: vi.fn(),
+    addNoteNode: vi.fn(),
+    addPortalNode: vi.fn(),
+    addFileTreeNode: vi.fn(),
+    addTextNode: vi.fn()
+  }
 }));
 
 vi.mock('../../../src/renderer/features/canvas/WorkspaceCanvasPage', () => ({
@@ -44,6 +59,7 @@ const readRendererFile = (relativePath: string): string => {
 describe('app shell', () => {
   beforeEach(() => {
     workspaceListPageMock.mockClear();
+    mockCanvasState.loading = false;
   });
 
   it('renders the workbench shell root instead of the demo document shell', () => {

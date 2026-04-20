@@ -11,20 +11,58 @@ interface WorkbenchShellProps {
   workspaceRootDir: string | null;
   contextPanel: ReactNode;
   stage: ReactNode;
+  disabled: boolean;
+  onAddTerminal: () => void;
+  onAddNote: () => void;
+  onAddPortal: () => void;
+  onAddFileTree: () => void;
+  onAddText: () => void;
+  onOpenCommandMenu: () => void;
+  onFitCanvas: () => void;
+  onOpenSettings: () => void;
+  commandMenuDisabled: boolean;
+  fitViewDisabled: boolean;
+  settingsDisabled: boolean;
 }
 
 export const WorkbenchShell = ({
   workspaceName,
   workspaceRootDir,
   contextPanel,
-  stage
+  stage,
+  disabled,
+  onAddTerminal,
+  onAddNote,
+  onAddPortal,
+  onAddFileTree,
+  onAddText,
+  onOpenCommandMenu,
+  onFitCanvas,
+  onOpenSettings,
+  commandMenuDisabled,
+  fitViewDisabled,
+  settingsDisabled
 }: WorkbenchShellProps): JSX.Element => {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const hasActiveWorkspace = workspaceName !== null;
 
   return (
     <main className="ow-workbench-shell" data-testid="workbench-shell">
-      <WorkbenchTopBar workspaceName={workspaceName} />
+      <WorkbenchTopBar
+        disabled={disabled}
+        onAddTerminal={onAddTerminal}
+        onAddNote={onAddNote}
+        onAddPortal={onAddPortal}
+        onAddFileTree={onAddFileTree}
+        onAddText={onAddText}
+        commandMenuDisabled={commandMenuDisabled}
+        fitViewDisabled={fitViewDisabled}
+        onOpenCommandMenu={onOpenCommandMenu}
+        onFitCanvas={onFitCanvas}
+        onOpenSettings={onOpenSettings}
+        settingsDisabled={settingsDisabled}
+        workspaceName={workspaceName}
+      />
 
       <div className={`ow-workbench-layout${inspectorCollapsed ? ' is-inspector-collapsed' : ''}`}>
         <WorkbenchLeftRail />

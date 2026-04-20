@@ -239,6 +239,32 @@ const createPortalGraphNode = (): GraphNodeRecord => {
   };
 };
 
+const createTextGraphNode = (): GraphNodeRecord => {
+  const manifest = getRequiredBuiltinManifest('builtin.text');
+  const now = Date.now();
+  return {
+    id: createNodeId('text'),
+    componentType: 'builtin.text',
+    componentVersion: manifest.version,
+    title: manifest.node.defaultTitle,
+    bounds: {
+      x: 940,
+      y: 160,
+      width: manifest.node.defaultSize.width,
+      height: manifest.node.defaultSize.height
+    },
+    config: {
+      ...(manifest.schema.config ?? {})
+    },
+    state: {
+      ...(manifest.schema.state ?? {})
+    },
+    capabilities: [...manifest.capabilities],
+    createdAtMs: now,
+    updatedAtMs: now
+  };
+};
+
 const applyGraphSnapshot = (graphSnapshot: GraphSnapshotV2Input): void => {
   setState({
     graphSnapshot,
@@ -315,7 +341,7 @@ export const canvasStore = {
     }
   },
   addNoteNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -337,7 +363,7 @@ export const canvasStore = {
     }
   },
   addTerminalNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -359,7 +385,7 @@ export const canvasStore = {
     }
   },
   addFileTreeNode: async (rootDir: string): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -381,7 +407,7 @@ export const canvasStore = {
     }
   },
   addPortalNode: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
 
@@ -399,6 +425,28 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to save portal node';
+      setState({ errorMessage });
+    }
+  },
+  addTextNode: async (): Promise<void> => {
+    if (!state.workspaceId || state.loading) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextGraphSnapshot: GraphSnapshotV2Input = {
+      ...state.graphSnapshot,
+      nodes: [...state.graphSnapshot.nodes, createTextGraphNode()]
+    };
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save text node';
       setState({ errorMessage });
     }
   },

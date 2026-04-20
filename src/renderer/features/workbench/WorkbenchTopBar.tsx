@@ -1,8 +1,34 @@
 interface WorkbenchTopBarProps {
   workspaceName: string | null;
+  disabled: boolean;
+  commandMenuDisabled: boolean;
+  fitViewDisabled: boolean;
+  settingsDisabled: boolean;
+  onAddTerminal: () => void;
+  onAddNote: () => void;
+  onAddPortal: () => void;
+  onAddFileTree: () => void;
+  onAddText: () => void;
+  onOpenCommandMenu: () => void;
+  onFitCanvas: () => void;
+  onOpenSettings: () => void;
 }
 
-export const WorkbenchTopBar = ({ workspaceName }: WorkbenchTopBarProps): JSX.Element => {
+export const WorkbenchTopBar = ({
+  workspaceName,
+  disabled,
+  commandMenuDisabled,
+  fitViewDisabled,
+  settingsDisabled,
+  onAddTerminal,
+  onAddNote,
+  onAddPortal,
+  onAddFileTree,
+  onAddText,
+  onOpenCommandMenu,
+  onFitCanvas,
+  onOpenSettings
+}: WorkbenchTopBarProps): JSX.Element => {
   return (
     <header className="ow-workbench-topbar" data-testid="workbench-topbar">
       <div className="ow-workbench-topbar__identity">
@@ -11,13 +37,28 @@ export const WorkbenchTopBar = ({ workspaceName }: WorkbenchTopBarProps): JSX.El
       </div>
 
       <div className="ow-workbench-topbar__actions">
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled type="button">
-          Create
+        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddTerminal} type="button">
+          Add terminal
         </button>
-        <button className="ow-toolbar-button" disabled type="button">
-          Search
+        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddNote} type="button">
+          Add note
         </button>
-        <button className="ow-toolbar-button" disabled type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddPortal} type="button">
+          Add portal
+        </button>
+        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddFileTree} type="button">
+          Add file tree
+        </button>
+        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddText} type="button">
+          Add text
+        </button>
+        <button className="ow-toolbar-button" disabled={commandMenuDisabled} onClick={onOpenCommandMenu} type="button">
+          Command menu
+        </button>
+        <button className="ow-toolbar-button" disabled={fitViewDisabled} onClick={onFitCanvas} type="button">
+          Fit view
+        </button>
+        <button className="ow-toolbar-button" disabled={settingsDisabled} onClick={onOpenSettings} type="button">
           Settings
         </button>
       </div>
@@ -26,7 +67,7 @@ export const WorkbenchTopBar = ({ workspaceName }: WorkbenchTopBarProps): JSX.El
         <div className="ow-workbench-topbar__workspace-pill" data-testid="workbench-topbar-workspace-pill">
           {workspaceName ?? 'No workspace'}
         </div>
-        <div className="ow-workbench-topbar__status">Workbench ready</div>
+        <div className="ow-workbench-topbar__status">Workflow shell active</div>
       </div>
     </header>
   );

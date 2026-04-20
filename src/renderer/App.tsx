@@ -1,3 +1,4 @@
+import { canvasStore, useCanvasStore } from './features/canvas/canvas.store';
 import { WorkspaceCanvasPage } from './features/canvas/WorkspaceCanvasPage';
 import { WorkbenchShell } from './features/workbench/WorkbenchShell';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
@@ -7,6 +8,8 @@ export const App = (): JSX.Element => {
   const workspaces = useWorkspacesStore((storeState) => storeState.workspaces);
   const activeWorkspaceId = useWorkspacesStore((storeState) => storeState.activeWorkspaceId);
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
+  const canvasLoading = useCanvasStore((storeState) => storeState.loading);
+  const disabled = activeWorkspace === null || canvasLoading;
 
   const stage = activeWorkspace ? (
     <WorkspaceCanvasPage
@@ -25,10 +28,22 @@ export const App = (): JSX.Element => {
 
   return (
     <WorkbenchShell
+      contextPanel={<WorkspaceListPage variant="panel" />}
+      commandMenuDisabled={true}
+      disabled={disabled}
+      fitViewDisabled={true}
+      onAddTerminal={() => void canvasStore.addTerminalNode()}
+      onAddNote={() => void canvasStore.addNoteNode()}
+      onAddPortal={() => void canvasStore.addPortalNode()}
+      onAddFileTree={() => void canvasStore.addFileTreeNode(activeWorkspace?.rootDir ?? '')}
+      onAddText={() => void canvasStore.addTextNode()}
+      onOpenCommandMenu={() => undefined}
+      onFitCanvas={() => undefined}
+      onOpenSettings={() => undefined}
+      settingsDisabled={true}
+      stage={stage}
       workspaceName={activeWorkspace?.name ?? null}
       workspaceRootDir={activeWorkspace?.rootDir ?? null}
-      contextPanel={<WorkspaceListPage variant="panel" />}
-      stage={stage}
     />
   );
 };

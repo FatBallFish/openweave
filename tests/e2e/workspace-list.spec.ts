@@ -37,6 +37,10 @@ test('supports create/open/delete from the workspace list page', async () => {
 
     await page.getByRole('button', { name: `Open ${workspaceName}` }).click();
     await expect(page.getByTestId('active-workspace-name')).toContainText(workspaceName);
+    await expect(page.getByTestId('canvas-empty')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add note' }).click();
+    await expect(page.getByTestId('canvas-shell')).toBeVisible();
 
     await page.getByRole('button', { name: `Delete ${workspaceName}` }).click();
     await expect(workspaceRow).toHaveCount(0);
