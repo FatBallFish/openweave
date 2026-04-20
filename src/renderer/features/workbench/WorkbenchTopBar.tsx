@@ -1,6 +1,7 @@
 interface WorkbenchTopBarProps {
   workspaceName: string | null;
   disabled: boolean;
+  searchDisabled: boolean;
   commandMenuDisabled: boolean;
   fitViewDisabled: boolean;
   settingsDisabled: boolean;
@@ -17,6 +18,7 @@ interface WorkbenchTopBarProps {
 export const WorkbenchTopBar = ({
   workspaceName,
   disabled,
+  searchDisabled,
   commandMenuDisabled,
   fitViewDisabled,
   settingsDisabled,
@@ -51,6 +53,9 @@ export const WorkbenchTopBar = ({
         </button>
         <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddText} type="button">
           Add text
+        </button>
+        <button className="ow-toolbar-button" disabled={searchDisabled} type="button">
+          Search
         </button>
         <button className="ow-toolbar-button" disabled={commandMenuDisabled} onClick={onOpenCommandMenu} type="button">
           Command menu

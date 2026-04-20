@@ -20,6 +20,7 @@ interface WorkbenchShellProps {
   onOpenCommandMenu: () => void;
   onFitCanvas: () => void;
   onOpenSettings: () => void;
+  searchDisabled: boolean;
   commandMenuDisabled: boolean;
   fitViewDisabled: boolean;
   settingsDisabled: boolean;
@@ -39,6 +40,7 @@ export const WorkbenchShell = ({
   onOpenCommandMenu,
   onFitCanvas,
   onOpenSettings,
+  searchDisabled,
   commandMenuDisabled,
   fitViewDisabled,
   settingsDisabled
@@ -55,6 +57,7 @@ export const WorkbenchShell = ({
         onAddPortal={onAddPortal}
         onAddFileTree={onAddFileTree}
         onAddText={onAddText}
+        searchDisabled={searchDisabled}
         commandMenuDisabled={commandMenuDisabled}
         fitViewDisabled={fitViewDisabled}
         onOpenCommandMenu={onOpenCommandMenu}

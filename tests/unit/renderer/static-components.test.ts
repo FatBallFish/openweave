@@ -48,6 +48,7 @@ describe('renderer static components', () => {
       createElement(WorkbenchTopBar, {
         workspaceName: 'Alpha Workspace',
         commandMenuDisabled: true,
+        searchDisabled: true,
         disabled: false,
         fitViewDisabled: true,
         onAddTerminal: vi.fn(),
@@ -65,6 +66,7 @@ describe('renderer static components', () => {
       createElement(PortalToolbar, {
         nodeId: 'portal-1',
         commandMenuDisabled: true,
+        searchDisabled: true,
         disabled: false,
         fitViewDisabled: true,
         url: 'https://example.com',
@@ -87,6 +89,7 @@ describe('renderer static components', () => {
     expect(nodeToolbar).toContain('Cmd/Ctrl+K Command menu');
     expect(topBar).toContain('Add terminal');
     expect(topBar).toContain('Add text');
+    expect(topBar).toContain('Search');
     expect(topBar).toContain('Command menu');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');

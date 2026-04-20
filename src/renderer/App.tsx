@@ -30,6 +30,7 @@ export const App = (): JSX.Element => {
     <WorkbenchShell
       contextPanel={<WorkspaceListPage variant="panel" />}
       commandMenuDisabled={true}
+      searchDisabled={true}
       disabled={disabled}
       fitViewDisabled={true}
       onAddTerminal={() => void canvasStore.addTerminalNode()}
