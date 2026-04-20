@@ -66,7 +66,11 @@ describe('builtin hosts', () => {
     expect(noteHtml).toContain('note-host-editor-node-note-1');
     expect(noteHtml).toContain('Editable markdown');
     expect(noteHtml).toContain('# hello');
+    expect(terminalHtml).toContain('builtin-node-frame-node-terminal-1');
     expect(terminalHtml).toContain('terminal-node-runtime-node-terminal-1');
+    expect(terminalHtml).toContain('terminal-node-session-node-terminal-1');
+    expect(terminalHtml).toContain('Open run');
+    expect(terminalHtml).toContain('cwd');
     expect(terminalHtml).toContain('<option value=\"codex\" selected=\"\">Codex</option>');
     expect(terminalHtml).toContain('terminal-node-command-node-terminal-1');
   });

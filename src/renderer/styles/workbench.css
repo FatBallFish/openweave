@@ -941,3 +941,210 @@ select {
   border-top: 1px solid var(--ow-color-border);
   background: rgba(var(--ow-surface-rgb), 0.56);
 }
+
+
+.ow-terminal-node,
+.ow-run-drawer,
+.ow-terminal-session-pane,
+.ow-terminal-session-pane__toolbar,
+.ow-terminal-session-pane__actions,
+.ow-terminal-node__toolbar,
+.ow-terminal-node__actions,
+.ow-terminal-node__output-header,
+.ow-run-drawer__header {
+  display: flex;
+}
+
+.ow-terminal-node,
+.ow-terminal-session-pane,
+.ow-run-drawer__content {
+  display: grid;
+  gap: 12px;
+}
+
+.ow-terminal-node {
+  height: 100%;
+  min-height: 0;
+}
+
+.ow-terminal-node__toolbar,
+.ow-terminal-node__actions,
+.ow-terminal-node__output-header,
+.ow-run-drawer__header,
+.ow-terminal-session-pane__toolbar,
+.ow-terminal-session-pane__actions {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ow-terminal-node__runtime,
+.ow-terminal-node__command,
+.ow-terminal-session-pane__input-field {
+  display: grid;
+  gap: 6px;
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-terminal-node__runtime select,
+.ow-terminal-node__command input,
+.ow-terminal-session-pane__input-field input {
+  min-height: 38px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background: rgba(var(--ow-surface-rgb), 0.88);
+  color: var(--ow-color-text-strong);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.ow-terminal-node__runtime {
+  min-width: 180px;
+}
+
+.ow-terminal-node__command input {
+  width: 100%;
+}
+
+.ow-terminal-node__session,
+.ow-terminal-session-pane__chip,
+.ow-run-drawer__status,
+.ow-run-drawer__content p {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-accent-rgb), 0.08);
+  color: var(--ow-color-text-strong);
+  font-size: 12px;
+}
+
+.ow-terminal-node__actions button,
+.ow-terminal-node__secondary-action,
+.ow-run-drawer__header button,
+.ow-terminal-session-pane__actions button {
+  min-height: 34px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background: rgba(var(--ow-surface-rgb), 0.88);
+  color: var(--ow-color-text-strong);
+  padding: 0 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ow-terminal-node button,
+.ow-terminal-node input,
+.ow-terminal-node select {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.ow-terminal-node__actions button:first-child,
+.ow-terminal-session-pane__actions button:first-child {
+  background: rgba(var(--ow-accent-rgb), 0.12);
+  border-color: rgba(var(--ow-accent-rgb), 0.26);
+}
+
+.ow-terminal-node__output,
+.ow-terminal-session-pane__output {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+.ow-terminal-node__output-header span,
+.ow-terminal-session-pane__output-header span {
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-terminal-node__output-surface,
+.ow-terminal-session-pane__output-surface {
+  min-height: 168px;
+  margin: 0;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--ow-shadow-rgb), 0.18);
+  background: #101828;
+  color: #f2f4f7;
+  padding: 12px;
+  white-space: pre-wrap;
+  font-family: var(--ow-font-mono);
+  line-height: 1.55;
+}
+
+.ow-terminal-node__runs {
+  display: grid;
+  gap: 8px;
+}
+
+.ow-terminal-node__run-item {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 14px;
+  background: rgba(var(--ow-surface-rgb), 0.86);
+  color: var(--ow-color-text-strong);
+  cursor: pointer;
+}
+
+.ow-terminal-node__run-item div,
+.ow-terminal-node__empty,
+.ow-terminal-node__error,
+.ow-terminal-session-pane__state,
+.ow-terminal-session-pane__error,
+.ow-run-drawer__error,
+.ow-run-drawer__loading {
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+}
+
+.ow-terminal-node__empty,
+.ow-terminal-node__error,
+.ow-terminal-session-pane__error,
+.ow-run-drawer__error,
+.ow-run-drawer__loading,
+.ow-run-drawer__content p {
+  margin: 0;
+}
+
+.ow-terminal-node__error,
+.ow-terminal-session-pane__error,
+.ow-run-drawer__error {
+  color: var(--ow-state-failed);
+}
+
+.ow-run-drawer {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 18px;
+  background: rgba(var(--ow-surface-rgb), 0.74);
+  box-shadow: var(--ow-shadow-panel);
+}
+
+.ow-run-drawer__eyebrow {
+  margin: 0 0 4px;
+  color: var(--ow-color-text-soft);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ow-run-drawer__header h3 {
+  margin: 0;
+  color: var(--ow-color-text-strong);
+}
+
+.ow-run-drawer__content p {
+  width: fit-content;
+}

@@ -39,19 +39,19 @@ export const WorkbenchTopBar = ({
       </div>
 
       <div className="ow-workbench-topbar__actions">
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddTerminal} type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" data-testid="canvas-add-terminal" disabled={disabled} onClick={onAddTerminal} type="button">
           Add terminal
         </button>
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddNote} type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" data-testid="canvas-add-note" disabled={disabled} onClick={onAddNote} type="button">
           Add note
         </button>
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddPortal} type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" data-testid="canvas-add-portal" disabled={disabled} onClick={onAddPortal} type="button">
           Add portal
         </button>
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddFileTree} type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" data-testid="canvas-add-file-tree" disabled={disabled} onClick={onAddFileTree} type="button">
           Add file tree
         </button>
-        <button className="ow-toolbar-button ow-toolbar-button--primary" disabled={disabled} onClick={onAddText} type="button">
+        <button className="ow-toolbar-button ow-toolbar-button--primary" data-testid="canvas-add-text" disabled={disabled} onClick={onAddText} type="button">
           Add text
         </button>
         <button className="ow-toolbar-button" disabled={searchDisabled} type="button">
