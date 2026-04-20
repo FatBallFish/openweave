@@ -28,14 +28,18 @@ test('supports create/open/delete from the workspace list page', async () => {
     await page.getByTestId('create-workspace-root-input').fill(workspaceRoot);
     await page.getByTestId('create-workspace-submit').click();
 
-    await expect(page.getByText(workspaceName, { exact: true })).toBeVisible();
-    await expect(page.getByText(workspaceRoot)).toBeVisible();
+    const workspaceRow = page.locator('[data-testid^="workspace-row-"]').filter({
+      has: page.getByText(workspaceName, { exact: true })
+    });
+
+    await expect(workspaceRow).toBeVisible();
+    await expect(workspaceRow.getByText(workspaceRoot)).toBeVisible();
 
     await page.getByRole('button', { name: `Open ${workspaceName}` }).click();
     await expect(page.getByTestId('active-workspace-name')).toContainText(workspaceName);
 
     await page.getByRole('button', { name: `Delete ${workspaceName}` }).click();
-    await expect(page.getByText(workspaceName, { exact: true })).toHaveCount(0);
+    await expect(workspaceRow).toHaveCount(0);
   } finally {
     await app.close();
   }

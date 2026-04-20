@@ -50,7 +50,7 @@ describe('app shell', () => {
     expect(html).not.toContain('Electron shell ready for MVP tasks.');
   });
 
-  it('keeps the active workspace branch wired into the canvas page', () => {
+  it('keeps the active workspace branch wired into the canvas page inside the shared stage shell', () => {
     mockWorkspacesState.workspaces = [
       {
         id: 'ws-1',
@@ -67,6 +67,7 @@ describe('app shell', () => {
 
     expect(html).toContain('data-testid="workspace-canvas-page-stub"');
     expect(html).toContain('Alpha Workspace');
+    expect(html).toContain('data-testid="workbench-stage"');
     expect(html).not.toContain('data-testid="workbench-stage-empty"');
   });
 

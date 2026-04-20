@@ -3,7 +3,11 @@ import { BranchWorkspaceDialog } from './BranchWorkspaceDialog';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 import { useWorkspacesStore, workspacesStore } from './workspaces.store';
 
-export const WorkspaceListPage = (): JSX.Element => {
+interface WorkspaceListPageProps {
+  variant?: 'page' | 'panel';
+}
+
+export const WorkspaceListPage = ({ variant = 'page' }: WorkspaceListPageProps): JSX.Element => {
   const workspaces = useWorkspacesStore((storeState) => storeState.workspaces);
   const activeWorkspaceId = useWorkspacesStore((storeState) => storeState.activeWorkspaceId);
   const loading = useWorkspacesStore((storeState) => storeState.loading);
@@ -19,16 +23,22 @@ export const WorkspaceListPage = (): JSX.Element => {
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
   const branchSourceWorkspace =
     workspaces.find((workspace) => workspace.id === branchSourceWorkspaceId) ?? null;
+  const heading = variant === 'panel' ? 'Workspaces' : 'Workspace registry';
+  const description =
+    variant === 'panel'
+      ? 'Open a workspace, branch it, or create a fresh one.'
+      : 'Create, open, and delete registry-backed workspaces.';
 
   return (
-    <section data-testid="workspace-list-page">
-      <h2 style={{ marginBottom: '8px' }}>Workspaces</h2>
-      <p style={{ marginTop: 0, marginBottom: '16px' }}>
-        Create, open, and delete registry-backed workspaces.
-      </p>
+    <section className={`ow-workspace-list ow-workspace-list--${variant}`} data-testid="workspace-list-page">
+      <header className="ow-workspace-list__header">
+        <h2>{heading}</h2>
+        <p>{description}</p>
+      </header>
 
-      <div style={{ marginBottom: '16px' }}>
+      <div className="ow-workspace-list__actions">
         <button
+          className="ow-toolbar-button ow-toolbar-button--primary"
           data-testid="workspace-create-button"
           disabled={loading}
           onClick={() => workspacesStore.openCreateDialog()}
@@ -53,61 +63,60 @@ export const WorkspaceListPage = (): JSX.Element => {
       />
 
       {errorMessage ? (
-        <p data-testid="workspace-error" style={{ color: '#b42318' }}>
+        <p className="ow-workspace-list__error" data-testid="workspace-error">
           {errorMessage}
         </p>
       ) : null}
 
-      <p data-testid="active-workspace-name" style={{ fontWeight: 600 }}>
-        Active workspace: {activeWorkspace?.name ?? 'none'}
-      </p>
+      <div className="ow-workspace-list__active" data-testid="active-workspace-name">
+        <span className="ow-workspace-list__eyebrow">Active workspace</span>
+        <strong>{activeWorkspace?.name ?? 'none'}</strong>
+      </div>
 
       {workspaces.length === 0 ? (
-        <p data-testid="workspace-empty">No workspaces yet.</p>
+        <p className="ow-workspace-list__empty" data-testid="workspace-empty">
+          No workspaces yet.
+        </p>
       ) : (
-        <ul data-testid="workspace-list" style={{ padding: 0, listStyle: 'none' }}>
+        <ul className="ow-workspace-list__items" data-testid="workspace-list">
           {workspaces.map((workspace) => (
             <li
               key={workspace.id}
+              className="ow-workspace-list__item"
               data-testid={`workspace-row-${workspace.id}`}
-              style={{
-                border: '1px solid #d0d7e2',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '8px'
-              }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-                <div>
-                  <strong>{workspace.name}</strong>
-                  <div style={{ color: '#475467', fontSize: '14px' }}>{workspace.rootDir}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    data-testid={`workspace-open-${workspace.id}`}
-                    disabled={loading}
-                    onClick={() => void workspacesStore.openWorkspace(workspace.id)}
-                    type="button"
-                  >
-                    Open {workspace.name}
-                  </button>
-                  <button
-                    data-testid={`workspace-branch-${workspace.id}`}
-                    disabled={loading}
-                    onClick={() => workspacesStore.openBranchDialog(workspace.id)}
-                    type="button"
-                  >
-                    Branch {workspace.name}
-                  </button>
-                  <button
-                    data-testid={`workspace-delete-${workspace.id}`}
-                    disabled={loading}
-                    onClick={() => void workspacesStore.deleteWorkspace(workspace.id)}
-                    type="button"
-                  >
-                    Delete {workspace.name}
-                  </button>
-                </div>
+              <div className="ow-workspace-list__item-meta">
+                <strong>{workspace.name}</strong>
+                <div>{workspace.rootDir}</div>
+              </div>
+              <div className="ow-workspace-list__item-actions">
+                <button
+                  aria-label={`Open ${workspace.name}`}
+                  data-testid={`workspace-open-${workspace.id}`}
+                  disabled={loading}
+                  onClick={() => void workspacesStore.openWorkspace(workspace.id)}
+                  type="button"
+                >
+                  Open
+                </button>
+                <button
+                  aria-label={`Branch ${workspace.name}`}
+                  data-testid={`workspace-branch-${workspace.id}`}
+                  disabled={loading}
+                  onClick={() => workspacesStore.openBranchDialog(workspace.id)}
+                  type="button"
+                >
+                  Branch
+                </button>
+                <button
+                  aria-label={`Delete ${workspace.name}`}
+                  data-testid={`workspace-delete-${workspace.id}`}
+                  disabled={loading}
+                  onClick={() => void workspacesStore.deleteWorkspace(workspace.id)}
+                  type="button"
+                >
+                  Delete
+                </button>
               </div>
             </li>
           ))}

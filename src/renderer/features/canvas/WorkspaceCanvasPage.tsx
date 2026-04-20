@@ -33,11 +33,14 @@ export const WorkspaceCanvasPage = ({
   }, [workspaceId]);
 
   return (
-    <section data-testid="workspace-canvas-page" style={{ marginTop: '24px' }}>
-      <h2 style={{ marginBottom: '8px' }}>Workspace Canvas</h2>
-      <p data-testid="canvas-workspace-name" style={{ marginTop: 0, marginBottom: '12px' }}>
-        Canvas workspace: {workspaceName}
-      </p>
+    <section className="ow-workspace-canvas-page" data-testid="workspace-canvas-page">
+      <header className="ow-workspace-canvas-page__header">
+        <div>
+          <p className="ow-workspace-canvas-page__eyebrow">Infinite canvas</p>
+          <h2 data-testid="canvas-workspace-name">{workspaceName}</h2>
+        </div>
+        <div className="ow-workspace-canvas-page__meta">Graph schema v2 workspace</div>
+      </header>
 
       <NodeToolbar
         disabled={loading}
@@ -48,7 +51,7 @@ export const WorkspaceCanvasPage = ({
       />
 
       {errorMessage ? (
-        <p data-testid="canvas-error" style={{ color: '#b42318' }}>
+        <p className="ow-workspace-canvas-page__error" data-testid="canvas-error">
           {errorMessage}
         </p>
       ) : null}

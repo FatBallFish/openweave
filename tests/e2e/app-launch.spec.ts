@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test } from '@playwright/test';
 
-test('opens the Electron shell entry page', async () => {
+test('opens the Electron workbench shell', async () => {
   const uniqueSuffix = Date.now().toString();
   const userDataDir = path.join(os.tmpdir(), `openweave-e2e-app-launch-${uniqueSuffix}`);
   const app = await electron.launch({
@@ -15,8 +15,15 @@ test('opens the Electron shell entry page', async () => {
 
   try {
     const page = await app.firstWindow();
-    await expect(page.getByTestId('app-shell-title')).toHaveText('OpenWeave');
-    await expect(page.getByTestId('app-shell-subtitle')).toContainText('Electron shell ready');
+    await expect(page.getByTestId('workbench-shell')).toBeVisible();
+    await expect(page.getByTestId('workbench-topbar')).toBeVisible();
+    await expect(page.getByTestId('workbench-left-rail')).toBeVisible();
+    await expect(page.getByTestId('workbench-context-panel')).toBeVisible();
+    await expect(page.getByTestId('workbench-inspector')).toBeVisible();
+    await expect(page.getByTestId('workbench-status-island')).toBeVisible();
+
+    await page.getByTestId('workbench-inspector-toggle').click();
+    await expect(page.getByTestId('workbench-inspector-collapsed')).toBeVisible();
 
     const bridge = await page.evaluate(() => {
       const shell = (window as Window & { openweaveShell?: unknown }).openweaveShell as
