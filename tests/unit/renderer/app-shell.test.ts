@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockWorkspacesState = {
   workspaces: [] as Array<{
@@ -16,14 +16,18 @@ const mockWorkspacesState = {
   activeWorkspaceId: null as string | null
 };
 
+const workspaceListPageMock = vi.fn(
+  ({ variant }: { variant?: 'page' | 'panel' }) =>
+    createElement('div', { 'data-testid': 'workspace-list-page-stub', 'data-variant': variant }, 'workspace list')
+);
+
 vi.mock('../../../src/renderer/features/workspaces/workspaces.store', () => ({
   useWorkspacesStore: <T,>(selector: (storeState: typeof mockWorkspacesState) => T): T =>
     selector(mockWorkspacesState)
 }));
 
 vi.mock('../../../src/renderer/features/workspaces/WorkspaceListPage', () => ({
-  WorkspaceListPage: (): JSX.Element =>
-    createElement('div', { 'data-testid': 'workspace-list-page-stub' }, 'workspace list')
+  WorkspaceListPage: (props: { variant?: 'page' | 'panel' }): JSX.Element => workspaceListPageMock(props)
 }));
 
 vi.mock('../../../src/renderer/features/canvas/WorkspaceCanvasPage', () => ({
@@ -38,6 +42,10 @@ const readRendererFile = (relativePath: string): string => {
 };
 
 describe('app shell', () => {
+  beforeEach(() => {
+    workspaceListPageMock.mockClear();
+  });
+
   it('renders the workbench shell root instead of the demo document shell', () => {
     mockWorkspacesState.workspaces = [];
     mockWorkspacesState.activeWorkspaceId = null;
@@ -48,6 +56,8 @@ describe('app shell', () => {
     expect(html).toContain('data-testid="workbench-topbar"');
     expect(html).toContain('OpenWeave');
     expect(html).not.toContain('Electron shell ready for MVP tasks.');
+    expect(workspaceListPageMock).toHaveBeenCalledTimes(1);
+    expect(workspaceListPageMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ variant: 'panel' }));
   });
 
   it('keeps the active workspace branch wired into the canvas page inside the shared stage shell', () => {

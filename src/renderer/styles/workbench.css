@@ -124,13 +124,13 @@ select {
   position: relative;
   min-height: calc(100vh - 72px);
   display: grid;
-  grid-template-columns: 76px 280px minmax(0, 1fr) 360px;
+  grid-template-columns: 76px minmax(240px, 280px) minmax(560px, 1fr) minmax(280px, 360px);
   gap: 16px;
   padding: 16px 24px 24px;
 }
 
 .ow-workbench-layout.is-inspector-collapsed {
-  grid-template-columns: 76px 280px minmax(0, 1fr) 72px;
+  grid-template-columns: 76px minmax(240px, 280px) minmax(640px, 1fr) 72px;
 }
 
 .ow-workbench-left-rail,
@@ -433,10 +433,10 @@ select {
 
 @media (max-width: 1380px) {
   .ow-workbench-layout {
-    grid-template-columns: 76px 260px minmax(0, 1fr) 320px;
+    grid-template-columns: 76px minmax(220px, 260px) minmax(480px, 1fr) minmax(240px, 320px);
   }
 
   .ow-workbench-layout.is-inspector-collapsed {
-    grid-template-columns: 76px 260px minmax(0, 1fr) 72px;
+    grid-template-columns: 76px minmax(220px, 260px) minmax(560px, 1fr) 72px;
   }
 }
