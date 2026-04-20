@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenWeave UI System"
+  short_description: "Blueprint/Slate workflow UI rules"
+  default_prompt: "Use $openweave-ui-design-system to design or review an OpenWeave canvas, inspector, drawer, or workspace UI change."
