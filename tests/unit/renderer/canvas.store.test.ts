@@ -511,4 +511,88 @@ describe('canvas store', () => {
     expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe('node-terminal-1');
     expect(canvasStore.getState().selectedNodeId).toBeNull();
   });
+
+  it('undo removes a newly added node', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addNoteNode();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
+
+    await (canvasStore as unknown as { undo: () => Promise<void> }).undo();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(0);
+  });
+
+  it('redo re-adds a node after undo', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addNoteNode();
+    const addedNodeId = canvasStore.getState().graphSnapshot.nodes[0]?.id;
+
+    await (canvasStore as unknown as { undo: () => Promise<void> }).undo();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(0);
+
+    await (canvasStore as unknown as { redo: () => Promise<void> }).redo();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe(addedNodeId);
+  });
+
+  it('undo restores a deleted node', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as { deleteNodes: (ids: string[]) => Promise<void> }).deleteNodes(['node-note-1']);
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
+
+    await (canvasStore as unknown as { undo: () => Promise<void> }).undo();
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(2);
+    expect(canvasStore.getState().graphSnapshot.nodes.find((n) => n.id === 'node-note-1')).toBeDefined();
+  });
+
+  it('undo and redo moveNode', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as { updateNodePosition: (id: string, pos: { x: number; y: number }) => Promise<void> }).updateNodePosition('node-note-1', { x: 999, y: 888 });
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toMatchObject({ x: 999, y: 888 });
+
+    await (canvasStore as unknown as { undo: () => Promise<void> }).undo();
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toMatchObject({ x: 1, y: 2 });
+
+    await (canvasStore as unknown as { redo: () => Promise<void> }).redo();
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toMatchObject({ x: 999, y: 888 });
+  });
 });

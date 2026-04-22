@@ -369,6 +369,7 @@ export const canvasStore = {
     };
   },
   loadCanvasState: async (workspaceId: string): Promise<void> => {
+    historyStore.clear();
     const requestId = ++latestLoadRequestId;
     setState({
       loading: true,
@@ -417,6 +418,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const newNode = createNoteGraphNode(state.graphSnapshot.nodes);
+    historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
       nodes: [...state.graphSnapshot.nodes, newNode]
@@ -440,6 +442,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const newNode = createTerminalGraphNode(state.graphSnapshot.nodes);
+    historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
       nodes: [...state.graphSnapshot.nodes, newNode]
@@ -463,6 +466,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const newNode = createFileTreeGraphNode(state.graphSnapshot.nodes, rootDir);
+    historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
       nodes: [...state.graphSnapshot.nodes, newNode]
@@ -486,6 +490,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const newNode = createPortalGraphNode(state.graphSnapshot.nodes);
+    historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
       nodes: [...state.graphSnapshot.nodes, newNode]
@@ -509,6 +514,7 @@ export const canvasStore = {
 
     const workspaceId = state.workspaceId;
     const newNode = createTextGraphNode(state.graphSnapshot.nodes);
+    historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
       nodes: [...state.graphSnapshot.nodes, newNode]
@@ -564,6 +570,7 @@ export const canvasStore = {
     }
 
     newNode = { ...newNode, bounds };
+    historyStore.push({ kind: 'addNode', node: newNode });
 
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
@@ -754,6 +761,8 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const oldNode = state.graphSnapshot.nodes.find((n) => n.id === nodeId);
+    const oldPosition = oldNode ? { x: oldNode.bounds.x, y: oldNode.bounds.y } : { x: position.x, y: position.y };
     const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (node) => ({
       ...node,
       bounds: {
@@ -763,6 +772,12 @@ export const canvasStore = {
       },
       updatedAtMs: Date.now()
     }));
+    historyStore.push({
+      kind: 'moveNode',
+      nodeId,
+      from: oldPosition,
+      to: { x: position.x, y: position.y }
+    });
 
     applyGraphSnapshot(nextGraphSnapshot);
     setState({ errorMessage: null, recentAction: 'Moved node on canvas' });
@@ -790,6 +805,10 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const oldNode = state.graphSnapshot.nodes.find((n) => n.id === nodeId);
+    const oldBounds = oldNode
+      ? { x: oldNode.bounds.x, y: oldNode.bounds.y, width: oldNode.bounds.width, height: oldNode.bounds.height }
+      : { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
     const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (node) => ({
       ...node,
       bounds: {
@@ -800,6 +819,12 @@ export const canvasStore = {
       },
       updatedAtMs: Date.now()
     }));
+    historyStore.push({
+      kind: 'resizeNode',
+      nodeId,
+      from: oldBounds,
+      to: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+    });
 
     applyGraphSnapshot(nextGraphSnapshot);
     setState({ errorMessage: null, recentAction: 'Resized node on canvas' });
@@ -855,6 +880,128 @@ export const canvasStore = {
       return;
     }
     await canvasStore.deleteNodes([state.selectedNodeId]);
+  },
+  undo: async (): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+    const entry = historyStore.undo();
+    if (!entry) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    let nextGraphSnapshot = state.graphSnapshot;
+
+    switch (entry.kind) {
+      case 'addNode': {
+        const nodeId = entry.node.id;
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          nodes: nextGraphSnapshot.nodes.filter((n) => n.id !== nodeId),
+          edges: nextGraphSnapshot.edges.filter(
+            (e) => e.source !== nodeId && e.target !== nodeId
+          )
+        };
+        break;
+      }
+      case 'removeNode': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          nodes: [...nextGraphSnapshot.nodes, entry.node]
+        };
+        break;
+      }
+      case 'moveNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          bounds: { ...node.bounds, x: entry.from.x, y: entry.from.y },
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
+      case 'resizeNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          bounds: { ...entry.from },
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
+    }
+
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: 'Undo' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to undo';
+      setState({ errorMessage });
+    }
+  },
+  redo: async (): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+    const entry = historyStore.redo();
+    if (!entry) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    let nextGraphSnapshot = state.graphSnapshot;
+
+    switch (entry.kind) {
+      case 'addNode': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          nodes: [...nextGraphSnapshot.nodes, entry.node]
+        };
+        break;
+      }
+      case 'removeNode': {
+        const nodeId = entry.node.id;
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          nodes: nextGraphSnapshot.nodes.filter((n) => n.id !== nodeId),
+          edges: nextGraphSnapshot.edges.filter(
+            (e) => e.source !== nodeId && e.target !== nodeId
+          )
+        };
+        break;
+      }
+      case 'moveNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          bounds: { ...node.bounds, x: entry.to.x, y: entry.to.y },
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
+      case 'resizeNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          bounds: { ...entry.to },
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
+    }
+
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: 'Redo' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to redo';
+      setState({ errorMessage });
+    }
   }
 };
 
