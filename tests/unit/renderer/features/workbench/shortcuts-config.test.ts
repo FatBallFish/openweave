@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   configsEqual,
   formatShortcut,
@@ -20,32 +20,22 @@ describe('shortcuts-config', () => {
 
   describe('formatShortcut', () => {
     it('formats macOS shortcuts with symbols', () => {
-      const originalPlatform = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-      Object.defineProperty(globalThis, 'navigator', {
-        value: { platform: 'MacIntel' },
-        configurable: true
-      });
-
+      vi.stubGlobal('navigator', { platform: 'MacIntel' });
       expect(formatShortcut({ key: 'k', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false })).toBe('⌘K');
       expect(formatShortcut({ key: 'i', metaKey: true, ctrlKey: false, shiftKey: true, altKey: false })).toBe('⇧⌘I');
-
-      if (originalPlatform) {
-        Object.defineProperty(globalThis, 'navigator', originalPlatform);
-      }
+      vi.unstubAllGlobals();
     });
 
     it('formats Windows shortcuts with labels', () => {
-      const originalPlatform = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-      Object.defineProperty(globalThis, 'navigator', {
-        value: { platform: 'Win32' },
-        configurable: true
-      });
-
+      vi.stubGlobal('navigator', { platform: 'Win32' });
       expect(formatShortcut({ key: 'k', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false })).toBe('Ctrl+K');
+      vi.unstubAllGlobals();
+    });
 
-      if (originalPlatform) {
-        Object.defineProperty(globalThis, 'navigator', originalPlatform);
-      }
+    it('formats Windows shortcuts with multiple modifiers', () => {
+      vi.stubGlobal('navigator', { platform: 'Win32' });
+      expect(formatShortcut({ key: 'i', ctrlKey: true, shiftKey: true, altKey: false, metaKey: false })).toBe('Ctrl+Shift+I');
+      vi.unstubAllGlobals();
     });
   });
 
@@ -67,6 +57,12 @@ describe('shortcuts-config', () => {
       const b = { key: 'k', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false };
       expect(configsEqual(a, b)).toBe(false);
     });
+
+    it('returns false for different keys', () => {
+      const a = { key: 'k', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false };
+      const b = { key: 'j', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false };
+      expect(configsEqual(a, b)).toBe(false);
+    });
   });
 
   describe('getMergedConfig', () => {
@@ -80,6 +76,11 @@ describe('shortcuts-config', () => {
       const override = { key: 'p', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false };
       const config = getMergedConfig('open-command-palette', { 'open-command-palette': override });
       expect(config.key).toBe('p');
+    });
+
+    it('returns empty config for unknown id', () => {
+      const config = getMergedConfig('nonexistent', {});
+      expect(config.key).toBe('');
     });
   });
 });

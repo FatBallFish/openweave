@@ -1,20 +1,20 @@
 export interface ShortcutConfig {
-  key: string;
-  ctrlKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-  altKey: boolean;
+  readonly key: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
 }
 
 export interface ShortcutDefinition {
-  id: string;
-  labelKey: string;
-  defaultConfig: ShortcutConfig;
-  aliases?: ShortcutConfig[];
-  group: 'canvas' | 'general' | 'edit';
+  readonly id: string;
+  readonly labelKey: string;
+  readonly defaultConfig: ShortcutConfig;
+  readonly aliases?: readonly ShortcutConfig[];
+  readonly group: 'canvas' | 'general' | 'edit';
 }
 
-export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
+export const SHORTCUT_DEFINITIONS: readonly ShortcutDefinition[] = [
   {
     id: 'open-command-palette',
     labelKey: 'settings.shortcuts.openCommandPalette',
@@ -128,5 +128,5 @@ export const getMergedConfig = (
   overrides: Record<string, ShortcutConfig>
 ): ShortcutConfig => {
   const def = SHORTCUT_DEFINITIONS.find((d) => d.id === id);
-  return overrides[id] ?? def?.defaultConfig ?? { key: '', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false };
+  return overrides[id] ?? (def?.defaultConfig ? { ...def.defaultConfig } : { key: '', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false });
 };
