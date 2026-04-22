@@ -595,4 +595,47 @@ describe('canvas store', () => {
     await (canvasStore as unknown as { redo: () => Promise<void> }).redo();
     expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toMatchObject({ x: 999, y: 888 });
   });
+
+  it('undo and redo resizeNode', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as { updateNodeBounds: (id: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<void> }).updateNodeBounds('node-note-1', { x: 100, y: 200, width: 640, height: 480 });
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toEqual({ x: 100, y: 200, width: 640, height: 480 });
+
+    await (canvasStore as unknown as { undo: () => Promise<void> }).undo();
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toEqual({ x: 1, y: 2, width: 320, height: 240 });
+
+    await (canvasStore as unknown as { redo: () => Promise<void> }).redo();
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.bounds).toEqual({ x: 100, y: 200, width: 640, height: 480 });
+  });
+
+  it('clears history on loadCanvasState', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    const { historyStore } = await import('../../../src/renderer/features/canvas/history.store');
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addNoteNode();
+    expect(historyStore.getState().canUndo).toBe(true);
+
+    await canvasStore.loadCanvasState('ws-2');
+    expect(historyStore.getState().canUndo).toBe(false);
+    expect(historyStore.getState().stack).toHaveLength(0);
+  });
 });

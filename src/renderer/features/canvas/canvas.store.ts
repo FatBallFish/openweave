@@ -882,7 +882,7 @@ export const canvasStore = {
     await canvasStore.deleteNodes([state.selectedNodeId]);
   },
   undo: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
     const entry = historyStore.undo();
@@ -943,7 +943,7 @@ export const canvasStore = {
     }
   },
   redo: async (): Promise<void> => {
-    if (!state.workspaceId) {
+    if (!state.workspaceId || state.loading) {
       return;
     }
     const entry = historyStore.redo();
