@@ -8,7 +8,9 @@ import { assertPortalUrlAllowed } from '../portal/types';
 
 export const workspaceCreateSchema = z.object({
   name: z.string().trim().min(1),
-  rootDir: z.string().trim().min(1)
+  rootDir: z.string().trim().min(1),
+  iconKey: z.string().trim().min(1).max(64).optional(),
+  iconColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional()
 });
 
 export const workspaceIdSchema = z.string().trim().min(1);
@@ -19,6 +21,67 @@ export const workspaceOpenSchema = z.object({
 
 export const workspaceDeleteSchema = z.object({
   workspaceId: workspaceIdSchema
+});
+
+export const workspaceUpdateSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  name: z.string().trim().min(1),
+  rootDir: z.string().trim().min(1),
+  iconKey: z.string().trim().min(1).max(64),
+  iconColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/),
+  groupId: z.string().trim().min(1).optional()
+});
+
+export const workspacePickDirectorySchema = z.object({
+  initialPath: z.string().trim().min(1).optional()
+});
+
+export const workspaceRevealDirectorySchema = z.object({
+  directory: z.string().trim().min(1)
+});
+
+export const workspaceGroupIdSchema = z.string().trim().min(1);
+
+export const workspaceGroupCreateSchema = z.object({
+  name: z.string().trim().min(1)
+});
+
+export const workspaceGroupUpdateSchema = z.object({
+  groupId: workspaceGroupIdSchema,
+  name: z.string().trim().min(1)
+});
+
+export const workspaceGroupDeleteSchema = z.object({
+  groupId: workspaceGroupIdSchema
+});
+
+export const workspaceGroupCollapseSetSchema = z.object({
+  groupId: workspaceGroupIdSchema,
+  collapsed: z.boolean()
+});
+
+export const workspaceGroupMoveSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  groupId: workspaceGroupIdSchema,
+  targetIndex: z.number().int().min(0)
+});
+
+export const workspaceGroupMoveToUngroupedSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  targetIndex: z.number().int().min(0)
+});
+
+export const workspaceGroupReorderUngroupedSchema = z.object({
+  workspaceIds: z.array(workspaceIdSchema)
+});
+
+export const workspaceGroupReorderGroupsSchema = z.object({
+  groupIds: z.array(workspaceGroupIdSchema)
+});
+
+export const workspaceGroupReorderWithinGroupSchema = z.object({
+  groupId: workspaceGroupIdSchema,
+  workspaceIds: z.array(workspaceIdSchema)
 });
 
 export const workspaceBranchCreateSchema = z.object({
@@ -45,6 +108,7 @@ export const workspaceBranchCreateSchema = z.object({
     ),
   copyCanvas: z.boolean()
 });
+
 
 export const noteNodeSchema = z.object({
   id: z.string().trim().min(1),
@@ -333,6 +397,18 @@ export const portalInputSchema = z.object({
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
+export type WorkspaceUpdateInput = z.infer<typeof workspaceUpdateSchema>;
+export type WorkspacePickDirectoryInput = z.infer<typeof workspacePickDirectorySchema>;
+export type WorkspaceRevealDirectoryInput = z.infer<typeof workspaceRevealDirectorySchema>;
+export type WorkspaceGroupCreateInput = z.infer<typeof workspaceGroupCreateSchema>;
+export type WorkspaceGroupUpdateInput = z.infer<typeof workspaceGroupUpdateSchema>;
+export type WorkspaceGroupDeleteInput = z.infer<typeof workspaceGroupDeleteSchema>;
+export type WorkspaceGroupCollapseSetInput = z.infer<typeof workspaceGroupCollapseSetSchema>;
+export type WorkspaceGroupMoveInput = z.infer<typeof workspaceGroupMoveSchema>;
+export type WorkspaceGroupMoveToUngroupedInput = z.infer<typeof workspaceGroupMoveToUngroupedSchema>;
+export type WorkspaceGroupReorderUngroupedInput = z.infer<typeof workspaceGroupReorderUngroupedSchema>;
+export type WorkspaceGroupReorderGroupsInput = z.infer<typeof workspaceGroupReorderGroupsSchema>;
+export type WorkspaceGroupReorderWithinGroupInput = z.infer<typeof workspaceGroupReorderWithinGroupSchema>;
 export type WorkspaceBranchCreateInput = z.infer<typeof workspaceBranchCreateSchema>;
 export type NoteNodeInput = z.infer<typeof noteNodeSchema>;
 export type TerminalNodeInput = z.infer<typeof terminalNodeSchema>;
@@ -371,5 +447,8 @@ export type PortalCaptureInput = z.infer<typeof portalCaptureSchema>;
 export type PortalStructureInput = z.infer<typeof portalStructureSchema>;
 export type PortalClickInput = z.infer<typeof portalClickSchema>;
 export type PortalInputInput = z.infer<typeof portalInputSchema>;
+
+export const OpenSettingsSchema = z.object({});
+export type OpenSettingsInput = z.infer<typeof OpenSettingsSchema>;
 
 export { componentCapabilitySchema };

@@ -259,6 +259,30 @@ describe('canvas store', () => {
     ).toBe(false);
   });
 
+  it('selects the latest created node and keeps repeated creations visible', async () => {
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot: vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+        graphSnapshot: input.graphSnapshot
+      }))
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addNoteNode();
+    const firstNoteId = canvasStore.getState().graphSnapshot.nodes[0]?.id ?? '';
+
+    await canvasStore.addNoteNode();
+    const graphNodes = canvasStore.getState().graphSnapshot.nodes;
+    const secondNoteId = graphNodes[1]?.id ?? '';
+
+    expect(firstNoteId).not.toBe('');
+    expect(secondNoteId).not.toBe('');
+    expect(canvasStore.getState().selectedNodeId).toBe(secondNoteId);
+    expect(rectanglesOverlap(graphNodes[0]?.bounds, graphNodes[1]?.bounds)).toBe(false);
+  });
+
   it('stores save failures and ignores mutations when no workspace is active', async () => {
     const saveGraphSnapshot = vi.fn().mockRejectedValue(new Error('save failed'));
     setBridge({

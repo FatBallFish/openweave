@@ -95,9 +95,9 @@ test('creates a branch workspace with isolated run state and copied portal URL',
     await page.getByTestId('create-workspace-submit').click();
 
     await expect(page.getByTestId('workspace-canvas-page')).toBeVisible();
-    await page.getByTestId('canvas-add-portal').click();
-    await page.getByTestId('canvas-add-terminal').click();
-    await page.getByTestId('canvas-add-file-tree').click();
+    await page.getByTestId('workbench-topbar-action-add-portal').click();
+    await page.getByTestId('workbench-topbar-action-add-terminal').click();
+    await page.getByTestId('workbench-topbar-action-add-file-tree').click();
 
     const portalUrlInput = page.locator('[data-testid^="portal-url-input-"]').first();
     const portalLoadButton = page.locator('[data-testid^="portal-load-"]').first();

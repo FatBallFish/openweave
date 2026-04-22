@@ -1,5 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts';
+
+ipcRenderer.on(IPC_CHANNELS.appOpenSettings, () => {
+  window.dispatchEvent(new CustomEvent('openweave:open-settings'));
+});
 import type {
   CanvasLoadInput,
   CanvasSaveInput,
@@ -22,7 +26,19 @@ import type {
   WorkspaceBranchCreateInput,
   WorkspaceCreateInput,
   WorkspaceDeleteInput,
-  WorkspaceOpenInput
+  WorkspaceGroupCollapseSetInput,
+  WorkspaceGroupCreateInput,
+  WorkspaceGroupDeleteInput,
+  WorkspaceGroupMoveInput,
+  WorkspaceGroupMoveToUngroupedInput,
+  WorkspaceGroupReorderGroupsInput,
+  WorkspaceGroupReorderUngroupedInput,
+  WorkspaceGroupReorderWithinGroupInput,
+  WorkspaceGroupUpdateInput,
+  WorkspaceOpenInput,
+  WorkspacePickDirectoryInput,
+  WorkspaceRevealDirectoryInput,
+  WorkspaceUpdateInput
 } from '../shared/ipc/schemas';
 
 const shellBridge: OpenWeaveShellBridge = {
@@ -36,7 +52,32 @@ const shellBridge: OpenWeaveShellBridge = {
     listWorkspaces: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceList),
     openWorkspace: (input: WorkspaceOpenInput) => ipcRenderer.invoke(IPC_CHANNELS.workspaceOpen, input),
     deleteWorkspace: (input: WorkspaceDeleteInput) =>
-      ipcRenderer.invoke(IPC_CHANNELS.workspaceDelete, input)
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceDelete, input),
+    updateWorkspace: (input: WorkspaceUpdateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceUpdate, input),
+    listWorkspaceGroups: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceGroupList),
+    createWorkspaceGroup: (input: WorkspaceGroupCreateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGroupCreate, input),
+    updateWorkspaceGroup: (input: WorkspaceGroupUpdateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGroupUpdate, input),
+    deleteWorkspaceGroup: (input: WorkspaceGroupDeleteInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGroupDelete, input),
+    setWorkspaceGroupCollapsed: (input: WorkspaceGroupCollapseSetInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceGroupCollapseSet, input),
+    moveWorkspaceToGroup: (input: WorkspaceGroupMoveInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceMoveToGroup, input),
+    moveWorkspaceToUngrouped: (input: WorkspaceGroupMoveToUngroupedInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceMoveToUngrouped, input),
+    reorderUngroupedWorkspaces: (input: WorkspaceGroupReorderUngroupedInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceReorderUngrouped, input),
+    reorderWorkspaceGroups: (input: WorkspaceGroupReorderGroupsInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceReorderGroups, input),
+    reorderGroupMembers: (input: WorkspaceGroupReorderWithinGroupInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceReorderGroupMembers, input),
+    pickWorkspaceDirectory: (input: WorkspacePickDirectoryInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspacePickDirectory, input),
+    revealWorkspaceDirectory: (input: WorkspaceRevealDirectoryInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.workspaceRevealDirectory, input)
   },
   components: {
     listComponents: (input: ComponentListInput) =>
@@ -74,6 +115,9 @@ const shellBridge: OpenWeaveShellBridge = {
       ipcRenderer.invoke(IPC_CHANNELS.portalClick, input),
     inputPortalText: (input: PortalInputInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.portalInput, input)
+  },
+  app: {
+    openSettings: () => ipcRenderer.invoke(IPC_CHANNELS.appOpenSettings)
   }
 };
 

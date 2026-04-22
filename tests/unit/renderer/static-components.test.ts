@@ -7,6 +7,7 @@ import { PortalToolbar } from '../../../src/renderer/features/portal/PortalToolb
 import { WorkbenchContextPanel } from '../../../src/renderer/features/workbench/WorkbenchContextPanel';
 import { WorkbenchTopBar } from '../../../src/renderer/features/workbench/WorkbenchTopBar';
 import { BranchWorkspaceDialog } from '../../../src/renderer/features/workspaces/BranchWorkspaceDialog';
+import { I18nProvider } from '../../../src/renderer/i18n/provider';
 
 describe('renderer static components', () => {
   it('renders branch workspace dialog only when source workspace exists', () => {
@@ -45,22 +46,50 @@ describe('renderer static components', () => {
   it('renders an orchestration-first topbar and a secondary canvas guidance strip', () => {
     const nodeToolbar = renderToStaticMarkup(createElement(NodeToolbar));
     const topBar = renderToStaticMarkup(
-      createElement(WorkbenchTopBar, {
-        workspaceName: 'Alpha Workspace',
-        commandMenuDisabled: true,
-        searchDisabled: true,
-        disabled: false,
-        fitViewDisabled: true,
-        onAddTerminal: vi.fn(),
-        onAddNote: vi.fn(),
-        onAddPortal: vi.fn(),
-        onAddFileTree: vi.fn(),
-        onAddText: vi.fn(),
-        onOpenCommandMenu: vi.fn(),
-        onFitCanvas: vi.fn(),
-        onOpenSettings: vi.fn(),
-        settingsDisabled: true
-      })
+      createElement(
+        I18nProvider,
+        null,
+        createElement(WorkbenchTopBar, {
+          workspaceName: 'Alpha Workspace',
+          commandMenuDisabled: false,
+          quickAddDisabled: false,
+          disabled: false,
+          fitViewDisabled: false,
+          inspectorDisabled: false,
+          onAddTerminal: vi.fn(),
+          onAddNote: vi.fn(),
+          onAddPortal: vi.fn(),
+          onAddFileTree: vi.fn(),
+          onAddText: vi.fn(),
+          onOpenCommandMenu: vi.fn(),
+          onOpenQuickAdd: vi.fn(),
+          onFitCanvas: vi.fn(),
+          onToggleInspector: vi.fn()
+        })
+      )
+    );
+    const englishTopBar = renderToStaticMarkup(
+      createElement(
+        I18nProvider,
+        { locale: 'en-US' },
+        createElement(WorkbenchTopBar, {
+          workspaceName: 'Alpha Workspace',
+          commandMenuDisabled: false,
+          quickAddDisabled: false,
+          disabled: false,
+          fitViewDisabled: false,
+          inspectorDisabled: false,
+          onAddTerminal: vi.fn(),
+          onAddNote: vi.fn(),
+          onAddPortal: vi.fn(),
+          onAddFileTree: vi.fn(),
+          onAddText: vi.fn(),
+          onOpenCommandMenu: vi.fn(),
+          onOpenQuickAdd: vi.fn(),
+          onFitCanvas: vi.fn(),
+          onToggleInspector: vi.fn()
+        })
+      )
     );
     const portalToolbar = renderToStaticMarkup(
       createElement(PortalToolbar, {
@@ -86,11 +115,13 @@ describe('renderer static components', () => {
     );
 
     expect(nodeToolbar).toContain('canvas-quick-insert-hint');
-    expect(nodeToolbar).toContain('Cmd/Ctrl+K Command menu');
-    expect(topBar).toContain('Add terminal');
-    expect(topBar).toContain('Add text');
-    expect(topBar).toContain('Search');
-    expect(topBar).toContain('Command menu');
+    expect(nodeToolbar).toContain('Cmd/Ctrl+K 命令面板');
+    expect(topBar).toContain('title="添加终端"');
+    expect(topBar).toContain('title="命令面板"');
+    expect(topBar).toContain('title="快速添加"');
+    expect(englishTopBar).toContain('title="Add terminal"');
+    expect(englishTopBar).toContain('title="Command menu"');
+    expect(englishTopBar).toContain('title="Quick add"');
     expect(portalToolbar).toContain('Open page');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');
@@ -100,11 +131,15 @@ describe('renderer static components', () => {
   it('renders workspace-and-resource context alongside git summaries', () => {
     const contextPanel = renderToStaticMarkup(
       createElement(
-        WorkbenchContextPanel,
-        {
-          workspaceName: 'Alpha Workspace'
-        },
-        createElement('div', null, 'workspace list')
+        I18nProvider,
+        null,
+        createElement(
+          WorkbenchContextPanel,
+          {
+            workspaceName: 'Alpha Workspace'
+          },
+          createElement('div', null, 'workspace list')
+        )
       )
     );
     const html = renderToStaticMarkup(
@@ -127,10 +162,10 @@ describe('renderer static components', () => {
       })
     );
 
-    expect(contextPanel).toContain('Workspace Registry');
-    expect(contextPanel).toContain('Context + resources');
-    expect(contextPanel).toContain('Terminal');
-    expect(contextPanel).toContain('Text');
+    expect(contextPanel).toContain('workspace list');
+    expect(contextPanel).not.toContain('工作区注册表');
+    expect(contextPanel).not.toContain('上下文与资源');
+    expect(contextPanel).not.toContain('data-testid="workbench-resource-starters"');
     expect(html).toContain('Modified: 1');
     expect(html).toContain('Added: 2');
     expect(html).toContain('Untracked: 3');

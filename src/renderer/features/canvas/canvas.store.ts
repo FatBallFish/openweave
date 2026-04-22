@@ -40,6 +40,10 @@ const initialState: CanvasState = {
 type StateListener = () => void;
 type GraphNodeRecord = GraphSnapshotV2Input['nodes'][number];
 const supportedRuntimes: RunRuntimeInput[] = ['shell', 'codex', 'claude', 'opencode'];
+const starterSlotColumns = 4;
+const starterSlotRows = 4;
+const starterSlotOrigin = { x: 96, y: 96 };
+const starterSlotGap = { x: 56, y: 56 };
 
 let state: CanvasState = initialState;
 const listeners = new Set<StateListener>();
@@ -86,6 +90,49 @@ const getRecord = (value: unknown): Record<string, unknown> => {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+};
+
+const rectanglesOverlap = (
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number }
+): boolean => {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+};
+
+const getStarterBounds = (
+  existingNodes: GraphNodeRecord[],
+  width: number,
+  height: number
+): GraphNodeRecord['bounds'] => {
+  for (let row = 0; row < starterSlotRows; row += 1) {
+    for (let column = 0; column < starterSlotColumns; column += 1) {
+      const bounds = {
+        x: starterSlotOrigin.x + column * (width + starterSlotGap.x),
+        y: starterSlotOrigin.y + row * (height + starterSlotGap.y),
+        width,
+        height
+      };
+      const hasOverlap = existingNodes.some((node) => rectanglesOverlap(bounds, node.bounds));
+      if (!hasOverlap) {
+        return bounds;
+      }
+    }
+  }
+
+  const index = existingNodes.length;
+  return {
+    x: starterSlotOrigin.x + (index % starterSlotColumns) * (width + starterSlotGap.x),
+    y:
+      starterSlotOrigin.y +
+      (Math.floor(index / starterSlotColumns) + 1) * (height + starterSlotGap.y),
+    width,
+    height
+  };
 };
 
 const toLegacyCanvasNode = (node: GraphNodeRecord): CanvasNodeInput | null => {
@@ -138,20 +185,20 @@ const toLegacyCanvasNodes = (graphSnapshot: GraphSnapshotV2Input): CanvasNodeInp
   });
 };
 
-const createNoteGraphNode = (): GraphNodeRecord => {
+const createNoteGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.note');
   const now = Date.now();
+  const bounds = getStarterBounds(
+    existingNodes,
+    manifest.node.defaultSize.width,
+    manifest.node.defaultSize.height
+  );
   return {
     id: createNodeId('note'),
     componentType: 'builtin.note',
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
-    bounds: {
-      x: 80,
-      y: 80,
-      width: manifest.node.defaultSize.width,
-      height: manifest.node.defaultSize.height
-    },
+    bounds,
     config: {
       ...(manifest.schema.config ?? {})
     },
@@ -164,20 +211,20 @@ const createNoteGraphNode = (): GraphNodeRecord => {
   };
 };
 
-const createTerminalGraphNode = (): GraphNodeRecord => {
+const createTerminalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.terminal');
   const now = Date.now();
+  const bounds = getStarterBounds(
+    existingNodes,
+    manifest.node.defaultSize.width,
+    manifest.node.defaultSize.height
+  );
   return {
     id: createNodeId('terminal'),
     componentType: 'builtin.terminal',
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
-    bounds: {
-      x: 520,
-      y: 80,
-      width: manifest.node.defaultSize.width,
-      height: manifest.node.defaultSize.height
-    },
+    bounds,
     config: {
       ...(manifest.schema.config ?? {})
     },
@@ -190,20 +237,20 @@ const createTerminalGraphNode = (): GraphNodeRecord => {
   };
 };
 
-const createFileTreeGraphNode = (rootDir: string): GraphNodeRecord => {
+const createFileTreeGraphNode = (existingNodes: GraphNodeRecord[], rootDir: string): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.file-tree');
   const now = Date.now();
+  const bounds = getStarterBounds(
+    existingNodes,
+    manifest.node.defaultSize.width,
+    manifest.node.defaultSize.height
+  );
   return {
     id: createNodeId('file-tree'),
     componentType: 'builtin.file-tree',
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
-    bounds: {
-      x: 80,
-      y: 360,
-      width: manifest.node.defaultSize.width,
-      height: manifest.node.defaultSize.height
-    },
+    bounds,
     config: {
       ...(manifest.schema.config ?? {}),
       rootDir
@@ -217,20 +264,20 @@ const createFileTreeGraphNode = (rootDir: string): GraphNodeRecord => {
   };
 };
 
-const createPortalGraphNode = (): GraphNodeRecord => {
+const createPortalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.portal');
   const now = Date.now();
+  const bounds = getStarterBounds(
+    existingNodes,
+    manifest.node.defaultSize.width,
+    manifest.node.defaultSize.height
+  );
   return {
     id: createNodeId('portal'),
     componentType: 'builtin.portal',
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
-    bounds: {
-      x: 520,
-      y: 360,
-      width: manifest.node.defaultSize.width,
-      height: manifest.node.defaultSize.height
-    },
+    bounds,
     config: {
       ...(manifest.schema.config ?? {})
     },
@@ -243,20 +290,20 @@ const createPortalGraphNode = (): GraphNodeRecord => {
   };
 };
 
-const createTextGraphNode = (): GraphNodeRecord => {
+const createTextGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.text');
   const now = Date.now();
+  const bounds = getStarterBounds(
+    existingNodes,
+    manifest.node.defaultSize.width,
+    manifest.node.defaultSize.height
+  );
   return {
     id: createNodeId('text'),
     componentType: 'builtin.text',
     componentVersion: manifest.version,
     title: manifest.node.defaultTitle,
-    bounds: {
-      x: 940,
-      y: 160,
-      width: manifest.node.defaultSize.width,
-      height: manifest.node.defaultSize.height
-    },
+    bounds,
     config: {
       ...(manifest.schema.config ?? {})
     },
@@ -269,21 +316,25 @@ const createTextGraphNode = (): GraphNodeRecord => {
   };
 };
 
-const applyGraphSnapshot = (graphSnapshot: GraphSnapshotV2Input): void => {
-  const selectedNodeStillExists = state.selectedNodeId
-    ? graphSnapshot.nodes.some((node) => node.id === state.selectedNodeId)
+const applyGraphSnapshot = (
+  graphSnapshot: GraphSnapshotV2Input,
+  selectedNodeId: string | null = state.selectedNodeId
+): void => {
+  const selectedNodeStillExists = selectedNodeId
+    ? graphSnapshot.nodes.some((node) => node.id === selectedNodeId)
     : false;
 
   setState({
     graphSnapshot,
     nodes: toLegacyCanvasNodes(graphSnapshot),
-    selectedNodeId: selectedNodeStillExists ? state.selectedNodeId : null
+    selectedNodeId: selectedNodeStillExists ? selectedNodeId : null
   });
 };
 
 const persistGraphSnapshot = async (
   workspaceId: string,
-  graphSnapshot: GraphSnapshotV2Input
+  graphSnapshot: GraphSnapshotV2Input,
+  selectedNodeId: string | null = state.selectedNodeId
 ): Promise<void> => {
   const requestId = ++latestSaveRequestId;
   const result = await getBridge().saveGraphSnapshot({
@@ -293,7 +344,7 @@ const persistGraphSnapshot = async (
   if (requestId !== latestSaveRequestId || state.workspaceId !== workspaceId) {
     return;
   }
-  applyGraphSnapshot(result.graphSnapshot);
+  applyGraphSnapshot(result.graphSnapshot, selectedNodeId);
   setState({ errorMessage: null });
 };
 
@@ -364,14 +415,15 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const newNode = createNoteGraphNode(state.graphSnapshot.nodes);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
-      nodes: [...state.graphSnapshot.nodes, createNoteGraphNode()]
+      nodes: [...state.graphSnapshot.nodes, newNode]
     };
-    applyGraphSnapshot(nextGraphSnapshot);
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added note' });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -386,14 +438,15 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const newNode = createTerminalGraphNode(state.graphSnapshot.nodes);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
-      nodes: [...state.graphSnapshot.nodes, createTerminalGraphNode()]
+      nodes: [...state.graphSnapshot.nodes, newNode]
     };
-    applyGraphSnapshot(nextGraphSnapshot);
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added terminal' });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -408,14 +461,15 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const newNode = createFileTreeGraphNode(state.graphSnapshot.nodes, rootDir);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
-      nodes: [...state.graphSnapshot.nodes, createFileTreeGraphNode(rootDir)]
+      nodes: [...state.graphSnapshot.nodes, newNode]
     };
-    applyGraphSnapshot(nextGraphSnapshot);
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added file tree' });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -430,14 +484,15 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const newNode = createPortalGraphNode(state.graphSnapshot.nodes);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
-      nodes: [...state.graphSnapshot.nodes, createPortalGraphNode()]
+      nodes: [...state.graphSnapshot.nodes, newNode]
     };
-    applyGraphSnapshot(nextGraphSnapshot);
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added portal' });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -452,14 +507,15 @@ export const canvasStore = {
     }
 
     const workspaceId = state.workspaceId;
+    const newNode = createTextGraphNode(state.graphSnapshot.nodes);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
-      nodes: [...state.graphSnapshot.nodes, createTextGraphNode()]
+      nodes: [...state.graphSnapshot.nodes, newNode]
     };
-    applyGraphSnapshot(nextGraphSnapshot);
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added text' });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;

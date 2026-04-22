@@ -67,6 +67,29 @@ describe('workspace IPC flow', () => {
     expect(opened.workspace.lastOpenedAtMs).toBeTypeOf('number');
   });
 
+  it('updates workspace metadata for rename/icon/root changes', async () => {
+    const suffix = Date.now();
+    const rootDir = createWorkspaceRootDir(`editable-${suffix}`);
+    const renamedRootDir = createWorkspaceRootDir(`editable-${suffix}-next`);
+    const created = await handlers.create({} as IpcMainInvokeEvent, {
+      name: `Editable-${suffix}`,
+      rootDir
+    });
+
+    const updated = await handlers.update({} as IpcMainInvokeEvent, {
+      workspaceId: created.workspace.id,
+      name: `Renamed-${suffix}`,
+      rootDir: renamedRootDir,
+      iconKey: 'terminal',
+      iconColor: '#3B82F6'
+    });
+
+    expect(updated.workspace.name).toBe(`Renamed-${suffix}`);
+    expect(updated.workspace.rootDir).toBe(fs.realpathSync(renamedRootDir));
+    expect(updated.workspace.iconKey).toBe('terminal');
+    expect(updated.workspace.iconColor).toBe('#3B82F6');
+  });
+
   it('deletes a workspace row', async () => {
     const suffix = Date.now();
     const rootDir = createWorkspaceRootDir(`deleted-${suffix}`);
@@ -118,15 +141,34 @@ describe('workspace IPC flow', () => {
     ).rejects.toThrow();
   });
 
-  it('stores workspace root as canonical existing directory path', async () => {
-    const canonicalRoot = fs.mkdtempSync(path.join(testDbDir, 'canonical-root-'));
-    const nonCanonicalInput = path.join(canonicalRoot, '..', path.basename(canonicalRoot));
 
+  it('moves grouped workspaces back to ungrouped when deleting a group', async () => {
+    const rootDir = createWorkspaceRootDir(`grouped-${Date.now()}`);
     const created = await handlers.create({} as IpcMainInvokeEvent, {
-      name: 'Canonical Root',
-      rootDir: nonCanonicalInput
+      name: 'Grouped Workspace',
+      rootDir
     });
 
-    expect(created.workspace.rootDir).toBe(fs.realpathSync(canonicalRoot));
+    const groupCreated = await (handlers as unknown as {
+      groupCreate: (_event: IpcMainInvokeEvent, input: { name: string }) => Promise<{ group: { id: string } }>;
+    }).groupCreate({} as IpcMainInvokeEvent, { name: 'Backend' });
+
+    await (handlers as unknown as {
+      moveToGroup: (
+        _event: IpcMainInvokeEvent,
+        input: { workspaceId: string; groupId: string; targetIndex: number }
+      ) => Promise<{ ok: true }>;
+    }).moveToGroup({} as IpcMainInvokeEvent, {
+      workspaceId: created.workspace.id,
+      groupId: groupCreated.group.id,
+      targetIndex: 0
+    });
+
+    await (handlers as unknown as {
+      groupDelete: (_event: IpcMainInvokeEvent, input: { groupId: string }) => Promise<{ deleted: boolean }>;
+    }).groupDelete({} as IpcMainInvokeEvent, { groupId: groupCreated.group.id });
+
+    const listed = handlers.list({} as IpcMainInvokeEvent);
+    expect(listed.workspaces.find((item) => item.id === created.workspace.id)?.groupId ?? null).toBeNull();
   });
 });

@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { canvasStore, useCanvasStore } from './features/canvas/canvas.store';
 import { useCanvasShortcuts } from './features/canvas-shell/useCanvasShortcuts';
 import { WorkspaceCanvasPage } from './features/canvas/WorkspaceCanvasPage';
 import { CommandPalette, type CommandPaletteItem } from './features/workbench/CommandPalette';
 import { WorkbenchShell } from './features/workbench/WorkbenchShell';
+import { SettingsDialog } from './features/workbench/SettingsDialog';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
 import { useWorkspacesStore } from './features/workspaces/workspaces.store';
+import { useI18n } from './i18n/provider';
 
 const createEmptyGraphSnapshot = () => ({
   schemaVersion: 2 as const,
@@ -14,6 +16,7 @@ const createEmptyGraphSnapshot = () => ({
 });
 
 export const App = (): JSX.Element => {
+  const { t } = useI18n();
   const workspaces = useWorkspacesStore((storeState) => storeState.workspaces);
   const activeWorkspaceId = useWorkspacesStore((storeState) => storeState.activeWorkspaceId);
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
@@ -23,8 +26,19 @@ export const App = (): JSX.Element => {
   const recentAction = useCanvasStore((storeState) => storeState.recentAction) ?? null;
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<'command' | 'quick-add'>('command');
+  const [contextPanelCollapsed, setContextPanelCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [fitViewRequestId, setFitViewRequestId] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const disabled = activeWorkspace === null || canvasLoading;
+
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+
+  useEffect(() => {
+    const handle = () => setSettingsOpen(true);
+    window.addEventListener('openweave:open-settings', handle);
+    return () => window.removeEventListener('openweave:open-settings', handle);
+  }, []);
 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) {
@@ -62,6 +76,14 @@ export const App = (): JSX.Element => {
     setInspectorCollapsed((value) => !value);
   }, []);
 
+  const toggleContextPanel = useCallback(() => {
+    setContextPanelCollapsed((value) => !value);
+  }, []);
+
+  const requestFitCanvas = useCallback(() => {
+    setFitViewRequestId((value) => value + 1);
+  }, []);
+
   const addTerminal = useCallback(() => {
     void canvasStore.addTerminalNode();
   }, []);
@@ -90,9 +112,9 @@ export const App = (): JSX.Element => {
     () => [
       {
         id: 'create-terminal',
-        label: 'Add terminal',
+        label: t('topbar.addTerminal'),
         hint: '1',
-        section: 'Create',
+        section: t('topbar.clusterCreate'),
         onSelect: () => {
           closeCommandPalette();
           addTerminal();
@@ -100,9 +122,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'create-note',
-        label: 'Add note',
+        label: t('topbar.addNote'),
         hint: '2',
-        section: 'Create',
+        section: t('topbar.clusterCreate'),
         onSelect: () => {
           closeCommandPalette();
           addNote();
@@ -110,9 +132,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'create-portal',
-        label: 'Add portal',
+        label: t('topbar.addPortal'),
         hint: '3',
-        section: 'Create',
+        section: t('topbar.clusterCreate'),
         onSelect: () => {
           closeCommandPalette();
           addPortal();
@@ -120,9 +142,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'create-file-tree',
-        label: 'Add file tree',
+        label: t('topbar.addFileTree'),
         hint: '4',
-        section: 'Create',
+        section: t('topbar.clusterCreate'),
         onSelect: () => {
           closeCommandPalette();
           addFileTree();
@@ -130,9 +152,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'create-text',
-        label: 'Add text',
+        label: t('topbar.addText'),
         hint: '5',
-        section: 'Create',
+        section: t('topbar.clusterCreate'),
         onSelect: () => {
           closeCommandPalette();
           addText();
@@ -140,9 +162,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'open-quick-add',
-        label: 'Open quick add',
+        label: t('inspector.quickAdd'),
         hint: '/',
-        section: 'Canvas',
+        section: t('topbar.clusterCanvas'),
         onSelect: () => {
           closeCommandPalette();
           openQuickAdd();
@@ -150,9 +172,9 @@ export const App = (): JSX.Element => {
       },
       {
         id: 'toggle-inspector',
-        label: 'Toggle inspector',
+        label: t('inspector.toggleInspector'),
         hint: 'Cmd/Ctrl+Shift+I',
-        section: 'Canvas',
+        section: t('topbar.clusterCanvas'),
         onSelect: () => {
           closeCommandPalette();
           toggleInspector();
@@ -172,8 +194,8 @@ export const App = (): JSX.Element => {
   );
 
   const quickAddItems = useMemo(
-    () => commandItems.filter((item) => item.section === 'Create'),
-    [commandItems]
+    () => commandItems.filter((item) => item.section === t('topbar.clusterCreate')),
+    [commandItems, t]
   );
 
   useCanvasShortcuts({
@@ -191,6 +213,7 @@ export const App = (): JSX.Element => {
 
   const stage = activeWorkspace ? (
     <WorkspaceCanvasPage
+      fitViewRequestId={fitViewRequestId}
       workspaceId={activeWorkspace.id}
       workspaceName={activeWorkspace.name}
       workspaceRootDir={activeWorkspace.rootDir}
@@ -199,17 +222,24 @@ export const App = (): JSX.Element => {
       onSelectNode={selectNode}
     />
   ) : (
-    <div className="ow-workbench-stage__empty" data-testid="workbench-stage-empty">
-      <div>
-        <strong>Select or create a workspace</strong>
-        Create or open a workspace to start composing workflows on the canvas.
+      <div className="ow-workbench-stage__empty" data-testid="workbench-stage-empty">
+        <div>
+          <strong>{t('app.stageEmptyTitle')}</strong>
+          {t('app.stageEmptyDescription')}
+        </div>
       </div>
-    </div>
   );
 
   return (
-    <WorkbenchShell
-      contextPanel={<WorkspaceListPage variant="panel" />}
+    <>
+      <WorkbenchShell
+      contextPanel={
+        <WorkspaceListPage
+          variant="panel"
+          collapsed={contextPanelCollapsed}
+          onToggleCollapse={toggleContextPanel}
+        />
+      }
       commandMenuDisabled={disabled}
       commandPalette={
         <CommandPalette
@@ -222,8 +252,10 @@ export const App = (): JSX.Element => {
       }
       disabled={disabled}
       edgeCount={graphSnapshot.edges.length}
+      contextPanelCollapsed={contextPanelCollapsed}
       fitViewDisabled={disabled}
       inspectorCollapsed={inspectorCollapsed}
+      inspectorDisabled={false}
       nodeCount={graphSnapshot.nodes.length}
       onAddTerminal={addTerminal}
       onAddNote={addNote}
@@ -231,16 +263,19 @@ export const App = (): JSX.Element => {
       onAddFileTree={addFileTree}
       onAddText={addText}
       onOpenCommandMenu={openCommandPalette}
-      onFitCanvas={() => undefined}
-      onOpenSettings={() => undefined}
+      onOpenQuickAdd={openQuickAdd}
+      onFitCanvas={requestFitCanvas}
+      onToggleContextPanel={toggleContextPanel}
       onToggleInspector={toggleInspector}
+      onOpenSettings={() => setSettingsOpen(true)}
       recentAction={recentAction}
-      searchDisabled={true}
       selectedNode={selectedNode}
-      settingsDisabled={true}
+      quickAddDisabled={disabled}
       stage={stage}
       workspaceName={activeWorkspace?.name ?? null}
       workspaceRootDir={activeWorkspace?.rootDir ?? null}
     />
+    <SettingsDialog open={settingsOpen} onClose={closeSettings} />
+    </>
   );
 };

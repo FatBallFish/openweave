@@ -16,7 +16,8 @@ describe('preload bridge', () => {
         exposeInMainWorld
       },
       ipcRenderer: {
-        invoke
+        invoke,
+        on: vi.fn()
       }
     }));
 

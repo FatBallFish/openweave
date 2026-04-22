@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useI18n } from '../../i18n/provider';
 
 export interface CommandPaletteItem {
   id: string;
@@ -25,6 +26,7 @@ export const CommandPalette = ({
   showTrigger = true,
   onOpen
 }: CommandPaletteProps): JSX.Element => {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -57,7 +59,7 @@ export const CommandPalette = ({
     <>
       {showTrigger ? (
         <button data-testid="command-palette-trigger" onClick={onOpen} type="button">
-          {mode === 'quick-add' ? 'Quick add' : 'Command palette'}
+          {mode === 'quick-add' ? t('commandPalette.quickAdd') : t('commandPalette.title')}
         </button>
       ) : null}
 
@@ -82,8 +84,8 @@ export const CommandPalette = ({
           >
             <div className="ow-command-palette__header">
               <div>
-                <p className="ow-command-palette__eyebrow">Workflow controls</p>
-                <h2>{mode === 'quick-add' ? 'Quick add' : 'Command palette'}</h2>
+                <p className="ow-command-palette__eyebrow">{t('commandPalette.eyebrow')}</p>
+                <h2>{mode === 'quick-add' ? t('commandPalette.quickAdd') : t('commandPalette.title')}</h2>
               </div>
               <button
                 className="ow-toolbar-button"
@@ -91,13 +93,13 @@ export const CommandPalette = ({
                 onClick={onClose}
                 type="button"
               >
-                Close
+                {t('commandPalette.close')}
               </button>
             </div>
 
             <div className="ow-command-palette__search">
               <label className="ow-command-palette__search-field">
-                <span>Find actions</span>
+                <span>{t('commandPalette.findActions')}</span>
                 <input
                   aria-label="Filter command palette items"
                   className="ow-command-palette__search-input"
@@ -105,8 +107,8 @@ export const CommandPalette = ({
                   onChange={(event) => setQuery(event.currentTarget.value)}
                   placeholder={
                     mode === 'quick-add'
-                      ? 'Filter node types, shortcuts, or actions'
-                      : 'Filter commands, tools, or keyboard hints'
+                      ? t('commandPalette.filterQuickAdd')
+                      : t('commandPalette.filterCommands')
                   }
                   ref={searchInputRef}
                   type="text"
@@ -114,15 +116,18 @@ export const CommandPalette = ({
                 />
               </label>
               <div className="ow-command-palette__search-meta">
-                <span>{filteredItems.length} results</span>
+                <span>
+                  {filteredItems.length}
+                  {t('commandPalette.results')}
+                </span>
                 <span>{mode === 'quick-add' ? '1-5 or /' : 'Cmd/Ctrl+K'}</span>
               </div>
             </div>
 
             {sections.length === 0 ? (
               <div className="ow-command-palette__empty" data-testid="command-palette-empty">
-                <strong>No matching actions</strong>
-                <p>Try a node type, section name, or keyboard hint.</p>
+                <strong>{t('commandPalette.noMatch')}</strong>
+                <p>{t('commandPalette.noMatchHint')}</p>
               </div>
             ) : (
               sections.map((section) => (
@@ -130,7 +135,8 @@ export const CommandPalette = ({
                   <div className="ow-command-palette__section-header">
                     <h3>{section}</h3>
                     <span>
-                      {filteredItems.filter((item) => item.section === section).length} items
+                      {filteredItems.filter((item) => item.section === section).length}
+                      {t('commandPalette.items')}
                     </span>
                   </div>
                   <div className="ow-command-palette__items">

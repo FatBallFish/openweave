@@ -20,7 +20,7 @@ describe('command palette', () => {
 
     expect(html).toContain('command-palette');
     expect(html).toContain('command-palette-trigger');
-    expect(html).toContain('Quick add');
+    expect(html).toContain('快速添加');
     expect(html).toContain('Add terminal');
     expect(html).toContain('Add note');
   });

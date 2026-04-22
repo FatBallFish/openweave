@@ -27,11 +27,23 @@ import type {
   RunStartInput,
   RunStopInput,
   RunStatusInput,
-  WorkspaceInfoInput,
-  WorkspaceCreateInput,
   WorkspaceBranchCreateInput,
+  WorkspaceCreateInput,
   WorkspaceDeleteInput,
-  WorkspaceOpenInput
+  WorkspaceGroupCollapseSetInput,
+  WorkspaceGroupCreateInput,
+  WorkspaceGroupDeleteInput,
+  WorkspaceGroupMoveInput,
+  WorkspaceGroupMoveToUngroupedInput,
+  WorkspaceGroupReorderGroupsInput,
+  WorkspaceGroupReorderUngroupedInput,
+  WorkspaceGroupReorderWithinGroupInput,
+  WorkspaceGroupUpdateInput,
+  WorkspaceInfoInput,
+  WorkspaceOpenInput,
+  WorkspacePickDirectoryInput,
+  WorkspaceRevealDirectoryInput,
+  WorkspaceUpdateInput
 } from './schemas';
 import type {
   ComponentActionManifest,
@@ -49,7 +61,20 @@ export const IPC_CHANNELS = {
   workspaceList: 'workspace:list',
   workspaceOpen: 'workspace:open',
   workspaceDelete: 'workspace:delete',
+  workspaceUpdate: 'workspace:update',
+  workspacePickDirectory: 'workspace:pick-directory',
+  workspaceRevealDirectory: 'workspace:reveal-directory',
   workspaceCreateBranch: 'workspace:create-branch',
+  workspaceGroupList: 'workspace-group:list',
+  workspaceGroupCreate: 'workspace-group:create',
+  workspaceGroupUpdate: 'workspace-group:update',
+  workspaceGroupDelete: 'workspace-group:delete',
+  workspaceGroupCollapseSet: 'workspace-group:set-collapsed',
+  workspaceMoveToGroup: 'workspace:move-to-group',
+  workspaceMoveToUngrouped: 'workspace:move-to-ungrouped',
+  workspaceReorderUngrouped: 'workspace:reorder-ungrouped',
+  workspaceReorderGroups: 'workspace-group:reorder',
+  workspaceReorderGroupMembers: 'workspace-group:reorder-members',
   componentList: 'component:list',
   componentInstall: 'component:install',
   componentUninstall: 'component:uninstall',
@@ -67,10 +92,51 @@ export const IPC_CHANNELS = {
   portalCapture: 'portal:capture',
   portalReadStructure: 'portal:read-structure',
   portalClick: 'portal:click',
-  portalInput: 'portal:input'
+  portalInput: 'portal:input',
+  appOpenSettings: 'app:open-settings'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
+
+export interface WorkspaceGroupRecord {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface WorkspaceGroupUiStateRecord {
+  groupId: string;
+  collapsed: boolean;
+  updatedAtMs: number;
+}
+
+export interface WorkspaceGroupListResponse {
+  groups: WorkspaceGroupRecord[];
+  uiState: WorkspaceGroupUiStateRecord[];
+}
+
+export interface WorkspaceGroupMutationResponse {
+  group: WorkspaceGroupRecord;
+}
+
+export interface WorkspaceGroupDeleteResponse {
+  deleted: boolean;
+}
+
+export interface WorkspaceGroupCollapseSetResponse {
+  groupId: string;
+  collapsed: boolean;
+}
+
+export interface WorkspaceMoveResponse {
+  ok: true;
+}
+
+export interface WorkspaceReorderResponse {
+  ok: true;
+}
 
 export interface WorkspaceRecord {
   id: string;
@@ -79,6 +145,11 @@ export interface WorkspaceRecord {
   createdAtMs: number;
   updatedAtMs: number;
   lastOpenedAtMs: number | null;
+  iconKey?: string;
+  iconColor?: string;
+  sourceWorkspaceId?: string | null;
+  branchName?: string | null;
+  groupId?: string | null;
 }
 
 export interface WorkspaceListResponse {
@@ -91,6 +162,14 @@ export interface WorkspaceMutationResponse {
 
 export interface WorkspaceDeleteResponse {
   deleted: boolean;
+}
+
+export interface WorkspaceDirectoryPickResponse {
+  directory: string | null;
+}
+
+export interface WorkspaceRevealDirectoryResponse {
+  ok: true;
 }
 
 export interface WorkspaceInfoResponse {
@@ -298,6 +377,31 @@ export interface WorkspaceBridgeApi {
   listWorkspaces: () => Promise<WorkspaceListResponse>;
   openWorkspace: (input: WorkspaceOpenInput) => Promise<WorkspaceMutationResponse>;
   deleteWorkspace: (input: WorkspaceDeleteInput) => Promise<WorkspaceDeleteResponse>;
+  updateWorkspace: (input: WorkspaceUpdateInput) => Promise<WorkspaceMutationResponse>;
+  listWorkspaceGroups: () => Promise<WorkspaceGroupListResponse>;
+  createWorkspaceGroup: (input: WorkspaceGroupCreateInput) => Promise<WorkspaceGroupMutationResponse>;
+  updateWorkspaceGroup: (input: WorkspaceGroupUpdateInput) => Promise<WorkspaceGroupMutationResponse>;
+  deleteWorkspaceGroup: (input: WorkspaceGroupDeleteInput) => Promise<WorkspaceGroupDeleteResponse>;
+  setWorkspaceGroupCollapsed: (
+    input: WorkspaceGroupCollapseSetInput
+  ) => Promise<WorkspaceGroupCollapseSetResponse>;
+  moveWorkspaceToGroup: (input: WorkspaceGroupMoveInput) => Promise<WorkspaceMoveResponse>;
+  moveWorkspaceToUngrouped: (
+    input: WorkspaceGroupMoveToUngroupedInput
+  ) => Promise<WorkspaceMoveResponse>;
+  reorderUngroupedWorkspaces: (
+    input: WorkspaceGroupReorderUngroupedInput
+  ) => Promise<WorkspaceReorderResponse>;
+  reorderWorkspaceGroups: (input: WorkspaceGroupReorderGroupsInput) => Promise<WorkspaceReorderResponse>;
+  reorderGroupMembers: (
+    input: WorkspaceGroupReorderWithinGroupInput
+  ) => Promise<WorkspaceReorderResponse>;
+  pickWorkspaceDirectory: (
+    input: WorkspacePickDirectoryInput
+  ) => Promise<WorkspaceDirectoryPickResponse>;
+  revealWorkspaceDirectory: (
+    input: WorkspaceRevealDirectoryInput
+  ) => Promise<WorkspaceRevealDirectoryResponse>;
 }
 
 export interface CanvasBridgeApi {
@@ -348,6 +452,10 @@ export interface AgentComponentBridgeApi {
   uninstallComponent: (input: ComponentUninstallInput) => Promise<ComponentUninstallResponse>;
 }
 
+export interface AppBridgeApi {
+  openSettings: () => Promise<void>;
+}
+
 export interface OpenWeaveShellBridge {
   platform: string;
   ipcChannels: typeof IPC_CHANNELS;
@@ -358,4 +466,5 @@ export interface OpenWeaveShellBridge {
   runs: RunsBridgeApi;
   files: FilesBridgeApi;
   portal: PortalBridgeApi;
+  app: AppBridgeApi;
 }

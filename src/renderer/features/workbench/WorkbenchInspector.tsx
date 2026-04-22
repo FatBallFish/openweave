@@ -1,3 +1,6 @@
+import { IconButton } from './IconButton';
+import { useI18n } from '../../i18n/provider';
+
 interface WorkbenchInspectorProps {
   workspaceName: string | null;
   workspaceRootDir: string | null;
@@ -10,7 +13,6 @@ interface WorkbenchInspectorProps {
   nodeCount?: number;
   edgeCount?: number;
   recentAction?: string | null;
-  collapsed?: boolean;
   onToggle?: () => void;
 }
 
@@ -21,115 +23,99 @@ export const WorkbenchInspector = ({
   nodeCount = 0,
   edgeCount = 0,
   recentAction = null,
-  collapsed = false,
   onToggle
 }: WorkbenchInspectorProps): JSX.Element => {
+  const { t } = useI18n();
+  const icon = (path: string): JSX.Element => (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d={path} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
   const focusLabel = selectedNode
-    ? 'Node focus'
+    ? t('inspector.focusNode')
     : workspaceName
-      ? 'Workspace overview'
-      : 'Idle shell';
-
-  if (collapsed) {
-    return (
-      <aside
-        className="ow-workbench-inspector ow-workbench-inspector--collapsed"
-        data-testid="workbench-inspector"
-      >
-        <button
-          className="ow-toolbar-button"
-          data-testid="workbench-inspector-toggle"
-          onClick={onToggle}
-          type="button"
-        >
-          Expand
-        </button>
-        <div data-testid="workbench-inspector-collapsed" className="ow-workbench-inspector__collapsed-badge">
-          {workspaceName ? workspaceName.slice(0, 2).toUpperCase() : 'IN'}
-        </div>
-      </aside>
-    );
-  }
+      ? t('inspector.focusWorkspace')
+      : t('inspector.focusIdle');
 
   return (
     <aside className="ow-workbench-inspector" data-testid="workbench-inspector">
       <div className="ow-workbench-inspector__header">
+        <IconButton
+          icon={icon('M9 18l6-6-6-6')}
+          label={t('inspector.collapse')}
+          onClick={onToggle}
+          testId="workbench-inspector-toggle"
+        />
         <div>
-          <p className="ow-workbench-inspector__eyebrow">Inspector</p>
+          <p className="ow-workbench-inspector__eyebrow">{t('inspector.title')}</p>
           <h2 className="ow-workbench-inspector__title">
-            {selectedNode?.title ?? workspaceName ?? 'Nothing selected'}
+            {selectedNode?.title ?? workspaceName ?? t('inspector.nothingSelected')}
           </h2>
         </div>
-        <button
-          className="ow-toolbar-button"
-          data-testid="workbench-inspector-toggle"
-          onClick={onToggle}
-          type="button"
-        >
-          Collapse
-        </button>
       </div>
 
-      <div className="ow-workbench-inspector__summary">
-        <article className="ow-workbench-inspector__summary-card">
-          <span>Focus</span>
-          <strong>{focusLabel}</strong>
-        </article>
-        <article className="ow-workbench-inspector__summary-card">
-          <span>Last change</span>
-          <strong>{recentAction ?? 'No actions yet'}</strong>
-        </article>
-      </div>
+      <div className="ow-workbench-inspector__body">
+        <div className="ow-workbench-inspector__summary">
+          <article className="ow-workbench-inspector__summary-card">
+            <span>{t('inspector.focus')}</span>
+            <strong>{focusLabel}</strong>
+          </article>
+          <article className="ow-workbench-inspector__summary-card">
+            <span>{t('inspector.lastChange')}</span>
+            <strong>{recentAction ?? t('inspector.noActions')}</strong>
+          </article>
+        </div>
 
-      <section className="ow-workbench-inspector__section">
-        <h3>Selected node</h3>
-        {selectedNode ? (
-          <>
-            <p>{selectedNode.title}</p>
-            <code>{selectedNode.componentType}</code>
-            <div className="ow-workbench-inspector__capabilities">
-              {selectedNode.capabilities.map((capability) => (
-                <span key={capability}>{capability}</span>
-              ))}
+        <section className="ow-workbench-inspector__section">
+          <h3>{t('inspector.selectedNode')}</h3>
+          {selectedNode ? (
+            <>
+              <p>{selectedNode.title}</p>
+              <code>{selectedNode.componentType}</code>
+              <div className="ow-workbench-inspector__capabilities">
+                {selectedNode.capabilities.map((capability) => (
+                  <span key={capability}>{capability}</span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>
+              {workspaceName
+                ? t('inspector.pickNode')
+                : t('inspector.pickWorkspace')}
+            </p>
+          )}
+        </section>
+
+        <section className="ow-workbench-inspector__section">
+          <h3>{t('inspector.canvasSummary')}</h3>
+          <div className="ow-workbench-inspector__stats">
+            <div>
+              <span>{t('inspector.nodes')}</span>
+              <strong>{nodeCount}</strong>
             </div>
-          </>
-        ) : (
-          <p>
-            {workspaceName
-              ? 'Pick a node on the canvas to inspect its component interface and runtime state.'
-              : 'Select or open a workspace to populate the canvas and controls.'}
-          </p>
-        )}
-      </section>
-
-      <section className="ow-workbench-inspector__section">
-        <h3>Canvas summary</h3>
-        <div className="ow-workbench-inspector__stats">
-          <div>
-            <span>Nodes</span>
-            <strong>{nodeCount}</strong>
+            <div>
+              <span>{t('inspector.edges')}</span>
+              <strong>{edgeCount}</strong>
+            </div>
           </div>
-          <div>
-            <span>Edges</span>
-            <strong>{edgeCount}</strong>
+          <p>{recentAction ?? t('inspector.noRecentActions')}</p>
+        </section>
+
+        <section className="ow-workbench-inspector__section">
+          <h3>{t('inspector.workspaceRoot')}</h3>
+          <code>{workspaceRootDir ?? t('inspector.awaitingWorkspace')}</code>
+        </section>
+
+        <section className="ow-workbench-inspector__section">
+          <h3>{t('inspector.quickActions')}</h3>
+          <div className="ow-workbench-inspector__quick-actions">
+            <span>{t('inspector.quickAdd')}</span>
+            <span>{t('inspector.commandPalette')}</span>
+            <span>{t('inspector.toggleInspector')}</span>
           </div>
-        </div>
-        <p>{recentAction ?? 'No recent actions yet.'}</p>
-      </section>
-
-      <section className="ow-workbench-inspector__section">
-        <h3>Workspace root</h3>
-        <code>{workspaceRootDir ?? 'Awaiting active workspace'}</code>
-      </section>
-
-      <section className="ow-workbench-inspector__section">
-        <h3>Quick actions</h3>
-        <div className="ow-workbench-inspector__quick-actions">
-          <span>/ Quick add</span>
-          <span>Cmd/Ctrl+K Command palette</span>
-          <span>Cmd/Ctrl+Shift+I Toggle inspector</span>
-        </div>
-      </section>
+        </section>
+      </div>
     </aside>
   );
 };

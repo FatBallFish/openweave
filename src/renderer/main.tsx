@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css';
 import './styles/tokens.css';
 import './styles/workbench.css';
 import { App } from './App';
+import { I18nProvider } from './i18n/provider';
 
 const rootElement = document.getElementById('root');
 
@@ -13,6 +14,8 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <I18nProvider>
+      <App />
+    </I18nProvider>
   </StrictMode>
 );

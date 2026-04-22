@@ -1,10 +1,9 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Background,
-  Controls,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -14,7 +13,7 @@ import {
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
 import { CanvasEmptyState } from './CanvasEmptyState';
-import { CanvasSelectionHud } from './CanvasSelectionHud';
+import { NodeToolbar } from '../canvas/nodes/NodeToolbar';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -46,6 +45,7 @@ export interface ProjectGraphToCanvasShellInput {
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
+  fitViewRequestId: number;
   onOpenCommandPalette: () => void;
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
@@ -82,6 +82,50 @@ const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element 
 
 const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
+};
+
+const CanvasViewportController = ({
+  fitViewRequestId,
+  nodesCount
+}: {
+  fitViewRequestId: number;
+  nodesCount: number;
+}): null => {
+  const { fitView } = useReactFlow();
+  const previousNodesCount = useRef(nodesCount);
+
+  useEffect(() => {
+    if (fitViewRequestId === 0) {
+      return;
+    }
+
+    void fitView({
+      duration: 180,
+      padding: 0.3
+    });
+  }, [fitView, fitViewRequestId]);
+
+  useEffect(() => {
+    const shouldFitNewNodes = nodesCount > previousNodesCount.current && nodesCount <= 6;
+    previousNodesCount.current = nodesCount;
+
+    if (!shouldFitNewNodes) {
+      return;
+    }
+
+    const timeoutHandle = window.setTimeout(() => {
+      void fitView({
+        duration: 180,
+        padding: 0.36
+      });
+    }, 48);
+
+    return () => {
+      window.clearTimeout(timeoutHandle);
+    };
+  }, [fitView, nodesCount]);
+
+  return null;
 };
 
 export const projectGraphToCanvasShell = (
@@ -123,6 +167,7 @@ export const projectGraphToCanvasShell = (
 };
 
 export const CanvasShell = ({
+  fitViewRequestId,
   workspaceId,
   workspaceRootDir,
   graphSnapshot,
@@ -163,40 +208,12 @@ export const CanvasShell = ({
 
   return (
     <section className="ow-canvas-shell" data-testid="canvas-shell">
-      <div className="ow-canvas-shell__header">
-        <div>
-          <p className="ow-canvas-shell__eyebrow">Infinite canvas</p>
-          <h3>Blueprint canvas surface</h3>
-        </div>
-        <div className="ow-canvas-shell__actions">
-          <button
-            className="ow-toolbar-button"
-            data-testid="command-palette-trigger"
-            onClick={onOpenCommandPalette}
-            type="button"
-          >
-            Command palette
-          </button>
-          <button
-            className="ow-toolbar-button ow-toolbar-button--primary"
-            data-testid="canvas-quick-add-trigger"
-            onClick={onOpenQuickAdd}
-            type="button"
-          >
-            Quick add
-          </button>
-          <div className="ow-canvas-shell__meta">Pan, zoom, connect, inspect</div>
-        </div>
-      </div>
-
-      <CanvasSelectionHud edgeCount={model.edges.length} nodeCount={model.nodes.length} />
-
       <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
-        <div className="ow-canvas-shell__grid" data-testid="canvas-shell-grid" />
         <ReactFlowProvider>
           <ReactFlow
             defaultViewport={DEFAULT_CANVAS_VIEWPORT}
             edges={edges}
+            elementsSelectable={true}
             minZoom={0.4}
             nodeTypes={nodeTypes}
             nodes={nodes}
@@ -214,13 +231,14 @@ export const CanvasShell = ({
             onPaneClick={() => {
               onSelectNode(null);
             }}
+            panOnDrag={true}
             proOptions={{ hideAttribution: true }}
+            selectionOnDrag={false}
+            zoomOnPinch={true}
+            zoomOnScroll={true}
           >
+            <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
             <Background gap={24} size={1} />
-            <div data-testid="canvas-shell-minimap">
-              <MiniMap pannable zoomable style={{ pointerEvents: 'none' }} />
-            </div>
-            <Controls />
           </ReactFlow>
         </ReactFlowProvider>
 
@@ -235,6 +253,7 @@ export const CanvasShell = ({
             ]}
           />
         ) : null}
+        <NodeToolbar />
       </div>
     </section>
   );

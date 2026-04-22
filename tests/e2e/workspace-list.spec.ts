@@ -23,7 +23,8 @@ test('supports create/open/delete from the workspace list page', async () => {
 
     await expect(page.getByTestId('workspace-list-page')).toBeVisible();
 
-    await page.getByTestId('workspace-create-button').click();
+    await page.getByTestId('workspace-add-button').click();
+    await page.getByTestId('workspace-add-menu-create-workspace').click();
     await page.getByTestId('create-workspace-name-input').fill(workspaceName);
     await page.getByTestId('create-workspace-root-input').fill(workspaceRoot);
     await page.getByTestId('create-workspace-submit').click();
@@ -33,16 +34,16 @@ test('supports create/open/delete from the workspace list page', async () => {
     });
 
     await expect(workspaceRow).toBeVisible();
-    await expect(workspaceRow.getByText(workspaceRoot)).toBeVisible();
 
-    await page.getByRole('button', { name: `Open ${workspaceName}` }).click();
+    await workspaceRow.click();
     await expect(page.getByTestId('active-workspace-name')).toContainText(workspaceName);
     await expect(page.getByTestId('canvas-empty')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add note' }).click();
+    await page.getByTestId('workbench-topbar-action-add-note').click();
     await expect(page.getByTestId('canvas-shell')).toBeVisible();
 
-    await page.getByRole('button', { name: `Delete ${workspaceName}` }).click();
+    await workspaceRow.locator('.ow-workspace-list__item-delete').click();
+    await page.getByTestId('workspace-delete-confirm').click();
     await expect(workspaceRow).toHaveCount(0);
   } finally {
     await app.close();

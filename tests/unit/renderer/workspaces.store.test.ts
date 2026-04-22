@@ -27,11 +27,20 @@ describe('workspaces store', () => {
       createWorkspace: vi.fn(),
       createBranchWorkspace: vi.fn(),
       openWorkspace: vi.fn(),
-      deleteWorkspace: vi.fn()
+      deleteWorkspace: vi.fn(),
+      listWorkspaceGroups: vi.fn().mockResolvedValue({ groups: [], uiState: [] }),
+      createWorkspaceGroup: vi.fn(),
+      deleteWorkspaceGroup: vi.fn(),
+      setWorkspaceGroupCollapsed: vi.fn(),
+      moveWorkspaceToGroup: vi.fn(),
+      moveWorkspaceToUngrouped: vi.fn(),
+      reorderUngroupedWorkspaces: vi.fn(),
+      reorderWorkspaceGroups: vi.fn(),
+      reorderGroupMembers: vi.fn()
     });
   });
 
-  it('opens and closes dialogs', async () => {
+  it('opens and closes dialogs and add menu', async () => {
     const { workspacesStore } = await importStore();
 
     workspacesStore.openCreateDialog();
@@ -44,6 +53,11 @@ describe('workspaces store', () => {
     expect(workspacesStore.getState().branchSourceWorkspaceId).toBe('ws-1');
     workspacesStore.closeBranchDialog();
     expect(workspacesStore.getState().isBranchDialogOpen).toBe(false);
+
+    workspacesStore.openAddMenu();
+    expect(workspacesStore.getState().isAddMenuOpen).toBe(true);
+    workspacesStore.closeAddMenu();
+    expect(workspacesStore.getState().isAddMenuOpen).toBe(false);
   });
 
   it('loads, creates, opens, branches, and deletes workspaces through the bridge', async () => {
@@ -53,7 +67,8 @@ describe('workspaces store', () => {
       rootDir: '/tmp/ws-1',
       createdAtMs: 1,
       updatedAtMs: 1,
-      lastOpenedAtMs: null
+      lastOpenedAtMs: null,
+      groupId: null
     };
     const branchWorkspace = {
       ...workspace,
@@ -70,7 +85,16 @@ describe('workspaces store', () => {
       createWorkspace,
       createBranchWorkspace,
       openWorkspace,
-      deleteWorkspace
+      deleteWorkspace,
+      listWorkspaceGroups: vi.fn().mockResolvedValue({ groups: [], uiState: [] }),
+      createWorkspaceGroup: vi.fn(),
+      deleteWorkspaceGroup: vi.fn(),
+      setWorkspaceGroupCollapsed: vi.fn(),
+      moveWorkspaceToGroup: vi.fn(),
+      moveWorkspaceToUngrouped: vi.fn(),
+      reorderUngroupedWorkspaces: vi.fn(),
+      reorderWorkspaceGroups: vi.fn(),
+      reorderGroupMembers: vi.fn()
     });
 
     const { workspacesStore } = await importStore();
@@ -102,6 +126,59 @@ describe('workspaces store', () => {
     expect(workspacesStore.getState().activeWorkspaceId).toBeNull();
   });
 
+  it('loads groups and persists collapsed state', async () => {
+    const listWorkspaceGroups = vi.fn().mockResolvedValue({
+      groups: [
+        {
+          id: 'group-1',
+          name: 'Backend',
+          sortOrder: 0,
+          createdAtMs: 1,
+          updatedAtMs: 1
+        }
+      ],
+      uiState: [
+        {
+          groupId: 'group-1',
+          collapsed: false,
+          updatedAtMs: 1
+        }
+      ]
+    });
+    const setWorkspaceGroupCollapsed = vi.fn().mockResolvedValue({
+      groupId: 'group-1',
+      collapsed: true,
+      updatedAtMs: 2
+    });
+
+    setBridge({
+      listWorkspaces: vi.fn().mockResolvedValue({ workspaces: [] }),
+      createWorkspace: vi.fn(),
+      createBranchWorkspace: vi.fn(),
+      openWorkspace: vi.fn(),
+      deleteWorkspace: vi.fn(),
+      listWorkspaceGroups,
+      createWorkspaceGroup: vi.fn(),
+      deleteWorkspaceGroup: vi.fn(),
+      setWorkspaceGroupCollapsed,
+      moveWorkspaceToGroup: vi.fn(),
+      moveWorkspaceToUngrouped: vi.fn(),
+      reorderUngroupedWorkspaces: vi.fn(),
+      reorderWorkspaceGroups: vi.fn(),
+      reorderGroupMembers: vi.fn()
+    });
+
+    const { workspacesStore } = await importStore();
+
+    await workspacesStore.loadWorkspaceGroups();
+    expect(listWorkspaceGroups).toHaveBeenCalled();
+    expect(workspacesStore.getState().groups).toHaveLength(1);
+
+    await workspacesStore.setGroupCollapsed('group-1', true);
+    expect(setWorkspaceGroupCollapsed).toHaveBeenCalledWith({ groupId: 'group-1', collapsed: true });
+    expect(workspacesStore.getState().groupUiState['group-1']?.collapsed).toBe(true);
+  });
+
   it('stores bridge errors and not-found delete responses', async () => {
     const listWorkspaces = vi.fn().mockRejectedValue(new Error('load failed'));
     const createWorkspace = vi.fn().mockRejectedValue(new Error('create failed'));
@@ -111,7 +188,16 @@ describe('workspaces store', () => {
       createWorkspace,
       createBranchWorkspace: vi.fn(),
       openWorkspace: vi.fn(),
-      deleteWorkspace
+      deleteWorkspace,
+      listWorkspaceGroups: vi.fn().mockResolvedValue({ groups: [], uiState: [] }),
+      createWorkspaceGroup: vi.fn(),
+      deleteWorkspaceGroup: vi.fn(),
+      setWorkspaceGroupCollapsed: vi.fn(),
+      moveWorkspaceToGroup: vi.fn(),
+      moveWorkspaceToUngrouped: vi.fn(),
+      reorderUngroupedWorkspaces: vi.fn(),
+      reorderWorkspaceGroups: vi.fn(),
+      reorderGroupMembers: vi.fn()
     });
 
     const { workspacesStore } = await importStore();
@@ -129,3 +215,4 @@ describe('workspaces store', () => {
     expect(workspacesStore.getState().errorMessage).toBe('Workspace not found');
   });
 });
+
