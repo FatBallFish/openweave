@@ -22,6 +22,16 @@ describe('getCanvasShortcutAction', () => {
     expect(getCanvasShortcutAction(event)).toBeNull();
   });
 
+  it('returns null for non-matching keys', () => {
+    expect(getCanvasShortcutAction(mockEvent({ key: 'x' }))).toBeNull();
+  });
+
+  it('returns null for contenteditable targets', () => {
+    const target = { tagName: 'DIV', isContentEditable: true } as unknown as EventTarget;
+    const event = { ...mockEvent({ key: 'k', metaKey: true }), target };
+    expect(getCanvasShortcutAction(event)).toBeNull();
+  });
+
   it('matches open-command-palette on Cmd+K', () => {
     expect(getCanvasShortcutAction(mockEvent({ key: 'k', metaKey: true }))).toBe('open-command-palette');
   });

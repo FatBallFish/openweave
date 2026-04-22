@@ -66,6 +66,7 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 };
 
 const configMatchesEvent = (config: ShortcutConfig, event: CanvasShortcutLike): boolean => {
+  if (!config.key) return false;
   if (config.key.toLowerCase() !== event.key.toLowerCase()) return false;
   if (config.ctrlKey !== event.ctrlKey) return false;
   if (config.metaKey !== event.metaKey) return false;
