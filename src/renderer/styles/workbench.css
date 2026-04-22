@@ -2394,7 +2394,7 @@ select:focus-visible {
 .ow-workbench-status-island__item--status::before {
   content: '';
   position: absolute;
-  top: 13px;
+  top: 10px;
   right: 10px;
   width: 7px;
   height: 7px;
@@ -2408,7 +2408,7 @@ select:focus-visible {
 .ow-workbench-status-island__item--status::after {
   content: '';
   position: absolute;
-  top: 13px;
+  top: 10px;
   right: 10px;
   width: 7px;
   height: 7px;
