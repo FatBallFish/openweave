@@ -15,7 +15,7 @@ import {
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
 import { CanvasEmptyState } from './CanvasEmptyState';
-import { NodeToolbar } from '../canvas/nodes/NodeToolbar';
+import { CanvasViewportControls } from './CanvasViewportControls';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -60,6 +60,9 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   onAddPortal: () => void;
   onAddFileTree: () => void;
   onAddText: () => void;
+  placementMode?: { type: string } | null;
+  onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onPlacementCancel?: () => void;
 }
 
 const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
@@ -297,8 +300,8 @@ export const CanvasShell = ({
 
   return (
     <section className="ow-canvas-shell" data-testid="canvas-shell">
-      <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
-        <ReactFlowProvider>
+      <ReactFlowProvider>
+        <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
           <ReactFlow
             defaultViewport={DEFAULT_CANVAS_VIEWPORT}
             edges={edges}
@@ -331,21 +334,21 @@ export const CanvasShell = ({
             <WheelHandler />
             <Background gap={32} variant={BackgroundVariant.Lines} />
           </ReactFlow>
-        </ReactFlowProvider>
 
-        {isEmpty ? (
-          <CanvasEmptyState
-            actions={[
-              { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
-              { label: 'Note', hotkey: '2', onClick: onAddNote },
-              { label: 'Portal', hotkey: '3', onClick: onAddPortal },
-              { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
-              { label: 'Text', hotkey: '5', onClick: onAddText }
-            ]}
-          />
-        ) : null}
-        <NodeToolbar />
-      </div>
+          {isEmpty ? (
+            <CanvasEmptyState
+              actions={[
+                { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
+                { label: 'Note', hotkey: '2', onClick: onAddNote },
+                { label: 'Portal', hotkey: '3', onClick: onAddPortal },
+                { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
+                { label: 'Text', hotkey: '5', onClick: onAddText }
+              ]}
+            />
+          ) : null}
+          <CanvasViewportControls />
+        </div>
+      </ReactFlowProvider>
     </section>
   );
 };

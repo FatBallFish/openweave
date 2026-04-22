@@ -121,7 +121,11 @@ describe('canvas shell', () => {
         onAddText: vi.fn(),
         onOpenRun: vi.fn(),
         onCreateBranchWorkspace: vi.fn(),
-        onMoveNode: vi.fn()
+        onMoveNode: vi.fn(),
+        onResizeNode: vi.fn(),
+        placementMode: null,
+        onPlacementComplete: vi.fn(),
+        onPlacementCancel: vi.fn()
       })
     );
 
@@ -132,5 +136,6 @@ describe('canvas shell', () => {
     expect(html).not.toContain('canvas-shell-grid');
     expect(html).not.toContain('command-palette-trigger');
     expect(html).not.toContain('canvas-quick-add-trigger');
+    expect(html).toContain('canvas-viewport-controls');
   });
 });
