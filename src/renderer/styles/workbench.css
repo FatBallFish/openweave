@@ -3746,7 +3746,7 @@ select:focus-visible {
 }
 
 .ow-canvas-shell__flow .react-flow__background pattern path {
-  stroke: rgba(var(--ow-accent-rgb), 0.28);
+  stroke: rgba(var(--ow-accent-rgb), 0.12);
   stroke-width: 1;
 }
 

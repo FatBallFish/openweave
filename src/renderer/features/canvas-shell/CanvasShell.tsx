@@ -104,6 +104,26 @@ const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
 };
 
+const classifyWheelEvent = (event: WheelEvent): 'pan' | 'zoom' => {
+  // Pinch gesture (macOS Safari/Chrome sends ctrlKey + wheel)
+  if (event.ctrlKey || event.metaKey) return 'zoom';
+  // DOM_DELTA_LINE is a strong signal for mouse wheel
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return 'zoom';
+
+  const absX = Math.abs(event.deltaX);
+  const absY = Math.abs(event.deltaY);
+
+  // Any horizontal movement strongly suggests trackpad pan
+  // (mouse wheels rarely produce horizontal deltas)
+  if (absX > 0.5) return 'pan';
+
+  // Small pure-vertical movement also suggests trackpad slow scroll
+  if (absY > 0 && absY < 20) return 'pan';
+
+  // Large pure-vertical movement → mouse wheel zoom
+  return 'zoom';
+};
+
 const WheelHandler = (): null => {
   const { getViewport, setViewport } = useReactFlow();
 
@@ -118,21 +138,10 @@ const WheelHandler = (): null => {
       wheelEvent.preventDefault();
 
       const { x, y, zoom } = getViewport();
-      const rect = pane.getBoundingClientRect();
+      const action = classifyWheelEvent(wheelEvent);
 
-      if (wheelEvent.ctrlKey || wheelEvent.metaKey) {
-        // Trackpad pinch → zoom
-        const delta = wheelEvent.deltaY > 0 ? -0.08 : 0.08;
-        const newZoom = Math.min(Math.max(zoom + delta, 0.4), 2);
-        setViewport({ x, y, zoom: newZoom }, { duration: 0 });
-      } else if (Math.abs(wheelEvent.deltaX) > 0.5 && Math.abs(wheelEvent.deltaY) > 0.5) {
-        // Trackpad two-finger pan → pan
-        setViewport(
-          { x: x - wheelEvent.deltaX / zoom, y: y - wheelEvent.deltaY / zoom, zoom },
-          { duration: 0 }
-        );
-      } else {
-        // Mouse wheel → zoom centered on cursor
+      if (action === 'zoom') {
+        const rect = pane.getBoundingClientRect();
         const mouseX = wheelEvent.clientX - rect.left;
         const mouseY = wheelEvent.clientY - rect.top;
         const zoomFactor = wheelEvent.deltaY > 0 ? 0.92 : 1.08;
@@ -144,6 +153,11 @@ const WheelHandler = (): null => {
         const newY = mouseY - worldY * newZoom;
 
         setViewport({ x: newX, y: newY, zoom: newZoom }, { duration: 0 });
+      } else {
+        setViewport(
+          { x: x - wheelEvent.deltaX / zoom, y: y - wheelEvent.deltaY / zoom, zoom },
+          { duration: 0 }
+        );
       }
     };
 
@@ -315,7 +329,7 @@ export const CanvasShell = ({
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
             <WheelHandler />
-            <Background gap={24} variant={BackgroundVariant.Lines} color="rgba(var(--ow-accent-rgb), 0.25)" />
+            <Background gap={32} variant={BackgroundVariant.Lines} />
           </ReactFlow>
         </ReactFlowProvider>
 
