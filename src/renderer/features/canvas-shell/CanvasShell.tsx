@@ -306,16 +306,16 @@ export const CanvasShell = ({
             onPaneClick={() => {
               onSelectNode(null);
             }}
-            panOnDrag={[1]}
+            panOnDrag={true}
             proOptions={{ hideAttribution: true }}
-            selectionOnDrag={true}
+            selectionOnDrag={false}
             zoomOnDoubleClick={false}
-            zoomOnPinch={true}
+            zoomOnPinch={false}
             zoomOnScroll={false}
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
             <WheelHandler />
-            <Background gap={24} variant={BackgroundVariant.Lines} />
+            <Background gap={24} variant={BackgroundVariant.Lines} color="rgba(var(--ow-accent-rgb), 0.25)" />
           </ReactFlow>
         </ReactFlowProvider>
 
