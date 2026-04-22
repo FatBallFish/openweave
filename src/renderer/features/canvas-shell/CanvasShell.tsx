@@ -68,7 +68,6 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
 const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
   return (
     <div
-      className="nodrag nopan"
       data-testid={`canvas-shell-node-${data.node.id}`}
       style={{
         width: '100%',
