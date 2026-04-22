@@ -141,7 +141,6 @@ export const englishLanguagePack: LanguagePack = {
     'nodeToolbar.title': 'Canvas quick guide',
     'nodeToolbar.quickInsert': '/ Quick insert',
     'nodeToolbar.commandMenu': 'Cmd/Ctrl+K Command menu',
-    'nodeToolbar.pan': 'Space Pan',
     'canvas.loading': 'Loading canvas...',
     'canvasEmpty.eyebrow': 'Workflow kickoff',
     'canvasEmpty.title': 'Start with a terminal',

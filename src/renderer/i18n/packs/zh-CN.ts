@@ -141,7 +141,6 @@ export const chineseLanguagePack: LanguagePack = {
     'nodeToolbar.title': '画布快捷指南',
     'nodeToolbar.quickInsert': '/ 快速插入',
     'nodeToolbar.commandMenu': 'Cmd/Ctrl+K 命令面板',
-    'nodeToolbar.pan': 'Space 平移',
     'canvas.loading': '正在加载画布...',
     'canvasEmpty.eyebrow': '工作流起点',
     'canvasEmpty.title': '从终端开始',

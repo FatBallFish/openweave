@@ -12,9 +12,6 @@ export const NodeToolbar = (): JSX.Element => {
       <span className="ow-node-toolbar__hint" data-testid="canvas-command-menu-hint">
         {t('nodeToolbar.commandMenu')}
       </span>
-      <span className="ow-node-toolbar__hint" data-testid="canvas-pan-hint">
-        {t('nodeToolbar.pan')}
-      </span>
     </div>
   );
 };

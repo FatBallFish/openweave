@@ -640,7 +640,6 @@ select {
   position: relative;
   min-height: 720px;
   border: 1px solid var(--ow-color-border);
-  border-radius: 18px;
   overflow: hidden;
   background: var(--ow-color-bg-canvas);
 }
@@ -949,8 +948,7 @@ select {
   overflow: hidden;
   border: 1px solid var(--ow-color-border);
   border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.94), rgba(var(--ow-surface-rgb), 0.82));
+  background: transparent;
   box-shadow: var(--ow-shadow-panel);
 }
 
@@ -2569,9 +2567,7 @@ select:focus-visible {
 .ow-builtin-node-frame {
   position: relative;
   border-radius: 20px;
-  background:
-    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.98), rgba(var(--ow-surface-rgb), 0.84)),
-    var(--ow-color-bg-panel-strong);
+  background: transparent;
   box-shadow: var(--ow-shadow-node);
 }
 
@@ -2954,6 +2950,8 @@ select:focus-visible {
     0 0 0 1px rgba(var(--ow-node-kind-rgb), 0.18),
     var(--ow-shadow-node);
   transform: translateY(-2px);
+  outline: 2px dashed rgba(var(--ow-accent-rgb), 0.72);
+  outline-offset: 4px;
 }
 
 .ow-canvas-shell__flow .react-flow__node.selected .ow-builtin-node-header {
@@ -3744,7 +3742,12 @@ select:focus-visible {
 }
 
 .ow-canvas-shell__flow .react-flow__background {
-  opacity: 0.7;
+  opacity: 0.9;
+}
+
+.ow-canvas-shell__flow .react-flow__background pattern line {
+  stroke: rgba(var(--ow-accent-rgb), 0.14);
+  stroke-width: 1;
 }
 
 @media (max-width: 1480px) {
@@ -4685,5 +4688,25 @@ select:focus-visible {
   border-radius: 14px;
   border: 1px dashed var(--ow-color-border);
   background: rgba(var(--ow-surface-rgb), 0.32);
+}
+
+.ow-node-resizer__handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 2px !important;
+  background: rgba(var(--ow-accent-rgb), 0.85) !important;
+  border: 1px solid rgba(var(--ow-surface-rgb), 0.9) !important;
+  box-shadow: 0 0 0 1px rgba(var(--ow-accent-rgb), 0.3) !important;
+}
+
+.ow-node-resizer__handle:hover {
+  background: rgb(var(--ow-accent-rgb)) !important;
+  transform: scale(1.3);
+}
+
+.ow-node-resizer__line {
+  border-color: rgba(var(--ow-accent-rgb), 0.35) !important;
+  border-style: dashed !important;
+  border-width: 1px !important;
 }
 }

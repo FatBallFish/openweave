@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
+  BackgroundVariant,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -314,7 +315,7 @@ export const CanvasShell = ({
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
             <WheelHandler />
-            <Background gap={24} size={1} />
+            <Background gap={24} variant={BackgroundVariant.Lines} />
           </ReactFlow>
         </ReactFlowProvider>
 
