@@ -68,8 +68,16 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 const configMatchesEvent = (config: ShortcutConfig, event: CanvasShortcutLike): boolean => {
   if (!config.key) return false;
   if (config.key.toLowerCase() !== event.key.toLowerCase()) return false;
-  if (config.ctrlKey !== event.ctrlKey) return false;
-  if (config.metaKey !== event.metaKey) return false;
+
+  const configHasPrimaryModifier = config.ctrlKey || config.metaKey;
+  const eventHasPrimaryModifier = event.ctrlKey || event.metaKey;
+
+  if (configHasPrimaryModifier) {
+    if (!eventHasPrimaryModifier) return false;
+  } else {
+    if (event.ctrlKey || event.metaKey) return false;
+  }
+
   if (config.shiftKey !== event.shiftKey) return false;
   if (config.altKey !== event.altKey) return false;
   return true;
