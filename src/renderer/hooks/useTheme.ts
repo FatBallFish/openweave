@@ -36,6 +36,8 @@ export const useTheme = (): void => {
       clearTheme();
     }
 
-    return undefined;
+    return () => {
+      clearTheme();
+    };
   }, [theme]);
 };
