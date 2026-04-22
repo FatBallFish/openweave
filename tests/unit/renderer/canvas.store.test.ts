@@ -301,6 +301,46 @@ describe('canvas store', () => {
 
 
 
+  it('persists graph-node bounds updates without dropping metadata', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as {
+      updateNodeBounds: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<void>;
+    }).updateNodeBounds('node-terminal-1', { x: 300, y: 220, width: 500, height: 300 });
+
+    expect(saveGraphSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        graphSnapshot: expect.objectContaining({
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'node-terminal-1',
+              componentType: 'builtin.terminal',
+              componentVersion: '1.0.0',
+              state: expect.objectContaining({
+                activeSessionId: null
+              }),
+              bounds: expect.objectContaining({
+                x: 300,
+                y: 220,
+                width: 500,
+                height: 300
+              })
+            })
+          ])
+        })
+      })
+    );
+  });
+
   it('ignores add-node mutations while a graph load is in progress', async () => {
     let resolveLoad: ((value: { graphSnapshot: GraphSnapshotV2Input }) => void) | null = null;
     setBridge({

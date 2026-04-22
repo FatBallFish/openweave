@@ -718,6 +718,43 @@ export const canvasStore = {
       const errorMessage = error instanceof Error ? error.message : 'Failed to move graph node';
       setState({ errorMessage });
     }
+  },
+  updateNodeBounds: async (
+    nodeId: string,
+    bounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  ): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (node) => ({
+      ...node,
+      bounds: {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height
+      },
+      updatedAtMs: Date.now()
+    }));
+
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: 'Resized node on canvas' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resize graph node';
+      setState({ errorMessage });
+    }
   }
 };
 
