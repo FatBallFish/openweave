@@ -1,9 +1,18 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { settingsStore } from '../../../../../src/renderer/features/workbench/settings.store';
 
 describe('settingsStore shortcuts', () => {
   beforeEach(() => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn()
+    });
     settingsStore.resetAllShortcuts();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('returns undefined override for unknown id', () => {
@@ -28,5 +37,14 @@ describe('settingsStore shortcuts', () => {
     settingsStore.resetAllShortcuts();
     expect(settingsStore.getShortcutOverride('open-command-palette')).toBeUndefined();
     expect(settingsStore.getShortcutOverride('undo')).toBeUndefined();
+  });
+
+  it('persists shortcuts to localStorage on set', () => {
+    const config = { key: 'p', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false };
+    settingsStore.setShortcut('open-command-palette', config);
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'openweave:settings:shortcuts',
+      JSON.stringify({ 'open-command-palette': config })
+    );
   });
 });

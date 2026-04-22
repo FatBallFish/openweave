@@ -29,13 +29,31 @@ const parseTheme = (value: string | null): ThemeSetting => {
   return 'system';
 };
 
+const isValidShortcutConfig = (value: unknown): value is ShortcutConfig => {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.key === 'string' &&
+    typeof candidate.ctrlKey === 'boolean' &&
+    typeof candidate.metaKey === 'boolean' &&
+    typeof candidate.shiftKey === 'boolean' &&
+    typeof candidate.altKey === 'boolean'
+  );
+};
+
 const loadShortcuts = (): Record<string, ShortcutConfig> => {
   try {
     const stored = localStorage.getItem(SHORTCUTS_STORAGE_KEY);
     if (stored !== null) {
       const parsed = JSON.parse(stored) as unknown;
       if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        return parsed as Record<string, ShortcutConfig>;
+        const result: Record<string, ShortcutConfig> = {};
+        for (const [id, config] of Object.entries(parsed)) {
+          if (isValidShortcutConfig(config)) {
+            result[id] = config;
+          }
+        }
+        return result;
       }
     }
   } catch {
@@ -126,8 +144,7 @@ export const settingsStore = {
     });
   },
   resetShortcut: (id: string): void => {
-    const next = { ...state.shortcuts };
-    delete next[id];
+    const { [id]: _, ...next } = state.shortcuts;
     setState({ shortcuts: next });
   },
   resetAllShortcuts: (): void => {
