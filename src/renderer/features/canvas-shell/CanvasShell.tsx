@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   ReactFlow,
@@ -6,6 +6,7 @@ import {
   useReactFlow,
   useEdgesState,
   useNodesState,
+  NodeResizer,
   type Edge,
   type Node,
   type NodeProps
@@ -27,6 +28,7 @@ interface CanvasShellNodeData {
   node: GraphSnapshotV2Input['nodes'][number];
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
+  onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
 }
 
 type CanvasShellNode = Node<CanvasShellNodeData, 'builtinHost'>;
@@ -42,6 +44,7 @@ export interface ProjectGraphToCanvasShellInput {
   graphSnapshot: GraphSnapshotV2Input;
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
+  onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
@@ -58,7 +61,7 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   onAddText: () => void;
 }
 
-const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element => {
+const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
   return (
     <div
       className="nodrag nopan"
@@ -70,6 +73,21 @@ const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element 
         overflow: 'hidden'
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={120}
+        minHeight={80}
+        handleClassName="ow-node-resizer__handle"
+        lineClassName="ow-node-resizer__line"
+        onResizeEnd={(_event, params) => {
+          data.onResizeNode?.(data.node.id, {
+            x: params.x,
+            y: params.y,
+            width: params.width,
+            height: params.height
+          });
+        }}
+      />
       <BuiltinHostRenderer
         workspaceId={data.workspaceId}
         workspaceRootDir={data.workspaceRootDir}
@@ -83,6 +101,58 @@ const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element 
 
 const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
+};
+
+const WheelHandler = (): null => {
+  const { getViewport, setViewport } = useReactFlow();
+
+  useEffect(() => {
+    const pane = document.querySelector('.ow-canvas-shell__flow .react-flow__pane');
+    if (!pane) {
+      return;
+    }
+
+    const handleWheel = (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      wheelEvent.preventDefault();
+
+      const { x, y, zoom } = getViewport();
+      const rect = pane.getBoundingClientRect();
+
+      if (wheelEvent.ctrlKey || wheelEvent.metaKey) {
+        // Trackpad pinch → zoom
+        const delta = wheelEvent.deltaY > 0 ? -0.08 : 0.08;
+        const newZoom = Math.min(Math.max(zoom + delta, 0.4), 2);
+        setViewport({ x, y, zoom: newZoom }, { duration: 0 });
+      } else if (Math.abs(wheelEvent.deltaX) > 0.5 && Math.abs(wheelEvent.deltaY) > 0.5) {
+        // Trackpad two-finger pan → pan
+        setViewport(
+          { x: x - wheelEvent.deltaX / zoom, y: y - wheelEvent.deltaY / zoom, zoom },
+          { duration: 0 }
+        );
+      } else {
+        // Mouse wheel → zoom centered on cursor
+        const mouseX = wheelEvent.clientX - rect.left;
+        const mouseY = wheelEvent.clientY - rect.top;
+        const zoomFactor = wheelEvent.deltaY > 0 ? 0.92 : 1.08;
+        const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.4), 2);
+
+        const worldX = (mouseX - x) / zoom;
+        const worldY = (mouseY - y) / zoom;
+        const newX = mouseX - worldX * newZoom;
+        const newY = mouseY - worldY * newZoom;
+
+        setViewport({ x: newX, y: newY, zoom: newZoom }, { duration: 0 });
+      }
+    };
+
+    pane.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      pane.removeEventListener('wheel', handleWheel);
+    };
+  }, [getViewport, setViewport]);
+
+  return null;
 };
 
 const CanvasViewportController = ({
@@ -145,7 +215,8 @@ export const projectGraphToCanvasShell = (
         workspaceRootDir: input.workspaceRootDir,
         node,
         onOpenRun: input.onOpenRun,
-        onCreateBranchWorkspace: input.onCreateBranchWorkspace
+        onCreateBranchWorkspace: input.onCreateBranchWorkspace,
+        onResizeNode: input.onResizeNode
       },
       style: {
         width: node.bounds.width,
@@ -192,9 +263,10 @@ export const CanvasShell = ({
         workspaceRootDir,
         graphSnapshot,
         onOpenRun,
-        onCreateBranchWorkspace
+        onCreateBranchWorkspace,
+        onResizeNode
       }),
-    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir]
+    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode]
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(model.edges);
@@ -233,13 +305,15 @@ export const CanvasShell = ({
             onPaneClick={() => {
               onSelectNode(null);
             }}
-            panOnDrag={true}
+            panOnDrag={[1]}
             proOptions={{ hideAttribution: true }}
-            selectionOnDrag={false}
+            selectionOnDrag={true}
+            zoomOnDoubleClick={false}
             zoomOnPinch={true}
-            zoomOnScroll={true}
+            zoomOnScroll={false}
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
+            <WheelHandler />
             <Background gap={24} size={1} />
           </ReactFlow>
         </ReactFlowProvider>
