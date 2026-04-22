@@ -226,7 +226,16 @@ export const App = (): JSX.Element => {
     onAddPortal: addPortal,
     onAddFileTree: addFileTree,
     onAddText: addText,
-    onEscape: closeCommandPalette
+    onEscape: closeCommandPalette,
+    onDeleteSelected: () => {
+      void canvasStore.deleteSelectedNode();
+    },
+    onUndo: () => {
+      void canvasStore.undo();
+    },
+    onRedo: () => {
+      void canvasStore.redo();
+    }
   });
 
   const stage = activeWorkspace ? (

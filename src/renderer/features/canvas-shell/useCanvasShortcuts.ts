@@ -9,7 +9,10 @@ export type CanvasShortcutAction =
   | 'add-portal'
   | 'add-file-tree'
   | 'add-text'
-  | 'escape';
+  | 'escape'
+  | 'delete-selected'
+  | 'undo'
+  | 'redo';
 
 interface CanvasShortcutLike {
   key: string;
@@ -31,6 +34,9 @@ interface UseCanvasShortcutsOptions {
   onAddFileTree: () => void;
   onAddText: () => void;
   onEscape: () => void;
+  onDeleteSelected: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -98,6 +104,24 @@ export const getCanvasShortcutAction = (
     return 'escape';
   }
 
+  if (!hasPrimaryModifier && !event.altKey && !event.shiftKey) {
+    if (key === 'backspace' || key === 'delete') {
+      return 'delete-selected';
+    }
+  }
+
+  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'z') {
+    return 'undo';
+  }
+
+  if (hasPrimaryModifier && event.shiftKey && !event.altKey && key === 'z') {
+    return 'redo';
+  }
+
+  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'y') {
+    return 'redo';
+  }
+
   return null;
 };
 
@@ -111,7 +135,10 @@ export const useCanvasShortcuts = ({
   onAddPortal,
   onAddFileTree,
   onAddText,
-  onEscape
+  onEscape,
+  onDeleteSelected,
+  onUndo,
+  onRedo
 }: UseCanvasShortcutsOptions): void => {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') {
@@ -154,6 +181,15 @@ export const useCanvasShortcuts = ({
         case 'escape':
           onEscape();
           return;
+        case 'delete-selected':
+          onDeleteSelected();
+          return;
+        case 'undo':
+          onUndo();
+          return;
+        case 'redo':
+          onRedo();
+          return;
         default:
           return;
       }
@@ -173,6 +209,9 @@ export const useCanvasShortcuts = ({
     onEscape,
     onOpenCommandPalette,
     onOpenQuickAdd,
-    onToggleInspector
+    onToggleInspector,
+    onDeleteSelected,
+    onUndo,
+    onRedo
   ]);
 };
