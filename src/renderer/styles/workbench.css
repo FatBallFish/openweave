@@ -2053,6 +2053,10 @@ select:focus-visible {
   backdrop-filter: blur(14px);
 }
 
+.ow-workbench-stage {
+  border-radius: 0;
+}
+
 .ow-workbench-left-rail::after,
 .ow-workbench-context-panel::after,
 .ow-workbench-inspector::after,
