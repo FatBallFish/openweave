@@ -16,7 +16,6 @@ import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
 import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
-import { CanvasViewportControls } from './CanvasViewportControls';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -495,7 +494,6 @@ export const CanvasShell = ({
               onClose={() => setEmptyStateDismissed(true)}
             />
           ) : null}
-          <CanvasViewportControls />
         </div>
       </ReactFlowProvider>
     </section>
