@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -216,6 +216,117 @@ const CanvasViewportController = ({
   return null;
 };
 
+const PlacementOverlay = ({
+  placementMode,
+  onPlacementComplete,
+  onPlacementCancel
+}: {
+  placementMode: { type: string };
+  onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onPlacementCancel?: () => void;
+}): JSX.Element => {
+  const [placementRect, setPlacementRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const placementStartRef = useRef<{ x: number; y: number } | null>(null);
+  const placementRectRef = useRef(placementRect);
+  const { getViewport } = useReactFlow();
+
+  useEffect(() => {
+    placementRectRef.current = placementRect;
+  }, [placementRect]);
+
+  useEffect(() => {
+    setPlacementRect(null);
+    placementStartRef.current = null;
+  }, [placementMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onPlacementCancel?.();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onPlacementCancel]);
+
+  return (
+    <div
+      className="ow-canvas-placement-overlay"
+      data-testid="canvas-placement-overlay"
+      onMouseDown={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const startX = e.clientX - rect.left;
+        const startY = e.clientY - rect.top;
+        placementStartRef.current = { x: startX, y: startY };
+        setPlacementRect({ x: startX, y: startY, width: 0, height: 0 });
+      }}
+      onMouseMove={(e) => {
+        if (!placementStartRef.current) {
+          return;
+        }
+        const rect = e.currentTarget.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        const startX = placementStartRef.current.x;
+        const startY = placementStartRef.current.y;
+        setPlacementRect({
+          x: Math.min(startX, currentX),
+          y: Math.min(startY, currentY),
+          width: Math.abs(currentX - startX),
+          height: Math.abs(currentY - startY)
+        });
+      }}
+      onMouseUp={() => {
+        const currentRect = placementRectRef.current;
+        if (!placementStartRef.current || !currentRect) {
+          placementStartRef.current = null;
+          return;
+        }
+        const { x: vpX, y: vpY, zoom } = getViewport();
+        const minSize = 60;
+        const worldX = (currentRect.x - vpX) / zoom;
+        const worldY = (currentRect.y - vpY) / zoom;
+        const worldWidth = Math.max(currentRect.width / zoom, minSize);
+        const worldHeight = Math.max(currentRect.height / zoom, minSize);
+
+        onPlacementComplete?.(placementMode.type, {
+          x: worldX,
+          y: worldY,
+          width: worldWidth,
+          height: worldHeight
+        });
+
+        placementStartRef.current = null;
+        setPlacementRect(null);
+      }}
+      onMouseLeave={() => {
+        placementStartRef.current = null;
+        setPlacementRect(null);
+      }}
+    >
+      {placementRect ? (
+        <div
+          className="ow-canvas-placement-rect"
+          style={{
+            left: placementRect.x,
+            top: placementRect.y,
+            width: placementRect.width,
+            height: placementRect.height
+          }}
+        />
+      ) : null}
+    </div>
+  );
+};
+
 export const projectGraphToCanvasShell = (
   input: ProjectGraphToCanvasShellInput
 ): CanvasShellModel => {
@@ -271,7 +382,10 @@ export const CanvasShell = ({
   onAddNote,
   onAddPortal,
   onAddFileTree,
-  onAddText
+  onAddText,
+  placementMode,
+  onPlacementComplete,
+  onPlacementCancel
 }: CanvasShellProps): JSX.Element => {
   const model = useMemo(
     () =>
@@ -332,6 +446,13 @@ export const CanvasShell = ({
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
             <WheelHandler />
             <Background gap={32} variant={BackgroundVariant.Lines} />
+            {placementMode ? (
+              <PlacementOverlay
+                placementMode={placementMode}
+                onPlacementComplete={onPlacementComplete}
+                onPlacementCancel={onPlacementCancel}
+              />
+            ) : null}
           </ReactFlow>
 
           {isEmpty ? (

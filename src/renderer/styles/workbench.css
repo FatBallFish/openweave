@@ -592,6 +592,19 @@ select {
   color: var(--ow-color-text-strong);
 }
 
+.ow-canvas-placement-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  cursor: crosshair;
+}
+
+.ow-canvas-placement-rect {
+  position: absolute;
+  border: 2px dashed rgba(var(--ow-accent-rgb), 0.6);
+  background: rgba(var(--ow-accent-rgb), 0.08);
+  pointer-events: none;
+}
 
 .ow-canvas-shell {
   display: flex;
