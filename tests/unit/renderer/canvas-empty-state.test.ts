@@ -18,9 +18,9 @@ describe('canvas empty state', () => {
     );
 
     expect(html).toContain('canvas-empty-state');
-    expect(html).toContain('Start with a terminal');
-    expect(html).toContain('Debug a repo');
-    expect(html).toContain('Explore a website');
+    expect(html).toContain('从终端开始');
+    expect(html).toContain('调试仓库');
+    expect(html).toContain('探索网站');
     expect(html).toContain('canvas-empty-action-terminal');
     expect(html).toContain('canvas-empty-action-file-tree');
   });

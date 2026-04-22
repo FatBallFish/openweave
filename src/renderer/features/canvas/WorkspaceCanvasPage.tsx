@@ -3,9 +3,10 @@ import { CanvasShell } from '../canvas-shell/CanvasShell';
 import { RunDrawer } from '../runs/RunDrawer';
 import { workspacesStore } from '../workspaces/workspaces.store';
 import { useCanvasStore, canvasStore } from './canvas.store';
-import { NodeToolbar } from './nodes/NodeToolbar';
+import { useI18n } from '../../i18n/provider';
 
 interface WorkspaceCanvasPageProps {
+  fitViewRequestId: number;
   workspaceId: string;
   workspaceName: string;
   workspaceRootDir: string;
@@ -15,6 +16,7 @@ interface WorkspaceCanvasPageProps {
 }
 
 export const WorkspaceCanvasPage = ({
+  fitViewRequestId,
   workspaceId,
   workspaceName,
   workspaceRootDir,
@@ -22,6 +24,7 @@ export const WorkspaceCanvasPage = ({
   onOpenQuickAdd,
   onSelectNode
 }: WorkspaceCanvasPageProps): JSX.Element => {
+  const { t } = useI18n();
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const graphSnapshot = useCanvasStore((storeState) => storeState.graphSnapshot);
   const loading = useCanvasStore((storeState) => storeState.loading);
@@ -40,16 +43,6 @@ export const WorkspaceCanvasPage = ({
 
   return (
     <section className="ow-workspace-canvas-page" data-testid="workspace-canvas-page">
-      <header className="ow-workspace-canvas-page__header">
-        <div>
-          <p className="ow-workspace-canvas-page__eyebrow">Infinite canvas</p>
-          <h2 data-testid="canvas-workspace-name">{workspaceName}</h2>
-        </div>
-        <div className="ow-workspace-canvas-page__meta">Graph schema v2 workspace</div>
-      </header>
-
-      <NodeToolbar />
-
       {errorMessage ? (
         <p className="ow-workspace-canvas-page__error" data-testid="canvas-error">
           {errorMessage}
@@ -57,9 +50,10 @@ export const WorkspaceCanvasPage = ({
       ) : null}
 
       {loading ? (
-        <p data-testid="canvas-loading">Loading canvas...</p>
+        <p data-testid="canvas-loading">{t('canvas.loading')}</p>
       ) : (
         <CanvasShell
+          fitViewRequestId={fitViewRequestId}
           workspaceId={workspaceId}
           workspaceRootDir={workspaceRootDir}
           graphSnapshot={graphSnapshot}
@@ -88,6 +82,10 @@ export const WorkspaceCanvasPage = ({
           }}
         />
       )}
+
+      <span data-testid="canvas-workspace-name" hidden={true}>
+        {workspaceName}
+      </span>
 
       <RunDrawer workspaceId={workspaceId} runId={activeRunId} onClose={() => setActiveRunId(null)} />
     </section>

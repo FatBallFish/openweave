@@ -1,3 +1,5 @@
+import { useI18n } from '../../i18n/provider';
+
 interface CanvasEmptyAction {
   label: string;
   hotkey: string;
@@ -9,6 +11,8 @@ interface CanvasEmptyStateProps {
 }
 
 export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Element => {
+  const { t } = useI18n();
+
   return (
     <div className="ow-canvas-empty-state" data-testid="canvas-empty-state">
       <div aria-hidden="true" className="ow-canvas-empty-state__edge-sketch">
@@ -24,10 +28,10 @@ export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Elemen
       </div>
 
       <div className="ow-canvas-empty-state__card" data-testid="canvas-empty">
-        <p className="ow-canvas-empty-state__eyebrow">Workflow kickoff</p>
-        <h3>Start with a terminal</h3>
+        <p className="ow-canvas-empty-state__eyebrow">{t('canvasEmpty.eyebrow')}</p>
+        <h3>{t('canvasEmpty.title')}</h3>
         <p className="ow-canvas-empty-state__lede">
-          Then add context around it with notes, files, portals, and pinned results.
+          {t('canvasEmpty.description')}
         </p>
         <div className="ow-canvas-empty-state__actions">
           {actions.map((action) => (
@@ -45,26 +49,26 @@ export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Elemen
         </div>
         <div className="ow-canvas-empty-state__signal-strip">
           <div>
-            <span>Primary surface</span>
-            <strong>Canvas first</strong>
+            <span>{t('canvasEmpty.primarySurface')}</span>
+            <strong>{t('canvasEmpty.canvasFirst')}</strong>
           </div>
           <div>
-            <span>Starter flow</span>
-            <strong>Terminal + context</strong>
+            <span>{t('canvasEmpty.starterFlow')}</span>
+            <strong>{t('canvasEmpty.terminalContext')}</strong>
           </div>
           <div>
-            <span>Hotkeys</span>
+            <span>{t('canvasEmpty.hotkeys')}</span>
             <strong>1-5 and /</strong>
           </div>
         </div>
         <div className="ow-canvas-empty-state__recipes">
           <article>
-            <strong>Debug a repo</strong>
-            <p>Inspect files, run commands, and capture fixes.</p>
+            <strong>{t('canvasEmpty.debugRepo')}</strong>
+            <p>{t('canvasEmpty.debugRepoDescription')}</p>
           </article>
           <article>
-            <strong>Explore a website</strong>
-            <p>Open a portal, inspect structure, and pin findings.</p>
+            <strong>{t('canvasEmpty.exploreSite')}</strong>
+            <p>{t('canvasEmpty.exploreSiteDescription')}</p>
           </article>
         </div>
       </div>

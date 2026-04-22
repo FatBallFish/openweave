@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import {
   cleanupRegisteredBranchWorkspaceOnDelete,
   disposeBranchWorkspaceIpcHandlers,
@@ -25,6 +25,7 @@ import {
   registerRunsIpcHandlers
 } from './ipc/runs';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
+import { IPC_CHANNELS } from '../shared/ipc/contracts';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
 if (configuredUserDataDir) {
@@ -59,11 +60,16 @@ const createMainWindow = (): BrowserWindow => {
     }
   });
 
-  const rendererEntry = path.join(__dirname, '..', 'renderer', 'index.html');
+  const devUrl = process.env.OPENWEAVE_DEV_URL;
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
-  void mainWindow.loadFile(rendererEntry);
+  if (devUrl) {
+    void mainWindow.loadURL(devUrl);
+  } else {
+    const rendererEntry = path.join(__dirname, '..', 'renderer', 'index.html');
+    void mainWindow.loadFile(rendererEntry);
+  }
 
   return mainWindow;
 };
@@ -72,6 +78,106 @@ void app.whenReady().then(() => {
   const registryDbFilePath = path.join(app.getPath('userData'), 'registry.db');
   const workspaceDbDir = path.join(app.getPath('userData'), 'workspaces');
   const enableCrashRecoveryOnOpen = initializeCrashRecoveryMarker();
+
+  ipcMain.handle(IPC_CHANNELS.appOpenSettings, () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      win.webContents.send(IPC_CHANNELS.appOpenSettings);
+    }
+  });
+
+  const isMac = process.platform === 'darwin';
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.getName(),
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              {
+                label: 'Preferences...',
+                accelerator: 'Command+,',
+                click: () => {
+                  const win = BrowserWindow.getFocusedWindow();
+                  if (win) {
+                    win.webContents.send(IPC_CHANNELS.appOpenSettings);
+                  }
+                }
+              },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const }
+            ]
+          }
+        ]
+      : []),
+    {
+      label: 'File',
+      submenu: [isMac ? { role: 'close' as const } : { role: 'quit' as const }]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { role: 'forceReload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' as const },
+        ...(isMac
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const }
+            ]
+          : [])
+      ]
+    }
+  ];
+
+  if (!isMac) {
+    template.push({
+      label: 'Settings',
+      submenu: [
+        {
+          label: 'Preferences...',
+          accelerator: 'Shift+Alt+,',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow();
+            if (win) {
+              win.webContents.send(IPC_CHANNELS.appOpenSettings);
+            }
+          }
+        }
+      ]
+    } as Electron.MenuItemConstructorOptions);
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 
   registerBranchWorkspaceIpcHandlers({
     dbFilePath: registryDbFilePath,

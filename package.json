@@ -10,6 +10,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "npm run build:main && OPENWEAVE_DEV_URL=http://localhost:5173 concurrently -k \"vite --host\" \"electron .\"",
+    "dev:main": "tsc -p tsconfig.node.json --watch",
     "build:main": "tsc -p tsconfig.node.json",
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
@@ -33,6 +35,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "concurrently": "^9.2.1",
     "electron": "^35.2.1",
     "electron-builder": "^24.13.3",
     "typescript": "^5.8.3",

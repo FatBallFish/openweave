@@ -1,57 +1,48 @@
 import type { ReactNode } from 'react';
+import { useI18n } from '../../i18n/provider';
 
 interface WorkbenchContextPanelProps {
   workspaceName: string | null;
+  collapsed?: boolean;
+  onOpenSettings?: () => void;
   children: ReactNode;
 }
 
-const resourceStarters = [
-  { code: 'TR', name: 'Terminal', detail: 'Launch an agent runtime', meta: 'Exec + logs' },
-  { code: 'NT', name: 'Note', detail: 'Keep markdown plans nearby', meta: 'Plans + drafts' },
-  { code: 'PT', name: 'Portal', detail: 'Verify against live web context', meta: 'Browser control' },
-  { code: 'FT', name: 'File tree', detail: 'Browse repo structure quickly', meta: 'Repo context' },
-  { code: 'TX', name: 'Text', detail: 'Pin read-only outputs and evidence', meta: 'Pinned evidence' }
-] as const;
-
 export const WorkbenchContextPanel = ({
-  workspaceName,
+  workspaceName: _workspaceName,
+  collapsed: _collapsed,
+  onOpenSettings,
   children
 }: WorkbenchContextPanelProps): JSX.Element => {
+  const { t } = useI18n();
+
   return (
     <section className="ow-workbench-context-panel" data-testid="workbench-context-panel">
-      <header className="ow-workbench-context-panel__header">
-        <div>
-          <p className="ow-workbench-context-panel__eyebrow">Workspace Registry</p>
-          <h2 className="ow-workbench-context-panel__title">{workspaceName ?? 'Choose a workspace'}</h2>
-        </div>
-        <div className="ow-workbench-context-panel__badge">Context + resources</div>
-      </header>
-
-      <div className="ow-workbench-context-panel__summary">
-        <article className="ow-workbench-context-panel__summary-card">
-          <span>Status</span>
-          <strong>{workspaceName ? 'Registry attached' : 'Awaiting workspace'}</strong>
-        </article>
-        <article className="ow-workbench-context-panel__summary-card">
-          <span>Surface</span>
-          <strong>Canvas orchestration</strong>
-        </article>
-      </div>
-
-      <section className="ow-workbench-context-panel__resources" data-testid="workbench-resource-starters">
-        {resourceStarters.map((resource) => (
-          <article key={resource.name} className="ow-workbench-context-panel__resource-card">
-            <div className="ow-workbench-context-panel__resource-header">
-              <span className="ow-workbench-context-panel__resource-code">{resource.code}</span>
-              <strong>{resource.name}</strong>
-            </div>
-            <p>{resource.detail}</p>
-            <span className="ow-workbench-context-panel__resource-meta">{resource.meta}</span>
-          </article>
-        ))}
-      </section>
-
       <div className="ow-workbench-context-panel__body">{children}</div>
+      {onOpenSettings && (
+        <div className="ow-workbench-context-panel__footer">
+          <div className="ow-workbench-context-panel__divider" />
+          <button
+            aria-label={t('topbar.settings')}
+            className="ow-workbench-context-panel__settings-btn"
+            data-testid="workbench-context-panel-settings"
+            onClick={onOpenSettings}
+            title={t('topbar.settings')}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path
+                d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
     </section>
   );
 };

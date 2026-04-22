@@ -107,6 +107,7 @@ describe('canvas shell', () => {
   it('renders workbench canvas chrome around builtin hosts', () => {
     const html = renderToStaticMarkup(
       createElement(CanvasShell, {
+        fitViewRequestId: 0,
         workspaceId: 'ws-1',
         workspaceRootDir: '/tmp/ws-1',
         graphSnapshot: createGraphSnapshot(),
@@ -125,10 +126,11 @@ describe('canvas shell', () => {
     );
 
     expect(html).toContain('canvas-shell');
-    expect(html).toContain('canvas-shell-grid');
-    expect(html).toContain('canvas-shell-minimap');
-    expect(html).toContain('canvas-selection-hud');
-    expect(html).toContain('command-palette-trigger');
-    expect(html).toContain('canvas-quick-add-trigger');
+    expect(html).toContain('canvas-shell-flow');
+    expect(html).not.toContain('canvas-shell-minimap');
+    expect(html).not.toContain('react-flow__controls');
+    expect(html).not.toContain('canvas-shell-grid');
+    expect(html).not.toContain('command-palette-trigger');
+    expect(html).not.toContain('canvas-quick-add-trigger');
   });
 });

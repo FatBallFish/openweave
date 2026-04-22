@@ -192,7 +192,9 @@ export const createBranchWorkspaceIpcHandlers = (
       try {
         const createdWorkspace = deps.registry.createWorkspace({
           name: toBranchWorkspaceName(sourceWorkspace.name, parsed.branchName),
-          rootDir: worktree.targetDir
+          rootDir: worktree.targetDir,
+          iconKey: sourceWorkspace.iconKey,
+          iconColor: sourceWorkspace.iconColor
         });
         createdWorkspaceId = createdWorkspace.id;
         deps.registry.upsertBranchWorkspaceLink({
@@ -214,7 +216,7 @@ export const createBranchWorkspaceIpcHandlers = (
         }
 
         return {
-          workspace: createdWorkspace
+          workspace: deps.registry.getWorkspace(createdWorkspace.id)
         };
       } catch (error) {
         if (createdWorkspaceId) {

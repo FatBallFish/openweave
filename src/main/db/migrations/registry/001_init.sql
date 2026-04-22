@@ -2,6 +2,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   root_dir TEXT NOT NULL,
+  icon_key TEXT NOT NULL DEFAULT 'folder-stack',
+  icon_color TEXT NOT NULL DEFAULT '#64748B',
+  group_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at_ms INTEGER NOT NULL,
   updated_at_ms INTEGER NOT NULL,
   last_opened_at_ms INTEGER
@@ -9,6 +13,27 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
 CREATE INDEX IF NOT EXISTS idx_workspaces_updated_at_ms
   ON workspaces (updated_at_ms DESC);
+
+CREATE INDEX IF NOT EXISTS idx_workspaces_group_sort_order
+  ON workspaces (group_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS workspace_groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_groups_sort_order
+  ON workspace_groups (sort_order);
+
+CREATE TABLE IF NOT EXISTS workspace_group_ui_state (
+  group_id TEXT PRIMARY KEY,
+  is_collapsed INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY (group_id) REFERENCES workspace_groups(id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS workspace_branch_links (
   workspace_id TEXT PRIMARY KEY,

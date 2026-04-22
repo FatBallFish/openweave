@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { WorkbenchContextPanel } from './WorkbenchContextPanel';
 import { WorkbenchInspector } from './WorkbenchInspector';
-import { WorkbenchLeftRail } from './WorkbenchLeftRail';
 import { WorkbenchStatusIsland } from './WorkbenchStatusIsland';
 import { WorkbenchTopBar } from './WorkbenchTopBar';
+import { useI18n } from '../../i18n/provider';
 
 export interface WorkbenchSelectedNode {
   id: string;
@@ -23,6 +23,7 @@ interface WorkbenchShellProps {
   nodeCount: number;
   edgeCount: number;
   recentAction: string | null;
+  contextPanelCollapsed: boolean;
   inspectorCollapsed: boolean;
   onAddTerminal: () => void;
   onAddNote: () => void;
@@ -30,13 +31,15 @@ interface WorkbenchShellProps {
   onAddFileTree: () => void;
   onAddText: () => void;
   onOpenCommandMenu: () => void;
+  onOpenQuickAdd: () => void;
   onFitCanvas: () => void;
-  onOpenSettings: () => void;
+  onToggleContextPanel: () => void;
   onToggleInspector: () => void;
-  searchDisabled: boolean;
+  onOpenSettings: () => void;
   commandMenuDisabled: boolean;
+  quickAddDisabled: boolean;
   fitViewDisabled: boolean;
-  settingsDisabled: boolean;
+  inspectorDisabled: boolean;
 }
 
 export const WorkbenchShell = ({
@@ -50,6 +53,7 @@ export const WorkbenchShell = ({
   nodeCount,
   edgeCount,
   recentAction,
+  contextPanelCollapsed,
   inspectorCollapsed,
   onAddTerminal,
   onAddNote,
@@ -57,46 +61,89 @@ export const WorkbenchShell = ({
   onAddFileTree,
   onAddText,
   onOpenCommandMenu,
+  onOpenQuickAdd,
   onFitCanvas,
-  onOpenSettings,
+  onToggleContextPanel,
   onToggleInspector,
-  searchDisabled,
+  onOpenSettings,
   commandMenuDisabled,
+  quickAddDisabled,
   fitViewDisabled,
-  settingsDisabled
+  inspectorDisabled
 }: WorkbenchShellProps): JSX.Element => {
+  const { t } = useI18n();
   const hasActiveWorkspace = workspaceName !== null;
-  const statusLabel = !hasActiveWorkspace ? 'Idle' : selectedNode ? 'Focused' : 'Ready';
+  const statusLabel = !hasActiveWorkspace
+    ? t('app.statusIdle')
+    : selectedNode
+      ? t('app.statusFocused')
+      : t('app.statusReady');
 
   return (
     <main className="ow-workbench-shell" data-testid="workbench-shell">
-      <WorkbenchTopBar
-        disabled={disabled}
-        onAddTerminal={onAddTerminal}
-        onAddNote={onAddNote}
-        onAddPortal={onAddPortal}
-        onAddFileTree={onAddFileTree}
-        onAddText={onAddText}
-        searchDisabled={searchDisabled}
-        commandMenuDisabled={commandMenuDisabled}
-        fitViewDisabled={fitViewDisabled}
-        onOpenCommandMenu={onOpenCommandMenu}
-        onFitCanvas={onFitCanvas}
-        onOpenSettings={onOpenSettings}
-        settingsDisabled={settingsDisabled}
-        workspaceName={workspaceName}
-      />
+      <section className="ow-workbench-shell__overlay-stage" data-testid="workbench-overlay-stage">
+        {contextPanelCollapsed ? (
+          <button
+            aria-label={t('inspector.expand')}
+            className="ow-workbench-expand-trigger"
+            data-testid="workbench-expand-trigger"
+            onClick={onToggleContextPanel}
+            title={t('inspector.expand')}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+        ) : null}
+        {inspectorCollapsed ? (
+          <button
+            aria-label={t('inspector.expand')}
+            className="ow-workbench-inspector-expand-trigger"
+            data-testid="workbench-inspector-expand-trigger"
+            onClick={onToggleInspector}
+            title={t('inspector.expand')}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+        ) : null}
+        <div className="ow-workbench-stage" data-testid="workbench-stage">
+          {stage}
+        </div>
+      </section>
 
-      <div className={`ow-workbench-layout${inspectorCollapsed ? ' is-inspector-collapsed' : ''}`}>
-        <WorkbenchLeftRail />
-        <WorkbenchContextPanel workspaceName={workspaceName}>{contextPanel}</WorkbenchContextPanel>
-        <section className="ow-workbench-stage-region" data-testid="workbench-stage-region">
-          <div className="ow-workbench-stage" data-testid="workbench-stage">
-            {stage}
-          </div>
-        </section>
+      <div
+        className={`ow-workbench-shell__chrome${inspectorCollapsed ? ' is-inspector-collapsed' : ''}${
+          contextPanelCollapsed ? ' is-context-collapsed' : ''
+        }`}
+      >
+        <WorkbenchTopBar
+          disabled={disabled}
+          onAddTerminal={onAddTerminal}
+          onAddNote={onAddNote}
+          onAddPortal={onAddPortal}
+          onAddFileTree={onAddFileTree}
+          onAddText={onAddText}
+          commandMenuDisabled={commandMenuDisabled}
+          quickAddDisabled={quickAddDisabled}
+          fitViewDisabled={fitViewDisabled}
+          onOpenCommandMenu={onOpenCommandMenu}
+          onOpenQuickAdd={onOpenQuickAdd}
+          onFitCanvas={onFitCanvas}
+          onToggleInspector={onToggleInspector}
+          inspectorDisabled={inspectorDisabled}
+        />
+        <WorkbenchContextPanel
+          workspaceName={workspaceName}
+          collapsed={contextPanelCollapsed}
+          onOpenSettings={onOpenSettings}
+        >
+          {contextPanel}
+        </WorkbenchContextPanel>
         <WorkbenchInspector
-          collapsed={inspectorCollapsed}
           edgeCount={edgeCount}
           nodeCount={nodeCount}
           onToggle={onToggleInspector}
@@ -105,14 +152,13 @@ export const WorkbenchShell = ({
           workspaceName={workspaceName}
           workspaceRootDir={workspaceRootDir}
         />
+        <WorkbenchStatusIsland
+          eventsCount={recentAction ? 1 : 0}
+          hasActiveWorkspace={hasActiveWorkspace}
+          statusLabel={statusLabel}
+          tasksCount={nodeCount}
+        />
       </div>
-
-      <WorkbenchStatusIsland
-        eventsCount={recentAction ? 1 : 0}
-        hasActiveWorkspace={hasActiveWorkspace}
-        statusLabel={statusLabel}
-        tasksCount={nodeCount}
-      />
       {commandPalette}
     </main>
   );

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '../../../src/renderer/i18n/provider';
 
 const mockWorkspacesState = {
   workspaces: [] as Array<{
@@ -66,12 +67,14 @@ describe('app shell', () => {
     mockWorkspacesState.workspaces = [];
     mockWorkspacesState.activeWorkspaceId = null;
 
-    const html = renderToStaticMarkup(createElement(App));
+    const html = renderToStaticMarkup(createElement(I18nProvider, null, createElement(App)));
 
     expect(html).toContain('data-testid="workbench-shell"');
     expect(html).toContain('data-testid="workbench-topbar"');
-    expect(html).toContain('OpenWeave');
+    expect(html).toContain('data-testid="workbench-overlay-stage"');
+    expect(html).toContain('选择或创建工作区');
     expect(html).not.toContain('Electron shell ready for MVP tasks.');
+    expect(html).not.toContain('ow-workbench-layout');
     expect(workspaceListPageMock).toHaveBeenCalledTimes(1);
     expect(workspaceListPageMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ variant: 'panel' }));
   });
@@ -89,12 +92,21 @@ describe('app shell', () => {
     ];
     mockWorkspacesState.activeWorkspaceId = 'ws-1';
 
-    const html = renderToStaticMarkup(createElement(App));
+    const html = renderToStaticMarkup(createElement(I18nProvider, null, createElement(App)));
 
     expect(html).toContain('data-testid="workspace-canvas-page-stub"');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('data-testid="workbench-stage"');
     expect(html).not.toContain('data-testid="workbench-stage-empty"');
+  });
+
+  it('renders the topbar in English when the locale is switched to en-US', () => {
+    mockWorkspacesState.workspaces = [];
+    mockWorkspacesState.activeWorkspaceId = null;
+
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en-US' }, createElement(App)));
+
+    expect(html).toContain('Select or create a workspace');
   });
 
   it('uses semantic shell tokens so dark parity can remap the same surfaces', () => {
