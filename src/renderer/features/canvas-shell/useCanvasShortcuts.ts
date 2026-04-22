@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import {
-  configsEqual,
   getMergedConfig,
   SHORTCUT_DEFINITIONS,
   type ShortcutConfig

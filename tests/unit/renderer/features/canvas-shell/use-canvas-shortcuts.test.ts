@@ -42,6 +42,22 @@ describe('getCanvasShortcutAction', () => {
     expect(getCanvasShortcutAction(mockEvent({ key: '1' }))).toBe('add-terminal');
   });
 
+  it('matches add-note on 2', () => {
+    expect(getCanvasShortcutAction(mockEvent({ key: '2' }))).toBe('add-note');
+  });
+
+  it('matches add-portal on 3', () => {
+    expect(getCanvasShortcutAction(mockEvent({ key: '3' }))).toBe('add-portal');
+  });
+
+  it('matches add-file-tree on 4', () => {
+    expect(getCanvasShortcutAction(mockEvent({ key: '4' }))).toBe('add-file-tree');
+  });
+
+  it('matches add-text on 5', () => {
+    expect(getCanvasShortcutAction(mockEvent({ key: '5' }))).toBe('add-text');
+  });
+
   it('matches delete on Backspace', () => {
     expect(getCanvasShortcutAction(mockEvent({ key: 'Backspace' }))).toBe('delete-selected');
   });
