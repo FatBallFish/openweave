@@ -8,6 +8,7 @@ import { SettingsDialog } from './features/workbench/SettingsDialog';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
 import { useWorkspacesStore } from './features/workspaces/workspaces.store';
 import { useI18n } from './i18n/provider';
+import { useTheme } from './hooks/useTheme';
 
 const createEmptyGraphSnapshot = () => ({
   schemaVersion: 2 as const,
@@ -34,6 +35,8 @@ export const App = (): JSX.Element => {
   const disabled = activeWorkspace === null || canvasLoading;
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+
+  useTheme();
 
   useEffect(() => {
     const handle = () => setSettingsOpen(true);
