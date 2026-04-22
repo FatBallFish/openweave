@@ -273,6 +273,7 @@ export const App = (): JSX.Element => {
           onToggleCollapse={toggleContextPanel}
         />
       }
+      commandMenuDisabled={disabled}
       commandPalette={
         <CommandPalette
           items={commandPaletteMode === 'quick-add' ? quickAddItems : commandItems}
@@ -282,18 +283,32 @@ export const App = (): JSX.Element => {
           showTrigger={false}
         />
       }
+      disabled={disabled}
       edgeCount={graphSnapshot.edges.length}
       contextPanelCollapsed={contextPanelCollapsed}
+      fitViewDisabled={disabled}
       inspectorCollapsed={inspectorCollapsed}
+      inspectorDisabled={false}
       nodeCount={graphSnapshot.nodes.length}
+      onAddTerminal={addTerminal}
+      onAddNote={addNote}
+      onAddPortal={addPortal}
+      onAddFileTree={addFileTree}
+      onAddText={addText}
+      onOpenCommandMenu={openCommandPalette}
+      onOpenQuickAdd={openQuickAdd}
+      onFitCanvas={requestFitCanvas}
       onToggleContextPanel={toggleContextPanel}
       onToggleInspector={toggleInspector}
       onOpenSettings={() => setSettingsOpen(true)}
       recentAction={recentAction}
       selectedNode={selectedNode}
+      quickAddDisabled={disabled}
       stage={stage}
       workspaceName={activeWorkspace?.name ?? null}
       workspaceRootDir={activeWorkspace?.rootDir ?? null}
+      activePlacementType={placementMode?.type ?? null}
+      onTogglePlacement={togglePlacement}
     />
     <SettingsDialog open={settingsOpen} onClose={closeSettings} />
     </>
