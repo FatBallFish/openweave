@@ -2388,14 +2388,14 @@ select:focus-visible {
 
 .ow-workbench-status-island__item--status {
   position: relative;
-  padding-left: 16px;
+  padding-right: 22px;
 }
 
-.ow-workbench-status-island__item--status::before {
+.ow-workbench-status-island__item--status::after {
   content: '';
   position: absolute;
   top: 14px;
-  left: 10px;
+  right: 10px;
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -2403,7 +2403,7 @@ select:focus-visible {
   box-shadow: 0 0 0 5px rgba(var(--ow-state-running-rgb), 0.14);
 }
 
-.ow-workbench-status-island__item--status[data-state='idle']::before {
+.ow-workbench-status-island__item--status[data-state='idle']::after {
   background: var(--ow-color-text-muted);
   box-shadow: 0 0 0 5px rgba(var(--ow-shadow-rgb), 0.08);
 }
@@ -3757,7 +3757,7 @@ select:focus-visible {
   font-size: 13px;
 }
 
-.ow-workbench-status-island__item--status::before {
+.ow-workbench-status-island__item--status::after {
   top: 12px;
 }
 
