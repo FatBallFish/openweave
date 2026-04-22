@@ -13,6 +13,9 @@ interface WorkspaceCanvasPageProps {
   onOpenCommandPalette: () => void;
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
+  placementMode?: { type: string } | null;
+  onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onPlacementCancel?: () => void;
 }
 
 export const WorkspaceCanvasPage = ({
@@ -22,7 +25,10 @@ export const WorkspaceCanvasPage = ({
   workspaceRootDir,
   onOpenCommandPalette,
   onOpenQuickAdd,
-  onSelectNode
+  onSelectNode,
+  placementMode,
+  onPlacementComplete,
+  onPlacementCancel
 }: WorkspaceCanvasPageProps): JSX.Element => {
   const { t } = useI18n();
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -35,6 +41,9 @@ export const WorkspaceCanvasPage = ({
   const openBranchDialog = useCallback(() => {
     workspacesStore.openBranchDialog(workspaceId);
   }, [workspaceId]);
+  const resizeNode = useCallback((nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => {
+    void canvasStore.updateNodeBounds(nodeId, bounds);
+  }, []);
 
   useEffect(() => {
     void canvasStore.loadCanvasState(workspaceId);
@@ -80,6 +89,10 @@ export const WorkspaceCanvasPage = ({
           onMoveNode={(nodeId, position) => {
             void canvasStore.updateNodePosition(nodeId, position);
           }}
+          onResizeNode={resizeNode}
+          placementMode={placementMode}
+          onPlacementComplete={onPlacementComplete}
+          onPlacementCancel={onPlacementCancel}
         />
       )}
 

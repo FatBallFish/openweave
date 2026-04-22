@@ -8,6 +8,7 @@ import { SettingsDialog } from './features/workbench/SettingsDialog';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
 import { useWorkspacesStore } from './features/workspaces/workspaces.store';
 import { useI18n } from './i18n/provider';
+import { useTheme } from './hooks/useTheme';
 
 const createEmptyGraphSnapshot = () => ({
   schemaVersion: 2 as const,
@@ -30,9 +31,12 @@ export const App = (): JSX.Element => {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [fitViewRequestId, setFitViewRequestId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [placementMode, setPlacementMode] = useState<{ type: string } | null>(null);
   const disabled = activeWorkspace === null || canvasLoading;
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+
+  useTheme();
 
   useEffect(() => {
     const handle = () => setSettingsOpen(true);
@@ -103,6 +107,23 @@ export const App = (): JSX.Element => {
   const addText = useCallback(() => {
     void canvasStore.addTextNode();
   }, []);
+
+  const togglePlacement = useCallback((type: string) => {
+    setPlacementMode((current) => (current?.type === type ? null : { type }));
+  }, []);
+
+  const cancelPlacement = useCallback(() => {
+    setPlacementMode(null);
+  }, []);
+
+  const handlePlacementComplete = useCallback(
+    (type: string, bounds: { x: number; y: number; width: number; height: number }) => {
+      const componentType = `builtin.${type}`;
+      void canvasStore.addNodeAtBounds(componentType, bounds, activeWorkspace?.rootDir ?? '');
+      setPlacementMode(null);
+    },
+    [activeWorkspace?.rootDir]
+  );
 
   const selectNode = useCallback((nodeId: string | null) => {
     canvasStore.selectNode(nodeId);
@@ -208,7 +229,16 @@ export const App = (): JSX.Element => {
     onAddPortal: addPortal,
     onAddFileTree: addFileTree,
     onAddText: addText,
-    onEscape: closeCommandPalette
+    onEscape: closeCommandPalette,
+    onDeleteSelected: () => {
+      void canvasStore.deleteSelectedNode();
+    },
+    onUndo: () => {
+      void canvasStore.undo();
+    },
+    onRedo: () => {
+      void canvasStore.redo();
+    }
   });
 
   const stage = activeWorkspace ? (
@@ -220,6 +250,9 @@ export const App = (): JSX.Element => {
       onOpenCommandPalette={openCommandPalette}
       onOpenQuickAdd={openQuickAdd}
       onSelectNode={selectNode}
+      placementMode={placementMode}
+      onPlacementComplete={handlePlacementComplete}
+      onPlacementCancel={cancelPlacement}
     />
   ) : (
       <div className="ow-workbench-stage__empty" data-testid="workbench-stage-empty">
@@ -274,6 +307,8 @@ export const App = (): JSX.Element => {
       stage={stage}
       workspaceName={activeWorkspace?.name ?? null}
       workspaceRootDir={activeWorkspace?.rootDir ?? null}
+      activePlacementType={placementMode?.type ?? null}
+      onTogglePlacement={togglePlacement}
     />
     <SettingsDialog open={settingsOpen} onClose={closeSettings} />
     </>

@@ -1,19 +1,22 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
+  BackgroundVariant,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   useEdgesState,
   useNodesState,
+  NodeResizer,
   type Edge,
   type Node,
   type NodeProps
 } from '@xyflow/react';
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
+import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
-import { NodeToolbar } from '../canvas/nodes/NodeToolbar';
+import { CanvasViewportControls } from './CanvasViewportControls';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -27,6 +30,7 @@ interface CanvasShellNodeData {
   node: GraphSnapshotV2Input['nodes'][number];
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
+  onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
 }
 
 type CanvasShellNode = Node<CanvasShellNodeData, 'builtinHost'>;
@@ -42,6 +46,7 @@ export interface ProjectGraphToCanvasShellInput {
   graphSnapshot: GraphSnapshotV2Input;
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
+  onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
@@ -50,17 +55,20 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
+  onResizeNode: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onAddTerminal: () => void;
   onAddNote: () => void;
   onAddPortal: () => void;
   onAddFileTree: () => void;
   onAddText: () => void;
+  placementMode?: { type: string } | null;
+  onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onPlacementCancel?: () => void;
 }
 
-const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element => {
+const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
   return (
     <div
-      className="nodrag nopan"
       data-testid={`canvas-shell-node-${data.node.id}`}
       style={{
         width: '100%',
@@ -69,6 +77,21 @@ const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element 
         overflow: 'hidden'
       }}
     >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={120}
+        minHeight={80}
+        handleClassName="ow-node-resizer__handle"
+        lineClassName="ow-node-resizer__line"
+        onResizeEnd={(_event, params) => {
+          data.onResizeNode?.(data.node.id, {
+            x: params.x,
+            y: params.y,
+            width: params.width,
+            height: params.height
+          });
+        }}
+      />
       <BuiltinHostRenderer
         workspaceId={data.workspaceId}
         workspaceRootDir={data.workspaceRootDir}
@@ -82,6 +105,72 @@ const BuiltinHostFlowNode = ({ data }: NodeProps<CanvasShellNode>): JSX.Element 
 
 const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
+};
+
+const classifyWheelEvent = (event: WheelEvent): 'pan' | 'zoom' => {
+  // Pinch gesture (macOS Safari/Chrome sends ctrlKey + wheel)
+  if (event.ctrlKey || event.metaKey) return 'zoom';
+  // DOM_DELTA_LINE is a strong signal for mouse wheel
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return 'zoom';
+
+  const absX = Math.abs(event.deltaX);
+  const absY = Math.abs(event.deltaY);
+
+  // Any horizontal movement strongly suggests trackpad pan
+  // (mouse wheels rarely produce horizontal deltas)
+  if (absX > 0.5) return 'pan';
+
+  // Small pure-vertical movement also suggests trackpad slow scroll
+  if (absY > 0 && absY < 20) return 'pan';
+
+  // Large pure-vertical movement → mouse wheel zoom
+  return 'zoom';
+};
+
+const WheelHandler = (): null => {
+  const { getViewport, setViewport } = useReactFlow();
+
+  useEffect(() => {
+    const pane = document.querySelector('.ow-canvas-shell__flow .react-flow__pane');
+    if (!pane) {
+      return;
+    }
+
+    const handleWheel = (event: Event) => {
+      const wheelEvent = event as WheelEvent;
+      wheelEvent.preventDefault();
+
+      const { x, y, zoom } = getViewport();
+      const action = classifyWheelEvent(wheelEvent);
+
+      if (action === 'zoom') {
+        const rect = pane.getBoundingClientRect();
+        const mouseX = wheelEvent.clientX - rect.left;
+        const mouseY = wheelEvent.clientY - rect.top;
+        const zoomFactor = wheelEvent.deltaY > 0 ? 0.92 : 1.08;
+        const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.4), 2);
+
+        const worldX = (mouseX - x) / zoom;
+        const worldY = (mouseY - y) / zoom;
+        const newX = mouseX - worldX * newZoom;
+        const newY = mouseY - worldY * newZoom;
+
+        setViewport({ x: newX, y: newY, zoom: newZoom }, { duration: 0 });
+      } else {
+        setViewport(
+          { x: x - wheelEvent.deltaX / zoom, y: y - wheelEvent.deltaY / zoom, zoom },
+          { duration: 0 }
+        );
+      }
+    };
+
+    pane.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      pane.removeEventListener('wheel', handleWheel);
+    };
+  }, [getViewport, setViewport]);
+
+  return null;
 };
 
 const CanvasViewportController = ({
@@ -128,6 +217,117 @@ const CanvasViewportController = ({
   return null;
 };
 
+const PlacementOverlay = ({
+  placementMode,
+  onPlacementComplete,
+  onPlacementCancel
+}: {
+  placementMode: { type: string };
+  onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  onPlacementCancel?: () => void;
+}): JSX.Element => {
+  const [placementRect, setPlacementRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const placementStartRef = useRef<{ x: number; y: number } | null>(null);
+  const placementRectRef = useRef(placementRect);
+  const { getViewport } = useReactFlow();
+
+  useEffect(() => {
+    placementRectRef.current = placementRect;
+  }, [placementRect]);
+
+  useEffect(() => {
+    setPlacementRect(null);
+    placementStartRef.current = null;
+  }, [placementMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onPlacementCancel?.();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onPlacementCancel]);
+
+  return (
+    <div
+      className="ow-canvas-placement-overlay"
+      data-testid="canvas-placement-overlay"
+      onMouseDown={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const startX = e.clientX - rect.left;
+        const startY = e.clientY - rect.top;
+        placementStartRef.current = { x: startX, y: startY };
+        setPlacementRect({ x: startX, y: startY, width: 0, height: 0 });
+      }}
+      onMouseMove={(e) => {
+        if (!placementStartRef.current) {
+          return;
+        }
+        const rect = e.currentTarget.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        const startX = placementStartRef.current.x;
+        const startY = placementStartRef.current.y;
+        setPlacementRect({
+          x: Math.min(startX, currentX),
+          y: Math.min(startY, currentY),
+          width: Math.abs(currentX - startX),
+          height: Math.abs(currentY - startY)
+        });
+      }}
+      onMouseUp={() => {
+        const currentRect = placementRectRef.current;
+        if (!placementStartRef.current || !currentRect) {
+          placementStartRef.current = null;
+          return;
+        }
+        const { x: vpX, y: vpY, zoom } = getViewport();
+        const minSize = 60;
+        const worldX = (currentRect.x - vpX) / zoom;
+        const worldY = (currentRect.y - vpY) / zoom;
+        const worldWidth = Math.max(currentRect.width / zoom, minSize);
+        const worldHeight = Math.max(currentRect.height / zoom, minSize);
+
+        onPlacementComplete?.(placementMode.type, {
+          x: worldX,
+          y: worldY,
+          width: worldWidth,
+          height: worldHeight
+        });
+
+        placementStartRef.current = null;
+        setPlacementRect(null);
+      }}
+      onMouseLeave={() => {
+        placementStartRef.current = null;
+        setPlacementRect(null);
+      }}
+    >
+      {placementRect ? (
+        <div
+          className="ow-canvas-placement-rect"
+          style={{
+            left: placementRect.x,
+            top: placementRect.y,
+            width: placementRect.width,
+            height: placementRect.height
+          }}
+        />
+      ) : null}
+    </div>
+  );
+};
+
 export const projectGraphToCanvasShell = (
   input: ProjectGraphToCanvasShellInput
 ): CanvasShellModel => {
@@ -144,7 +344,8 @@ export const projectGraphToCanvasShell = (
         workspaceRootDir: input.workspaceRootDir,
         node,
         onOpenRun: input.onOpenRun,
-        onCreateBranchWorkspace: input.onCreateBranchWorkspace
+        onCreateBranchWorkspace: input.onCreateBranchWorkspace,
+        onResizeNode: input.onResizeNode
       },
       style: {
         width: node.bounds.width,
@@ -177,11 +378,15 @@ export const CanvasShell = ({
   onOpenRun,
   onCreateBranchWorkspace,
   onMoveNode,
+  onResizeNode,
   onAddTerminal,
   onAddNote,
   onAddPortal,
   onAddFileTree,
-  onAddText
+  onAddText,
+  placementMode,
+  onPlacementComplete,
+  onPlacementCancel
 }: CanvasShellProps): JSX.Element => {
   const model = useMemo(
     () =>
@@ -190,26 +395,54 @@ export const CanvasShell = ({
         workspaceRootDir,
         graphSnapshot,
         onOpenRun,
-        onCreateBranchWorkspace
+        onCreateBranchWorkspace,
+        onResizeNode
       }),
-    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir]
+    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode]
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(model.edges);
-  const isEmpty = model.nodes.length === 0;
+  const [emptyStateDismissed, setEmptyStateDismissed] = useState(false);
+  const isEmpty = model.nodes.length === 0 && !emptyStateDismissed;
 
   useEffect(() => {
     setNodes(model.nodes);
   }, [model.nodes, setNodes]);
 
   useEffect(() => {
+    if (model.nodes.length > 0) {
+      setEmptyStateDismissed(false);
+    }
+  }, [model.nodes.length]);
+
+  useEffect(() => {
     setEdges(model.edges);
   }, [model.edges, setEdges]);
 
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      const removeChanges = changes.filter(
+        (change): change is { type: 'remove'; id: string } => change.type === 'remove'
+      );
+      if (removeChanges.length > 0) {
+        const nodeIdsToRemove = removeChanges.map((change) => change.id);
+        void canvasStore.deleteNodes(nodeIdsToRemove);
+        // Do NOT pass remove changes to onNodesChange; the store update will re-sync nodes
+        const otherChanges = changes.filter((change) => change.type !== 'remove');
+        if (otherChanges.length > 0) {
+          onNodesChange(otherChanges);
+        }
+        return;
+      }
+      onNodesChange(changes);
+    },
+    [onNodesChange]
+  );
+
   return (
     <section className="ow-canvas-shell" data-testid="canvas-shell">
-      <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
-        <ReactFlowProvider>
+      <ReactFlowProvider>
+        <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
           <ReactFlow
             defaultViewport={DEFAULT_CANVAS_VIEWPORT}
             edges={edges}
@@ -227,34 +460,44 @@ export const CanvasShell = ({
                 y: node.position.y
               });
             }}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onPaneClick={() => {
               onSelectNode(null);
             }}
             panOnDrag={true}
             proOptions={{ hideAttribution: true }}
             selectionOnDrag={false}
-            zoomOnPinch={true}
-            zoomOnScroll={true}
+            zoomOnDoubleClick={false}
+            zoomOnPinch={false}
+            zoomOnScroll={false}
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
-            <Background gap={24} size={1} />
+            <WheelHandler />
+            <Background gap={32} variant={BackgroundVariant.Lines} />
+            {placementMode ? (
+              <PlacementOverlay
+                placementMode={placementMode}
+                onPlacementComplete={onPlacementComplete}
+                onPlacementCancel={onPlacementCancel}
+              />
+            ) : null}
           </ReactFlow>
-        </ReactFlowProvider>
 
-        {isEmpty ? (
-          <CanvasEmptyState
-            actions={[
-              { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
-              { label: 'Note', hotkey: '2', onClick: onAddNote },
-              { label: 'Portal', hotkey: '3', onClick: onAddPortal },
-              { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
-              { label: 'Text', hotkey: '5', onClick: onAddText }
-            ]}
-          />
-        ) : null}
-        <NodeToolbar />
-      </div>
+          {isEmpty ? (
+            <CanvasEmptyState
+              actions={[
+                { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
+                { label: 'Note', hotkey: '2', onClick: onAddNote },
+                { label: 'Portal', hotkey: '3', onClick: onAddPortal },
+                { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
+                { label: 'Text', hotkey: '5', onClick: onAddText }
+              ]}
+              onClose={() => setEmptyStateDismissed(true)}
+            />
+          ) : null}
+          <CanvasViewportControls />
+        </div>
+      </ReactFlowProvider>
     </section>
   );
 };

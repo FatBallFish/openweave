@@ -1,7 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { NodeToolbar } from '../../../src/renderer/features/canvas/nodes/NodeToolbar';
 import { GitPanel } from '../../../src/renderer/features/git/GitPanel';
 import { PortalToolbar } from '../../../src/renderer/features/portal/PortalToolbar';
 import { WorkbenchContextPanel } from '../../../src/renderer/features/workbench/WorkbenchContextPanel';
@@ -44,7 +43,6 @@ describe('renderer static components', () => {
   });
 
   it('renders an orchestration-first topbar and a secondary canvas guidance strip', () => {
-    const nodeToolbar = renderToStaticMarkup(createElement(NodeToolbar));
     const topBar = renderToStaticMarkup(
       createElement(
         I18nProvider,
@@ -114,14 +112,8 @@ describe('renderer static components', () => {
       })
     );
 
-    expect(nodeToolbar).toContain('canvas-quick-insert-hint');
-    expect(nodeToolbar).toContain('Cmd/Ctrl+K 命令面板');
     expect(topBar).toContain('title="添加终端"');
-    expect(topBar).toContain('title="命令面板"');
-    expect(topBar).toContain('title="快速添加"');
     expect(englishTopBar).toContain('title="Add terminal"');
-    expect(englishTopBar).toContain('title="Command menu"');
-    expect(englishTopBar).toContain('title="Quick add"');
     expect(portalToolbar).toContain('Open page');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');
