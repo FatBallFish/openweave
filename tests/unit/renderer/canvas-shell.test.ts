@@ -136,5 +136,6 @@ describe('canvas shell', () => {
     expect(html).not.toContain('canvas-shell-grid');
     expect(html).not.toContain('command-palette-trigger');
     expect(html).not.toContain('canvas-quick-add-trigger');
+    expect(html).toContain('canvas-viewport-controls');
   });
 });
