@@ -2391,21 +2391,50 @@ select:focus-visible {
   padding-right: 22px;
 }
 
-.ow-workbench-status-island__item--status::after {
+.ow-workbench-status-island__item--status::before {
   content: '';
   position: absolute;
-  top: 14px;
+  top: 13px;
   right: 10px;
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: var(--ow-state-running);
-  box-shadow: 0 0 0 5px rgba(var(--ow-state-running-rgb), 0.14);
+  animation: status-pulse 2s ease-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ow-workbench-status-island__item--status::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ow-state-running);
+  z-index: 1;
+}
+
+.ow-workbench-status-island__item--status[data-state='idle']::before {
+  animation: none;
+  opacity: 0;
 }
 
 .ow-workbench-status-island__item--status[data-state='idle']::after {
   background: var(--ow-color-text-muted);
-  box-shadow: 0 0 0 5px rgba(var(--ow-shadow-rgb), 0.08);
+}
+
+@keyframes status-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
 }
 
 .ow-workbench-status-island__value {
@@ -3755,10 +3784,6 @@ select:focus-visible {
 
 .ow-workbench-status-island__value {
   font-size: 13px;
-}
-
-.ow-workbench-status-island__item--status::after {
-  top: 12px;
 }
 
 .ow-canvas-shell__flow {
