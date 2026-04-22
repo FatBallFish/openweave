@@ -24,6 +24,15 @@ const platformAliasMap = {
 
 const resolveNpmCommand = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm');
 
+const applyWindowsPackagingDefaults = () => {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  process.env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/';
+  process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron-builder-binaries/';
+};
+
 const resolveRequestedPlatform = (rawPlatform) => {
   if (!rawPlatform) {
     return process.platform;
@@ -38,11 +47,23 @@ const resolveRequestedPlatform = (rawPlatform) => {
 };
 
 const runCommand = (command, args, options = {}) => {
-  const result = spawnSync(command, args, {
+  let executable = command;
+  let commandArgs = args;
+
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
+    executable = 'cmd.exe';
+    commandArgs = ['/d', '/s', '/c', command, ...args];
+  }
+
+  const result = spawnSync(executable, commandArgs, {
     cwd: projectDir,
     stdio: 'inherit',
     ...options
   });
+
+  if (result.error) {
+    throw result.error;
+  }
 
   if (result.status !== 0) {
     const renderedArgs = args.join(' ');
@@ -52,6 +73,7 @@ const runCommand = (command, args, options = {}) => {
 
 const requestedPlatform = resolveRequestedPlatform(process.argv[2]);
 const requestedArch = process.env.OPENWEAVE_PACKAGE_ARCH ?? process.arch;
+applyWindowsPackagingDefaults();
 if (requestedPlatform !== process.platform) {
   throw new Error(
     `Packaging target ${requestedPlatform} must run on a matching host platform. Current host: ${process.platform}`
