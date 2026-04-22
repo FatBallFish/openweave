@@ -778,6 +778,29 @@ select {
   pointer-events: auto;
 }
 
+.ow-canvas-empty-state__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ow-color-text-soft);
+  cursor: pointer;
+  transition: background var(--ow-transition-fast), color var(--ow-transition-fast);
+}
+
+.ow-canvas-empty-state__close:hover {
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  color: var(--ow-color-text-default);
+}
+
 .ow-canvas-empty-state__eyebrow {
   margin: 0 0 8px;
   color: var(--ow-color-text-soft);
@@ -4709,6 +4732,25 @@ select:focus-visible {
   background: rgba(var(--ow-accent-rgb), 0.12);
   color: var(--ow-color-accent-strong);
   font-weight: 600;
+}
+
+.ow-settings-dialog__number-input {
+  width: 120px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-default);
+  font-size: 13px;
+  font-family: var(--ow-font-ui);
+  transition: border-color var(--ow-transition-fast), box-shadow var(--ow-transition-fast);
+}
+
+.ow-settings-dialog__number-input:focus {
+  outline: none;
+  border-color: rgba(var(--ow-accent-rgb), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--ow-accent-rgb), 0.12);
 }
 
 .ow-settings-dialog__placeholder {

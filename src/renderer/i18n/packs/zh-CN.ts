@@ -158,6 +158,7 @@ export const chineseLanguagePack: LanguagePack = {
     'canvasEmpty.starterFlow': '起步流程',
     'canvasEmpty.terminalContext': '终端 + 上下文',
     'canvasEmpty.hotkeys': '快捷键',
+    'canvasEmpty.close': '关闭',
     'canvasEmpty.debugRepo': '调试仓库',
     'canvasEmpty.debugRepoDescription': '查看文件、执行命令，并把修复结果沉淀下来。',
     'canvasEmpty.exploreSite': '探索网站',

@@ -8,26 +8,27 @@ interface CanvasEmptyAction {
 
 interface CanvasEmptyStateProps {
   actions: CanvasEmptyAction[];
+  onClose?: () => void;
 }
 
-export const CanvasEmptyState = ({ actions }: CanvasEmptyStateProps): JSX.Element => {
+export const CanvasEmptyState = ({ actions, onClose }: CanvasEmptyStateProps): JSX.Element => {
   const { t } = useI18n();
 
   return (
     <div className="ow-canvas-empty-state" data-testid="canvas-empty-state">
-      <div aria-hidden="true" className="ow-canvas-empty-state__edge-sketch">
-        <span className="ow-canvas-empty-state__ghost ow-canvas-empty-state__ghost--context" />
-        <span className="ow-canvas-empty-state__ghost ow-canvas-empty-state__ghost--plan" />
-        <span className="ow-canvas-empty-state__ghost ow-canvas-empty-state__ghost--runtime" />
-        <span className="ow-canvas-empty-state__ghost ow-canvas-empty-state__ghost--result" />
-        <svg viewBox="0 0 600 260">
-          <path d="M116 86C180 72 242 72 314 120" />
-          <path d="M300 136C362 158 420 170 498 162" />
-          <path d="M132 174C206 184 254 174 300 140" />
-        </svg>
-      </div>
-
       <div className="ow-canvas-empty-state__card" data-testid="canvas-empty">
+        {onClose ? (
+          <button
+            aria-label={t('canvasEmpty.close')}
+            className="ow-canvas-empty-state__close"
+            onClick={onClose}
+            type="button"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+              <path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+        ) : null}
         <p className="ow-canvas-empty-state__eyebrow">{t('canvasEmpty.eyebrow')}</p>
         <h3>{t('canvasEmpty.title')}</h3>
         <p className="ow-canvas-empty-state__lede">

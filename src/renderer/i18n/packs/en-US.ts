@@ -158,6 +158,7 @@ export const englishLanguagePack: LanguagePack = {
     'canvasEmpty.starterFlow': 'Starter flow',
     'canvasEmpty.terminalContext': 'Terminal + context',
     'canvasEmpty.hotkeys': 'Hotkeys',
+    'canvasEmpty.close': 'Close',
     'canvasEmpty.debugRepo': 'Debug a repo',
     'canvasEmpty.debugRepoDescription': 'Inspect files, run commands, and capture fixes.',
     'canvasEmpty.exploreSite': 'Explore a website',

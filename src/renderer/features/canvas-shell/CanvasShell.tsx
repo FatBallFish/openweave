@@ -402,11 +402,18 @@ export const CanvasShell = ({
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(model.edges);
-  const isEmpty = model.nodes.length === 0;
+  const [emptyStateDismissed, setEmptyStateDismissed] = useState(false);
+  const isEmpty = model.nodes.length === 0 && !emptyStateDismissed;
 
   useEffect(() => {
     setNodes(model.nodes);
   }, [model.nodes, setNodes]);
+
+  useEffect(() => {
+    if (model.nodes.length > 0) {
+      setEmptyStateDismissed(false);
+    }
+  }, [model.nodes.length]);
 
   useEffect(() => {
     setEdges(model.edges);
@@ -485,6 +492,7 @@ export const CanvasShell = ({
                 { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
                 { label: 'Text', hotkey: '5', onClick: onAddText }
               ]}
+              onClose={() => setEmptyStateDismissed(true)}
             />
           ) : null}
           <CanvasViewportControls />
