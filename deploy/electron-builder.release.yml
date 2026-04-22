@@ -15,6 +15,7 @@ linux:
   artifactName: "${productName}-${version}-${arch}.${ext}"
 win:
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  signAndEditExecutable: false
 nsis:
   oneClick: false
   perMachine: false
