@@ -50,6 +50,7 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
+  onResizeNode: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onAddTerminal: () => void;
   onAddNote: () => void;
   onAddPortal: () => void;
@@ -177,6 +178,7 @@ export const CanvasShell = ({
   onOpenRun,
   onCreateBranchWorkspace,
   onMoveNode,
+  onResizeNode,
   onAddTerminal,
   onAddNote,
   onAddPortal,

@@ -35,6 +35,9 @@ export const WorkspaceCanvasPage = ({
   const openBranchDialog = useCallback(() => {
     workspacesStore.openBranchDialog(workspaceId);
   }, [workspaceId]);
+  const resizeNode = useCallback((nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => {
+    void canvasStore.updateNodeBounds(nodeId, bounds);
+  }, []);
 
   useEffect(() => {
     void canvasStore.loadCanvasState(workspaceId);
@@ -80,6 +83,7 @@ export const WorkspaceCanvasPage = ({
           onMoveNode={(nodeId, position) => {
             void canvasStore.updateNodePosition(nodeId, position);
           }}
+          onResizeNode={resizeNode}
         />
       )}
 
