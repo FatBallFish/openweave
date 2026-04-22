@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../../i18n/provider';
 import { settingsStore, useSettingsStore } from './settings.store';
+import {
+  formatShortcut,
+  getMergedConfig,
+  SHORTCUT_DEFINITIONS,
+  type ShortcutConfig
+} from './shortcuts-config';
 
 type SettingsTab = 'general' | 'terminal' | 'role' | 'page' | 'shortcuts' | 'data' | 'about';
 
@@ -19,6 +25,158 @@ const TABS: { key: SettingsTab; labelKey: string }[] = [
   { key: 'data', labelKey: 'settings.tabData' },
   { key: 'about', labelKey: 'settings.tabAbout' }
 ];
+
+const ShortcutsSettingsPanel = (): JSX.Element => {
+  const { t } = useI18n();
+  const shortcuts = useSettingsStore((s) => s.shortcuts);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const listeningRef = useRef(false);
+
+  const conflictMap = useCallback((): Map<string, string[]> => {
+    const conflicts = new Map<string, string[]>();
+    const configs = SHORTCUT_DEFINITIONS.map((def) => ({
+      id: def.id,
+      config: getMergedConfig(def.id, shortcuts)
+    }));
+
+    for (let i = 0; i < configs.length; i++) {
+      for (let j = i + 1; j < configs.length; j++) {
+        if (
+          configs[i].config.key.toLowerCase() === configs[j].config.key.toLowerCase() &&
+          configs[i].config.ctrlKey === configs[j].config.ctrlKey &&
+          configs[i].config.metaKey === configs[j].config.metaKey &&
+          configs[i].config.shiftKey === configs[j].config.shiftKey &&
+          configs[i].config.altKey === configs[j].config.altKey
+        ) {
+          const a = conflicts.get(configs[i].id) ?? [];
+          a.push(configs[j].id);
+          conflicts.set(configs[i].id, a);
+
+          const b = conflicts.get(configs[j].id) ?? [];
+          b.push(configs[i].id);
+          conflicts.set(configs[j].id, b);
+        }
+      }
+    }
+
+    return conflicts;
+  }, [shortcuts]);
+
+  const conflicts = conflictMap();
+
+  useEffect(() => {
+    if (!editingId) {
+      listeningRef.current = false;
+      return;
+    }
+
+    listeningRef.current = true;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!listeningRef.current) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        setEditingId(null);
+        return;
+      }
+
+      const isModifierOnly = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key);
+      if (isModifierOnly) return;
+
+      const config: ShortcutConfig = {
+        key: e.key.toLowerCase() === 'escape' ? 'escape' : e.key,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey
+      };
+
+      settingsStore.setShortcut(editingId, config);
+      setEditingId(null);
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      listeningRef.current = false;
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [editingId]);
+
+  const grouped = {
+    canvas: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'canvas'),
+    general: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'general'),
+    edit: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'edit')
+  };
+
+  const groupLabels: Record<string, string> = {
+    canvas: t('settings.shortcuts.groupCanvas'),
+    general: t('settings.shortcuts.groupGeneral'),
+    edit: t('settings.shortcuts.groupEdit')
+  };
+
+  return (
+    <div className="ow-settings-dialog__groups">
+      {(['general', 'canvas', 'edit'] as const).map((group) => (
+        <section key={group} className="ow-settings-dialog__group">
+          <h3>{groupLabels[group]}</h3>
+          <div className="ow-settings-dialog__shortcuts-list">
+            {grouped[group].map((def) => {
+              const config = getMergedConfig(def.id, shortcuts);
+              const isEditing = editingId === def.id;
+              const conflictIds = conflicts.get(def.id) ?? [];
+              const hasConflict = conflictIds.length > 0;
+
+              return (
+                <div
+                  key={def.id}
+                  className={`ow-settings-dialog__shortcut-row${hasConflict ? ' is-conflict' : ''}`}
+                  data-testid={`shortcut-row-${def.id}`}
+                >
+                  <span className="ow-settings-dialog__shortcut-name">
+                    {t(def.labelKey)}
+                  </span>
+                  <div className="ow-settings-dialog__shortcut-right">
+                    <button
+                      className={`ow-settings-dialog__shortcut-key${isEditing ? ' is-listening' : ''}`}
+                      onClick={() => setEditingId(def.id)}
+                      type="button"
+                      data-testid={`shortcut-key-${def.id}`}
+                    >
+                      {isEditing ? t('settings.shortcuts.listening') : formatShortcut(config)}
+                    </button>
+                    {hasConflict && (
+                      <span className="ow-settings-dialog__shortcut-conflict">
+                        {t('settings.shortcuts.conflict')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      <div className="ow-settings-dialog__shortcuts-footer">
+        <button
+          className="ow-settings-dialog__shortcuts-reset"
+          onClick={() => {
+            if (window.confirm(t('settings.shortcuts.resetConfirm'))) {
+              settingsStore.resetAllShortcuts();
+            }
+          }}
+          type="button"
+          data-testid="shortcuts-reset-all"
+        >
+          {t('settings.shortcuts.resetAll')}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const SettingsDialog = ({ open, onClose }: SettingsDialogProps): JSX.Element | null => {
   const { t, locale, availableLocales, localeLabels, setLocale } = useI18n();
@@ -150,7 +308,7 @@ export const SettingsDialog = ({ open, onClose }: SettingsDialogProps): JSX.Elem
                 </section>
               </div>
             )}
-            {activeTab === 'shortcuts' && <div className="ow-settings-dialog__placeholder" />}
+            {activeTab === 'shortcuts' && <ShortcutsSettingsPanel />}
             {activeTab === 'data' && <div className="ow-settings-dialog__placeholder" />}
             {activeTab === 'about' && <div className="ow-settings-dialog__placeholder" />}
           </div>
