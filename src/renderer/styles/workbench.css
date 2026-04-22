@@ -4804,4 +4804,96 @@ select:focus-visible {
   border-style: dashed !important;
   border-width: 1px !important;
 }
+
+
+/* Shortcuts tab styles */
+
+.ow-settings-dialog__shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ow-settings-dialog__shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.46);
+  transition: background var(--ow-transition-fast);
+}
+
+.ow-settings-dialog__shortcut-row:hover {
+  background: rgba(var(--ow-surface-rgb), 0.72);
+}
+
+.ow-settings-dialog__shortcut-row.is-conflict {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.ow-settings-dialog__shortcut-name {
+  font-size: 13px;
+  color: var(--ow-color-text-default);
+}
+
+.ow-settings-dialog__shortcut-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ow-settings-dialog__shortcut-key {
+  min-width: 120px;
+  padding: 6px 12px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 8px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-default);
+  font-size: 12px;
+  font-family: var(--ow-font-mono, monospace);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--ow-transition-fast), background var(--ow-transition-fast);
+}
+
+.ow-settings-dialog__shortcut-key:hover {
+  border-color: var(--ow-color-border-strong);
+  background: rgba(var(--ow-surface-rgb), 1);
+}
+
+.ow-settings-dialog__shortcut-key.is-listening {
+  border-color: rgba(var(--ow-accent-rgb), 0.5);
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  color: var(--ow-color-accent-strong);
+  animation: ow-pulse 1.5s ease-in-out infinite;
+}
+
+.ow-settings-dialog__shortcut-conflict {
+  font-size: 11px;
+  color: #ef4444;
+}
+
+.ow-settings-dialog__shortcuts-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.ow-settings-dialog__shortcuts-reset {
+  padding: 8px 16px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-default);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--ow-transition-fast), background var(--ow-transition-fast);
+}
+
+.ow-settings-dialog__shortcuts-reset:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.06);
+  color: #ef4444;
 }
