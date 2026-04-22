@@ -118,4 +118,9 @@ export const useHistoryStore = <T,>(
   );
 };
 
+// Subscribe to maxUndoSteps changes to auto-trim history stack
+settingsStore.subscribe(() => {
+  historyStore.adjustMaxSize();
+});
+
 export type { HistoryEntry };
