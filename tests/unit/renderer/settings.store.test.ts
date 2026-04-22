@@ -20,6 +20,26 @@ const createMockStorage = (): Storage => {
   };
 };
 
+const createMockStorageWithThrowingGet = (): Storage => {
+  const storage = createMockStorage();
+  return {
+    ...storage,
+    getItem: () => {
+      throw new Error('localStorage read error');
+    }
+  };
+};
+
+const createMockStorageWithThrowingSet = (): Storage => {
+  const storage = createMockStorage();
+  return {
+    ...storage,
+    setItem: () => {
+      throw new Error('localStorage write error');
+    }
+  };
+};
+
 describe('settings store', () => {
   let mockStorage: Storage;
 
@@ -83,5 +103,43 @@ describe('settings store', () => {
     vi.resetModules();
     const { settingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
     expect(settingsStore.getState().theme).toBe('system');
+  });
+
+  it('falls back to defaults when localStorage.getItem throws', async () => {
+    vi.stubGlobal('localStorage', createMockStorageWithThrowingGet());
+    vi.resetModules();
+    const { settingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
+    expect(settingsStore.getState().maxUndoSteps).toBe(50);
+    expect(settingsStore.getState().theme).toBe('system');
+  });
+
+  it('updates in-memory state when localStorage.setItem throws', async () => {
+    vi.stubGlobal('localStorage', createMockStorageWithThrowingSet());
+    vi.resetModules();
+    const { settingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
+    settingsStore.setMaxUndoSteps(80);
+    expect(settingsStore.getState().maxUndoSteps).toBe(80);
+    settingsStore.setTheme('light');
+    expect(settingsStore.getState().theme).toBe('light');
+  });
+
+  it('floors floating-point maxUndoSteps from localStorage', async () => {
+    mockStorage.setItem('openweave:settings:maxUndoSteps', '75.7');
+    vi.resetModules();
+    const { settingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
+    expect(settingsStore.getState().maxUndoSteps).toBe(75);
+  });
+
+  it('falls back to MIN_UNDO_STEPS for non-numeric maxUndoSteps from localStorage', async () => {
+    mockStorage.setItem('openweave:settings:maxUndoSteps', 'abc');
+    vi.resetModules();
+    const { settingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
+    expect(settingsStore.getState().maxUndoSteps).toBe(10);
+  });
+
+  it('useSettingsStore is a valid function', async () => {
+    vi.resetModules();
+    const { useSettingsStore } = await import('../../../src/renderer/features/workbench/settings.store');
+    expect(typeof useSettingsStore).toBe('function');
   });
 });
