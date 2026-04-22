@@ -99,40 +99,8 @@ export const WorkbenchTopBar = ({
         />
       </div>
 
-      <div
-        className="ow-workbench-topbar__action-cluster ow-workbench-topbar__action-cluster--utility"
-        data-testid="workbench-topbar-canvas-cluster"
-      >
-        <span className="ow-workbench-topbar__cluster-label">{t('topbar.clusterCanvas')}</span>
-        <IconButton
-          disabled={commandMenuDisabled}
-          icon={icon('M5 7h14M5 12h14M5 17h10')}
-          label={t('topbar.commandMenu')}
-          onClick={onOpenCommandMenu}
-          testId="workbench-topbar-action-command-menu"
-        />
-        <IconButton
-          disabled={quickAddDisabled}
-          icon={icon('M12 5v14M5 12h14')}
-          label={t('topbar.quickAdd')}
-          onClick={onOpenQuickAdd}
-          testId="workbench-topbar-action-quick-add"
-        />
-        <IconButton
-          disabled={fitViewDisabled}
-          icon={icon('M8 4H4v4M20 8V4h-4M4 16v4h4M16 20h4v-4')}
-          label={t('topbar.fitView')}
-          onClick={onFitCanvas}
-          testId="workbench-topbar-action-fit-view"
-        />
-        <IconButton
-          disabled={inspectorDisabled}
-          icon={icon('M9 4h11v16H9M4 8h1M4 12h1M4 16h1')}
-          label={t('topbar.toggleInspector')}
-          onClick={onToggleInspector}
-          testId="workbench-topbar-action-toggle-inspector"
-        />
-      </div>
+      {/* Utility cluster removed: command menu, quick add, fit view, toggle inspector
+         are now accessible via keyboard shortcuts and the command palette */}
     </div>
   );
 };

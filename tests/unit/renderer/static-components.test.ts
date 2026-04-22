@@ -113,11 +113,7 @@ describe('renderer static components', () => {
     );
 
     expect(topBar).toContain('title="添加终端"');
-    expect(topBar).toContain('title="命令面板"');
-    expect(topBar).toContain('title="快速添加"');
     expect(englishTopBar).toContain('title="Add terminal"');
-    expect(englishTopBar).toContain('title="Command menu"');
-    expect(englishTopBar).toContain('title="Quick add"');
     expect(portalToolbar).toContain('Open page');
     expect(portalToolbar).toContain('Capture screenshot');
     expect(portalToolbar).toContain('Read structure');
