@@ -524,6 +524,62 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
+  addNodeAtBounds: async (
+    componentType: string,
+    bounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    },
+    rootDir?: string
+  ): Promise<void> => {
+    if (!state.workspaceId || state.loading) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const existingNodes = state.graphSnapshot.nodes;
+    let newNode: GraphNodeRecord;
+
+    switch (componentType) {
+      case 'builtin.note':
+        newNode = createNoteGraphNode(existingNodes);
+        break;
+      case 'builtin.terminal':
+        newNode = createTerminalGraphNode(existingNodes);
+        break;
+      case 'builtin.file-tree':
+        newNode = createFileTreeGraphNode(existingNodes, rootDir ?? '');
+        break;
+      case 'builtin.portal':
+        newNode = createPortalGraphNode(existingNodes);
+        break;
+      case 'builtin.text':
+        newNode = createTextGraphNode(existingNodes);
+        break;
+      default:
+        return;
+    }
+
+    newNode = { ...newNode, bounds };
+
+    const nextGraphSnapshot: GraphSnapshotV2Input = {
+      ...state.graphSnapshot,
+      nodes: [...state.graphSnapshot.nodes, newNode]
+    };
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
+    setState({ errorMessage: null, recentAction: `Added ${componentType.replace('builtin.', '')}` });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add node';
+      setState({ errorMessage });
+    }
+  },
   updateNoteNode: async (
     nodeId: string,
     patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'>>

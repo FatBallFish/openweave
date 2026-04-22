@@ -402,4 +402,30 @@ describe('canvas store', () => {
       })
     );
   });
+
+  it('adds a node at specified bounds without using starter grid', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as {
+      addNodeAtBounds: (
+        componentType: string,
+        bounds: { x: number; y: number; width: number; height: number },
+        rootDir?: string
+      ) => Promise<void>;
+    }).addNodeAtBounds('builtin.note', { x: 500, y: 400, width: 200, height: 150 });
+
+    const noteNode = canvasStore.getState().graphSnapshot.nodes.find((node) => node.componentType === 'builtin.note');
+    expect(noteNode).toBeDefined();
+    expect(noteNode?.bounds).toEqual({ x: 500, y: 400, width: 200, height: 150 });
+    expect(saveGraphSnapshot).toHaveBeenCalled();
+  });
 });
