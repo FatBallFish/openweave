@@ -10,6 +10,7 @@ import type {
   RunRuntimeInput,
   TerminalNodeInput
 } from '../../../shared/ipc/schemas';
+import { historyStore } from './history.store';
 
 interface CanvasState {
   workspaceId: string | null;
@@ -811,6 +812,49 @@ export const canvasStore = {
       const errorMessage = error instanceof Error ? error.message : 'Failed to resize graph node';
       setState({ errorMessage });
     }
+  },
+  deleteNodes: async (nodeIds: string[]): Promise<void> => {
+    if (!state.workspaceId || state.loading || nodeIds.length === 0) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const nodesToDelete = state.graphSnapshot.nodes.filter((node) => nodeIds.includes(node.id));
+    if (nodesToDelete.length === 0) {
+      return;
+    }
+
+    const deletedNodeIds = new Set(nodeIds);
+    const nextGraphSnapshot: GraphSnapshotV2Input = {
+      ...state.graphSnapshot,
+      nodes: state.graphSnapshot.nodes.filter((node) => !deletedNodeIds.has(node.id)),
+      edges: state.graphSnapshot.edges.filter(
+        (edge) => !deletedNodeIds.has(edge.source) && !deletedNodeIds.has(edge.target)
+      )
+    };
+
+    // Push history entries for each deleted node (in reverse order so undo restores them in correct order)
+    for (let i = nodesToDelete.length - 1; i >= 0; i -= 1) {
+      historyStore.push({ kind: 'removeNode', node: nodesToDelete[i] });
+    }
+
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: `Deleted ${nodesToDelete.length} node(s)` });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete node(s)';
+      setState({ errorMessage });
+    }
+  },
+  deleteSelectedNode: async (): Promise<void> => {
+    if (!state.selectedNodeId) {
+      return;
+    }
+    await canvasStore.deleteNodes([state.selectedNodeId]);
   }
 };
 

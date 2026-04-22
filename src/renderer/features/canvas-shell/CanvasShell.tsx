@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react';
 import type { GraphSnapshotV2Input } from '../../../shared/ipc/schemas';
 import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-host-registry';
+import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { CanvasViewportControls } from './CanvasViewportControls';
 
@@ -411,6 +412,26 @@ export const CanvasShell = ({
     setEdges(model.edges);
   }, [model.edges, setEdges]);
 
+  const handleNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChange>[0]) => {
+      const removeChanges = changes.filter(
+        (change): change is { type: 'remove'; id: string } => change.type === 'remove'
+      );
+      if (removeChanges.length > 0) {
+        const nodeIdsToRemove = removeChanges.map((change) => change.id);
+        void canvasStore.deleteNodes(nodeIdsToRemove);
+        // Do NOT pass remove changes to onNodesChange; the store update will re-sync nodes
+        const otherChanges = changes.filter((change) => change.type !== 'remove');
+        if (otherChanges.length > 0) {
+          onNodesChange(otherChanges);
+        }
+        return;
+      }
+      onNodesChange(changes);
+    },
+    [onNodesChange]
+  );
+
   return (
     <section className="ow-canvas-shell" data-testid="canvas-shell">
       <ReactFlowProvider>
@@ -432,7 +453,7 @@ export const CanvasShell = ({
                 y: node.position.y
               });
             }}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onPaneClick={() => {
               onSelectNode(null);
             }}

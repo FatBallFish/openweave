@@ -428,4 +428,87 @@ describe('canvas store', () => {
     expect(noteNode?.bounds).toEqual({ x: 500, y: 400, width: 200, height: 150 });
     expect(saveGraphSnapshot).toHaveBeenCalled();
   });
+
+  it('deletes selected nodes and their connected edges', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({
+        graphSnapshot: {
+          schemaVersion: 2,
+          nodes: [
+            {
+              id: 'node-a',
+              componentType: 'builtin.note',
+              componentVersion: '1.0.0',
+              title: 'Note A',
+              bounds: { x: 0, y: 0, width: 100, height: 100 },
+              config: {},
+              state: {},
+              capabilities: [],
+              createdAtMs: 1,
+              updatedAtMs: 1
+            },
+            {
+              id: 'node-b',
+              componentType: 'builtin.terminal',
+              componentVersion: '1.0.0',
+              title: 'Terminal B',
+              bounds: { x: 200, y: 0, width: 100, height: 100 },
+              config: {},
+              state: {},
+              capabilities: [],
+              createdAtMs: 2,
+              updatedAtMs: 2
+            }
+          ],
+          edges: [
+            {
+              id: 'edge-1',
+              source: 'node-a',
+              target: 'node-b',
+              sourceHandle: null,
+              targetHandle: null,
+              label: null,
+              meta: {},
+              createdAtMs: 3,
+              updatedAtMs: 3
+            }
+          ]
+        }
+      }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as { deleteNodes: (ids: string[]) => Promise<void> }).deleteNodes(['node-a']);
+
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe('node-b');
+    expect(canvasStore.getState().graphSnapshot.edges).toHaveLength(0);
+    expect(saveGraphSnapshot).toHaveBeenCalled();
+  });
+
+  it('deleteSelectedNode deletes the currently selected node', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+    canvasStore.selectNode('node-note-1');
+
+    await (canvasStore as unknown as { deleteSelectedNode: () => Promise<void> }).deleteSelectedNode();
+
+    expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe('node-terminal-1');
+    expect(canvasStore.getState().selectedNodeId).toBeNull();
+  });
 });
