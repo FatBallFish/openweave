@@ -40,6 +40,8 @@ interface WorkbenchShellProps {
   quickAddDisabled: boolean;
   fitViewDisabled: boolean;
   inspectorDisabled: boolean;
+  activePlacementType?: string | null;
+  onTogglePlacement?: (type: string) => void;
 }
 
 export const WorkbenchShell = ({
@@ -69,7 +71,9 @@ export const WorkbenchShell = ({
   commandMenuDisabled,
   quickAddDisabled,
   fitViewDisabled,
-  inspectorDisabled
+  inspectorDisabled,
+  activePlacementType,
+  onTogglePlacement
 }: WorkbenchShellProps): JSX.Element => {
   const { t } = useI18n();
   const hasActiveWorkspace = workspaceName !== null;
@@ -135,6 +139,8 @@ export const WorkbenchShell = ({
           onFitCanvas={onFitCanvas}
           onToggleInspector={onToggleInspector}
           inspectorDisabled={inspectorDisabled}
+          activePlacementType={activePlacementType}
+          onTogglePlacement={onTogglePlacement}
         />
         <WorkbenchContextPanel
           workspaceName={workspaceName}
