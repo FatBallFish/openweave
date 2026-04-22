@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../../i18n/provider';
 import { settingsStore, useSettingsStore } from './settings.store';
@@ -26,14 +26,20 @@ const TABS: { key: SettingsTab; labelKey: string }[] = [
   { key: 'about', labelKey: 'settings.tabAbout' }
 ];
 
+const GROUPED_SHORTCUTS: Record<string, typeof SHORTCUT_DEFINITIONS> = {
+  canvas: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'canvas'),
+  general: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'general'),
+  edit: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'edit')
+};
+
 const ShortcutsSettingsPanel = (): JSX.Element => {
   const { t } = useI18n();
   const shortcuts = useSettingsStore((s) => s.shortcuts);
   const [editingId, setEditingId] = useState<string | null>(null);
   const listeningRef = useRef(false);
 
-  const conflictMap = useCallback((): Map<string, string[]> => {
-    const conflicts = new Map<string, string[]>();
+  const conflicts = useMemo(() => {
+    const conflictMap = new Map<string, string[]>();
     const configs = SHORTCUT_DEFINITIONS.map((def) => ({
       id: def.id,
       config: getMergedConfig(def.id, shortcuts)
@@ -48,21 +54,19 @@ const ShortcutsSettingsPanel = (): JSX.Element => {
           configs[i].config.shiftKey === configs[j].config.shiftKey &&
           configs[i].config.altKey === configs[j].config.altKey
         ) {
-          const a = conflicts.get(configs[i].id) ?? [];
+          const a = conflictMap.get(configs[i].id) ?? [];
           a.push(configs[j].id);
-          conflicts.set(configs[i].id, a);
+          conflictMap.set(configs[i].id, a);
 
-          const b = conflicts.get(configs[j].id) ?? [];
+          const b = conflictMap.get(configs[j].id) ?? [];
           b.push(configs[i].id);
-          conflicts.set(configs[j].id, b);
+          conflictMap.set(configs[j].id, b);
         }
       }
     }
 
-    return conflicts;
+    return conflictMap;
   }, [shortcuts]);
-
-  const conflicts = conflictMap();
 
   useEffect(() => {
     if (!editingId) {
@@ -75,16 +79,18 @@ const ShortcutsSettingsPanel = (): JSX.Element => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!listeningRef.current) return;
 
-      e.preventDefault();
-      e.stopPropagation();
-
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         setEditingId(null);
         return;
       }
 
       const isModifierOnly = ['Control', 'Shift', 'Alt', 'Meta'].includes(e.key);
       if (isModifierOnly) return;
+
+      e.preventDefault();
+      e.stopPropagation();
 
       const config: ShortcutConfig = {
         key: e.key.toLowerCase() === 'escape' ? 'escape' : e.key,
@@ -105,11 +111,17 @@ const ShortcutsSettingsPanel = (): JSX.Element => {
     };
   }, [editingId]);
 
-  const grouped = {
-    canvas: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'canvas'),
-    general: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'general'),
-    edit: SHORTCUT_DEFINITIONS.filter((d) => d.group === 'edit')
-  };
+  useEffect(() => {
+    return () => {
+      setEditingId(null);
+    };
+  }, []);
+
+  const groupOrder = useMemo(() => {
+    const groups = new Set<string>();
+    SHORTCUT_DEFINITIONS.forEach((d) => groups.add(d.group));
+    return Array.from(groups);
+  }, []);
 
   const groupLabels: Record<string, string> = {
     canvas: t('settings.shortcuts.groupCanvas'),
@@ -119,11 +131,11 @@ const ShortcutsSettingsPanel = (): JSX.Element => {
 
   return (
     <div className="ow-settings-dialog__groups">
-      {(['general', 'canvas', 'edit'] as const).map((group) => (
+      {groupOrder.map((group) => (
         <section key={group} className="ow-settings-dialog__group">
           <h3>{groupLabels[group]}</h3>
           <div className="ow-settings-dialog__shortcuts-list">
-            {grouped[group].map((def) => {
+            {GROUPED_SHORTCUTS[group].map((def) => {
               const config = getMergedConfig(def.id, shortcuts);
               const isEditing = editingId === def.id;
               const conflictIds = conflicts.get(def.id) ?? [];
