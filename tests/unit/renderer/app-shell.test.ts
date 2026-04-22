@@ -70,7 +70,6 @@ describe('app shell', () => {
     const html = renderToStaticMarkup(createElement(I18nProvider, null, createElement(App)));
 
     expect(html).toContain('data-testid="workbench-shell"');
-    expect(html).toContain('data-testid="workbench-topbar"');
     expect(html).toContain('data-testid="workbench-overlay-stage"');
     expect(html).toContain('选择或创建工作区');
     expect(html).not.toContain('Electron shell ready for MVP tasks.');

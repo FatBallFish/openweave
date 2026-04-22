@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { WorkbenchContextPanel } from './WorkbenchContextPanel';
 import { WorkbenchInspector } from './WorkbenchInspector';
 import { WorkbenchStatusIsland } from './WorkbenchStatusIsland';
-import { WorkbenchTopBar } from './WorkbenchTopBar';
 import { useI18n } from '../../i18n/provider';
 
 export interface WorkbenchSelectedNode {
@@ -18,30 +17,15 @@ interface WorkbenchShellProps {
   contextPanel: ReactNode;
   stage: ReactNode;
   commandPalette?: ReactNode;
-  disabled: boolean;
   selectedNode: WorkbenchSelectedNode | null;
   nodeCount: number;
   edgeCount: number;
   recentAction: string | null;
   contextPanelCollapsed: boolean;
   inspectorCollapsed: boolean;
-  onAddTerminal: () => void;
-  onAddNote: () => void;
-  onAddPortal: () => void;
-  onAddFileTree: () => void;
-  onAddText: () => void;
-  onOpenCommandMenu: () => void;
-  onOpenQuickAdd: () => void;
-  onFitCanvas: () => void;
   onToggleContextPanel: () => void;
   onToggleInspector: () => void;
   onOpenSettings: () => void;
-  commandMenuDisabled: boolean;
-  quickAddDisabled: boolean;
-  fitViewDisabled: boolean;
-  inspectorDisabled: boolean;
-  activePlacementType?: string | null;
-  onTogglePlacement?: (type: string) => void;
 }
 
 export const WorkbenchShell = ({
@@ -50,30 +34,15 @@ export const WorkbenchShell = ({
   contextPanel,
   stage,
   commandPalette,
-  disabled,
   selectedNode,
   nodeCount,
   edgeCount,
   recentAction,
   contextPanelCollapsed,
   inspectorCollapsed,
-  onAddTerminal,
-  onAddNote,
-  onAddPortal,
-  onAddFileTree,
-  onAddText,
-  onOpenCommandMenu,
-  onOpenQuickAdd,
-  onFitCanvas,
   onToggleContextPanel,
   onToggleInspector,
-  onOpenSettings,
-  commandMenuDisabled,
-  quickAddDisabled,
-  fitViewDisabled,
-  inspectorDisabled,
-  activePlacementType,
-  onTogglePlacement
+  onOpenSettings
 }: WorkbenchShellProps): JSX.Element => {
   const { t } = useI18n();
   const hasActiveWorkspace = workspaceName !== null;
@@ -124,24 +93,6 @@ export const WorkbenchShell = ({
           contextPanelCollapsed ? ' is-context-collapsed' : ''
         }`}
       >
-        <WorkbenchTopBar
-          disabled={disabled}
-          onAddTerminal={onAddTerminal}
-          onAddNote={onAddNote}
-          onAddPortal={onAddPortal}
-          onAddFileTree={onAddFileTree}
-          onAddText={onAddText}
-          commandMenuDisabled={commandMenuDisabled}
-          quickAddDisabled={quickAddDisabled}
-          fitViewDisabled={fitViewDisabled}
-          onOpenCommandMenu={onOpenCommandMenu}
-          onOpenQuickAdd={onOpenQuickAdd}
-          onFitCanvas={onFitCanvas}
-          onToggleInspector={onToggleInspector}
-          inspectorDisabled={inspectorDisabled}
-          activePlacementType={activePlacementType}
-          onTogglePlacement={onTogglePlacement}
-        />
         <WorkbenchContextPanel
           workspaceName={workspaceName}
           collapsed={contextPanelCollapsed}
