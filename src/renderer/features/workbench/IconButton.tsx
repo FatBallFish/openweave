@@ -6,6 +6,7 @@ interface IconButtonProps {
   onClick?: () => void;
   disabled?: boolean;
   primary?: boolean;
+  active?: boolean;
   testId?: string;
 }
 
@@ -15,12 +16,13 @@ export const IconButton = ({
   onClick,
   disabled = false,
   primary = false,
+  active = false,
   testId
 }: IconButtonProps): JSX.Element => {
   return (
     <button
       aria-label={label}
-      className={`ow-icon-button${primary ? ' ow-icon-button--primary' : ''}`}
+      className={`ow-icon-button${primary ? ' ow-icon-button--primary' : ''}${active ? ' ow-icon-button--active' : ''}`}
       data-testid={testId}
       disabled={disabled}
       onClick={onClick}

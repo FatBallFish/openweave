@@ -20,7 +20,9 @@ describe('workbench top bar', () => {
         onOpenCommandMenu: vi.fn(),
         onOpenQuickAdd: vi.fn(),
         onFitCanvas: vi.fn(),
-        onToggleInspector: vi.fn()
+        onToggleInspector: vi.fn(),
+        activePlacementType: null,
+        onTogglePlacement: vi.fn()
       })
     );
 
