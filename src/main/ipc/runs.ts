@@ -89,6 +89,8 @@ const MAX_TAIL_LOG_LENGTH = 4096;
 const MAX_STORED_RUNS = 200;
 const MAX_LISTED_RUNS = 100;
 const STOPPED_RUN_SUMMARY = 'Run stopped';
+const RECOVERED_RUN_SUMMARY = 'Recovered after unclean shutdown';
+const RECOVERY_EVENT_TYPE = 'run.recovered';
 
 const MANAGED_RUNTIMES = new Set<SkillPackRuntimeKind>(['codex', 'claude', 'opencode']);
 
@@ -131,10 +133,6 @@ const toErrorMessage = (error: unknown): string => {
 const BRIDGE_USAGE_HINT = 'Use the OpenWeave bridge to inspect workspace graph nodes.';
 const CLI_USAGE_HINT = 'Use the openweave CLI from the workspace root.';
 
-const buildManagedRuntimeConflictMessage = (activeRun: RunRecord, nextRuntime: RunRuntimeInput): string => {
-  return `Managed runtime launch blocked: ${nextRuntime} cannot start while ${activeRun.runtime} run ${activeRun.id} is still ${activeRun.status}`;
-};
-
 const deriveExitStatus = (
   event: RuntimeExitEvent,
   stopRequested: boolean
@@ -168,27 +166,6 @@ class InMemoryRunsService {
   private readonly launchEnv: NodeJS.ProcessEnv;
 
   private readonly onRunUpdated?: (run: RunRecord) => void;
-
-  private findManagedRuntimeConflict(run: RunRecord): RunRecord | null {
-    if (!isManagedRuntime(run.runtime)) {
-      return null;
-    }
-
-    for (const existingRun of this.runs.values()) {
-      if (existingRun.id === run.id || existingRun.workspaceId !== run.workspaceId) {
-        continue;
-      }
-      if (isTerminalRunStatus(existingRun.status) || !isManagedRuntime(existingRun.runtime)) {
-        continue;
-      }
-      if (existingRun.runtime === run.runtime) {
-        continue;
-      }
-      return existingRun;
-    }
-
-    return null;
-  }
 
   constructor(options: RunsServiceOptions) {
     this.assertWorkspaceExists = options.assertWorkspaceExists;
@@ -250,10 +227,6 @@ class InMemoryRunsService {
     this.storeRun(run);
 
     try {
-      const managedRuntimeConflict = this.findManagedRuntimeConflict(run);
-      if (managedRuntimeConflict) {
-        throw new Error(buildManagedRuntimeConflictMessage(managedRuntimeConflict, run.runtime));
-      }
       this.prepareRuntimeLaunch?.({
         workspaceId: run.workspaceId,
         workspaceRootDir,
@@ -287,6 +260,10 @@ class InMemoryRunsService {
   public getRun(input: RunGetInput): RunRecord {
     const parsed = runGetSchema.parse(input);
     return this.requireRun(parsed.workspaceId, parsed.runId);
+  }
+
+  public hasRun(runId: string): boolean {
+    return this.runs.has(runId);
   }
 
   public listRuns(input: RunListInput): RunRecord[] {
@@ -540,6 +517,50 @@ interface RegisteredRunsContext {
   service: InMemoryRunsService;
 }
 
+const reconcilePersistedOrphanRuns = (
+  context: RegisteredRunsContext,
+  workspaceId: string,
+  repository: ReturnType<typeof createWorkspaceRepository>
+): Map<string, RunRecord> => {
+  const existingRecoveryAuditRunIds = new Set(
+    repository
+      .listAuditLogs(1000)
+      .filter((audit) => audit.eventType === RECOVERY_EVENT_TYPE && typeof audit.runId === 'string')
+      .map((audit) => audit.runId as string)
+  );
+  const reconciledRuns = new Map<string, RunRecord>();
+
+  for (const run of repository.listRuns()) {
+    if (isTerminalRunStatus(run.status) || context.service.hasRun(run.id)) {
+      continue;
+    }
+
+    const reconciledRun: RunRecord = {
+      ...run,
+      status: 'failed',
+      summary: RECOVERED_RUN_SUMMARY,
+      completedAtMs: run.completedAtMs ?? Date.now()
+    };
+    repository.saveRun(reconciledRun);
+    reconciledRuns.set(reconciledRun.id, reconciledRun);
+
+    if (!existingRecoveryAuditRunIds.has(reconciledRun.id)) {
+      createAuditLog({
+        workspaceId,
+        repository
+      }).persist({
+        eventType: RECOVERY_EVENT_TYPE,
+        runId: reconciledRun.id,
+        status: 'success',
+        message: RECOVERED_RUN_SUMMARY
+      });
+      existingRecoveryAuditRunIds.add(reconciledRun.id);
+    }
+  }
+
+  return reconciledRuns;
+};
+
 let registeredRunsContext: RegisteredRunsContext | null = null;
 
 export interface RegisterRunsIpcHandlersOptions {
@@ -673,7 +694,10 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       const persistedRun = withWorkspaceRepository(
         context.workspaceDbDir,
         parsedWorkspaceId,
-        (repository) => repository.getRun(parsed.runId)
+        (repository) => {
+          const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+          return reconciledRuns.get(parsed.runId) ?? repository.getRun(parsed.runId);
+        }
       );
       if (persistedRun && persistedRun.workspaceId === parsedWorkspaceId) {
         return {
@@ -688,9 +712,13 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       const parsed = runListSchema.parse(input);
       const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
       return {
-        runs: withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) =>
-          repository.listRunsByNode(parsed.nodeId).slice(0, MAX_LISTED_RUNS)
-        )
+        runs: withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) => {
+          const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+          return repository
+            .listRunsByNode(parsed.nodeId)
+            .map((run) => reconciledRuns.get(run.id) ?? run)
+            .slice(0, MAX_LISTED_RUNS);
+        })
       };
     },
     inputRun: async (_event: IpcMainInvokeEvent, input: RunInputInput) => {
@@ -700,7 +728,18 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     },
     stopRun: async (_event: IpcMainInvokeEvent, input: RunStopInput) => {
       const parsed = runStopSchema.parse(input);
-      assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      const persistedRun = withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) => {
+        const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+        return reconciledRuns.get(parsed.runId) ?? repository.getRun(parsed.runId);
+      });
+
+      if (persistedRun && isTerminalRunStatus(persistedRun.status) && !context.service.hasRun(parsed.runId)) {
+        return {
+          run: persistedRun
+        };
+      }
+
       return {
         run: context.service.stopRun(parsed)
       };

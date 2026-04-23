@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import {JSX, useEffect, useRef, useState} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord } from '../../../../shared/ipc/contracts';
@@ -74,9 +74,58 @@ export const TerminalNode = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const latestRun = runs[0] ?? null;
-  const latestRunRef = useRef<RunRecord | null>(null);
+  const activeRun = runs.find((candidate) => !isTerminalState(candidate.status)) ?? null;
+  const displayRun = activeRun ?? latestRun;
+  const activeRunRef = useRef<RunRecord | null>(null);
   const isStartingRef = useRef(false);
   const renderedRunIdRef = useRef<string | null>(null);
+  const renderedTailRef = useRef('');
+  const deferredFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent): void => {
+      if (container.contains(document.activeElement)) {
+        event.stopPropagation();
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel);
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handlePointerDown = (): void => {
+      xtermRef.current?.focus();
+      if (deferredFocusTimerRef.current !== null) {
+        clearTimeout(deferredFocusTimerRef.current);
+      }
+      deferredFocusTimerRef.current = setTimeout(() => {
+        xtermRef.current?.focus();
+        deferredFocusTimerRef.current = null;
+      }, 0);
+    };
+
+    container.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    return () => {
+      container.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      if (deferredFocusTimerRef.current !== null) {
+        clearTimeout(deferredFocusTimerRef.current);
+        deferredFocusTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize xterm.js
   useEffect(() => {
@@ -87,7 +136,7 @@ export const TerminalNode = ({
       fontFamily: config.fontFamily || 'monospace',
       fontSize: config.fontSize || 14,
       cursorBlink: true,
-      convertEol: true,
+      convertEol: false,
       scrollback: 1000
     });
 
@@ -102,7 +151,7 @@ export const TerminalNode = ({
 
     // Capture keyboard input
     term.onData((data) => {
-      const run = latestRunRef.current;
+      const run = activeRunRef.current;
       if (run && !isTerminalState(run.status)) {
         try {
           getShellBridge().runs.inputRun({
@@ -134,22 +183,23 @@ export const TerminalNode = ({
 
   // Subscribe to real-time stream for active run
   useEffect(() => {
-    if (!latestRun) return;
+    if (!activeRun) return;
 
     const bridge = getShellBridge();
-    bridge.runs.subscribeStream(latestRun.id);
+    bridge.runs.subscribeStream(activeRun.id);
 
     const unsubscribe = bridge.runs.onStream((event) => {
-      if (event.runId === latestRun.id && xtermRef.current) {
+      if (event.runId === activeRun.id && xtermRef.current) {
         xtermRef.current.write(event.chunk);
+        renderedTailRef.current += event.chunk;
       }
     });
 
     return () => {
       unsubscribe();
-      bridge.runs.unsubscribeStream(latestRun.id);
+      bridge.runs.unsubscribeStream(activeRun.id);
     };
-  }, [latestRun?.id]);
+  }, [activeRun?.id]);
 
   // ResizeObserver → fitAddon.fit() → resizeRun
   useEffect(() => {
@@ -161,7 +211,7 @@ export const TerminalNode = ({
       fitAddonRef.current?.fit();
       const cols = term.cols;
       const rows = term.rows;
-      const run = latestRunRef.current;
+      const run = activeRunRef.current;
       if (run && !isTerminalState(run.status)) {
         try {
           getShellBridge().runs.resizeRun({
@@ -212,23 +262,45 @@ export const TerminalNode = ({
   }, [workspaceId, node.id]);
 
   useEffect(() => {
-    latestRunRef.current = latestRun;
-  }, [latestRun]);
+    activeRunRef.current = activeRun;
+  }, [activeRun]);
 
   useEffect(() => {
     const term = xtermRef.current;
-    if (!term || !latestRun) {
+    if (!term) {
       return;
     }
 
-    if (renderedRunIdRef.current !== latestRun.id) {
-      term.clear();
-      renderedRunIdRef.current = latestRun.id;
-      if (latestRun.tailLog.length > 0) {
-        term.write(latestRun.tailLog);
-      }
+    if (!displayRun) {
+      renderedRunIdRef.current = null;
+      renderedTailRef.current = '';
+      return;
     }
-  }, [latestRun?.id, latestRun?.tailLog]);
+
+    if (renderedRunIdRef.current !== displayRun.id) {
+      term.clear();
+      renderedRunIdRef.current = displayRun.id;
+      renderedTailRef.current = displayRun.tailLog;
+      if (displayRun.tailLog.length > 0) {
+        term.write(displayRun.tailLog);
+      }
+      return;
+    }
+
+    if (displayRun.tailLog === renderedTailRef.current) {
+      return;
+    }
+
+    if (activeRun?.id === displayRun.id && !isTerminalState(displayRun.status)) {
+      return;
+    }
+
+    term.clear();
+    renderedTailRef.current = displayRun.tailLog;
+    if (displayRun.tailLog.length > 0) {
+      term.write(displayRun.tailLog);
+    }
+  }, [displayRun?.id, displayRun?.tailLog]);
 
   useEffect(() => {
     isStartingRef.current = isStarting;
@@ -264,7 +336,7 @@ export const TerminalNode = ({
   // Auto-start terminal on mount if no active run
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!latestRunRef.current && !isStartingRef.current) {
+      if (!activeRunRef.current && !isStartingRef.current) {
         startRun();
       }
     }, 600);
@@ -285,7 +357,9 @@ export const TerminalNode = ({
         className="ow-terminal-node__xterm nodrag nopan"
         data-testid={`terminal-node-xterm-${node.id}`}
         style={{ width: '100%', height: '100%', overflow: 'hidden' }}
-        tabIndex={0}
+        onFocus={() => {
+          xtermRef.current?.focus();
+        }}
         onPointerDown={(e) => {
           e.stopPropagation();
           xtermRef.current?.focus();

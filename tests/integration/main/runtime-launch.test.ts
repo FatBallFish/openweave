@@ -155,7 +155,7 @@ describe('runtime launch', () => {
     ).toContain('Use the OpenWeave bridge');
   });
 
-  it('blocks switching to a different managed runtime while an earlier managed runtime is still active', async () => {
+  it('allows switching to a different managed runtime while an earlier managed runtime is still active', async () => {
     const preflightCalls: string[] = [];
     const runtimeBridge = new HoldRuntimeBridge();
     const handlers = createRunsIpcHandlers({
@@ -181,15 +181,14 @@ describe('runtime launch', () => {
     });
 
     expect(firstRun.run.status).toBe('queued');
-    expect(secondRun.run.status).toBe('failed');
-    expect(secondRun.run.summary).toContain('Managed runtime launch blocked');
-    expect(secondRun.run.tailLog).toContain('Managed runtime launch blocked');
-    expect(preflightCalls).toEqual(['opencode']);
-    expect(runtimeBridge.startRequests).toHaveLength(1);
+    expect(secondRun.run.status).toBe('queued');
+    expect(preflightCalls).toEqual(['opencode', 'claude']);
+    expect(runtimeBridge.startRequests).toHaveLength(2);
     expect(runtimeBridge.startRequests[0]?.runtime).toBe('opencode');
+    expect(runtimeBridge.startRequests[1]?.runtime).toBe('claude');
   });
 
-  it('keeps managed-runtime exclusivity during the stop grace window until exit finalizes', async () => {
+  it('allows a new managed runtime during the stop grace window before exit finalizes', async () => {
     const preflightCalls: string[] = [];
     const runtimeBridge = new HoldRuntimeBridge();
     const handlers = createRunsIpcHandlers({
@@ -218,14 +217,13 @@ describe('runtime launch', () => {
     });
     expect(stopResult.run.status).toBe('running');
 
-    const blockedRun = await handlers.startRun({} as IpcMainInvokeEvent, {
+    const concurrentRun = await handlers.startRun({} as IpcMainInvokeEvent, {
       workspaceId: 'ws-runtime-stop-window',
       nodeId: 'terminal-2',
       runtime: 'claude',
       command: 'run --help'
     });
-    expect(blockedRun.run.status).toBe('failed');
-    expect(blockedRun.run.summary).toContain('Managed runtime launch blocked');
+    expect(concurrentRun.run.status).toBe('queued');
 
     runtimeBridge.emit('exit', {
       runId: firstRun.run.id,
@@ -241,9 +239,10 @@ describe('runtime launch', () => {
       command: 'run --help'
     });
     expect(nextRun.run.status).toBe('queued');
-    expect(preflightCalls).toEqual(['opencode', 'claude']);
-    expect(runtimeBridge.startRequests).toHaveLength(2);
+    expect(preflightCalls).toEqual(['opencode', 'claude', 'claude']);
+    expect(runtimeBridge.startRequests).toHaveLength(3);
     expect(runtimeBridge.startRequests[1]?.runtime).toBe('claude');
+    expect(runtimeBridge.startRequests[2]?.runtime).toBe('claude');
   });
 
 

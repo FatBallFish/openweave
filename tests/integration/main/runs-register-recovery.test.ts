@@ -264,4 +264,51 @@ describe('registered runs IPC handlers', () => {
     expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toHaveLength(1);
     repository.close();
   });
+
+  it('reconciles orphaned active runs from persistence before listing or stopping them', async () => {
+    const bridge = new HoldRuntimeBridge();
+    const { workspace, workspaceDbDir, ipcMain } = setupRegisteredRuns(bridge, {
+      enableCrashRecoveryOnOpen: false
+    });
+
+    let repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    repository.saveRun({
+      id: 'run-orphaned',
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'echo orphaned',
+      status: 'running',
+      summary: null,
+      tailLog: 'orphaned\n',
+      createdAtMs: 1,
+      startedAtMs: 2,
+      completedAtMs: null
+    });
+    repository.close();
+
+    const listed = await ipcMain.invoke(IPC_CHANNELS.runList, {
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1'
+    });
+    expect(listed.runs).toHaveLength(1);
+    expect(listed.runs[0]?.status).toBe('failed');
+    expect(listed.runs[0]?.summary).toBe('Recovered after unclean shutdown');
+
+    const stopped = await ipcMain.invoke(IPC_CHANNELS.runStop, {
+      workspaceId: workspace.id,
+      runId: 'run-orphaned'
+    });
+    expect(stopped.run.status).toBe('failed');
+    expect(bridge.stopCalls).toEqual([]);
+
+    repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    expect(repository.getRun('run-orphaned')?.status).toBe('failed');
+    expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toHaveLength(1);
+    repository.close();
+  });
 });

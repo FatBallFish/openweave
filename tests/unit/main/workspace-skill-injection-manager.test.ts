@@ -104,7 +104,7 @@ describe('workspace skill injection manager', () => {
     }
   });
 
-  it('treats a runtime switch as stale injection, updates files, and drops prior runtime ownership', () => {
+  it('keeps other runtime injections available when preparing a different managed runtime', () => {
     const workspaceRoot = createWorkspaceRoot();
     const repository = createInMemoryInjectionStore();
     let nowValue = 100;
@@ -132,11 +132,11 @@ describe('workspace skill injection manager', () => {
     });
 
     expect(result.status).toBe('created');
-    expect(fs.existsSync(path.join(workspaceRoot, 'AGENTS.md'))).toBe(false);
-    expect(fs.existsSync(path.join(workspaceRoot, '.agents', 'skills', 'openweave-workspace.md'))).toBe(false);
+    expect(fs.existsSync(path.join(workspaceRoot, 'AGENTS.md'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceRoot, '.agents', 'skills', 'openweave-workspace.md'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceRoot, '.claude', 'skills', 'openweave-workspace.md'))).toBe(true);
-    expect(repository.getSkillInjection('codex')).toBeNull();
-    expect(repository.listSkillInjections().map((record) => record.runtimeKind)).toEqual(['claude']);
+    expect(repository.getSkillInjection('codex')).not.toBeNull();
+    expect(repository.listSkillInjections().map((record) => record.runtimeKind)).toEqual(['claude', 'codex']);
     expect(repository.getSkillInjection('claude')?.updatedAtMs).toBe(200);
   });
 });

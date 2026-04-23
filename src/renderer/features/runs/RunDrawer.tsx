@@ -47,6 +47,13 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
           return;
         }
         const message = error instanceof Error ? error.message : 'Failed to load run details';
+        if (message.startsWith('Run not found:')) {
+          setRun(null);
+          setErrorMessage(null);
+          setIsStopping(false);
+          onClose();
+          return;
+        }
         setErrorMessage(message);
       }
     };
@@ -60,7 +67,7 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
       cancelled = true;
       clearInterval(timer);
     };
-  }, [runId, workspaceId]);
+  }, [onClose, runId, workspaceId]);
 
   useEffect(() => {
     if (!runId) {

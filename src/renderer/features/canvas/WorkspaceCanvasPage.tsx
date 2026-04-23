@@ -33,13 +33,13 @@ export const WorkspaceCanvasPage = ({
   onPlacementCancel
 }: WorkspaceCanvasPageProps): JSX.Element => {
   const { t } = useI18n();
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<{ workspaceId: string; runId: string } | null>(null);
   const graphSnapshot = useCanvasStore((storeState) => storeState.graphSnapshot);
   const loading = useCanvasStore((storeState) => storeState.loading);
   const errorMessage = useCanvasStore((storeState) => storeState.errorMessage);
   const openRun = useCallback((runId: string) => {
-    setActiveRunId(runId);
-  }, []);
+    setActiveRun({ workspaceId, runId });
+  }, [workspaceId]);
   const openBranchDialog = useCallback(() => {
     workspacesStore.openBranchDialog(workspaceId);
   }, [workspaceId]);
@@ -49,7 +49,7 @@ export const WorkspaceCanvasPage = ({
 
   useEffect(() => {
     void canvasStore.loadCanvasState(workspaceId);
-    setActiveRunId(null);
+    setActiveRun(null);
   }, [workspaceId]);
 
   return (
@@ -100,7 +100,11 @@ export const WorkspaceCanvasPage = ({
         {workspaceName}
       </span>
 
-      <RunDrawer workspaceId={workspaceId} runId={activeRunId} onClose={() => setActiveRunId(null)} />
+      <RunDrawer
+        workspaceId={workspaceId}
+        runId={activeRun?.workspaceId === workspaceId ? activeRun.runId : null}
+        onClose={() => setActiveRun(null)}
+      />
     </section>
   );
 };

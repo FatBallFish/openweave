@@ -39,6 +39,7 @@ export const TerminalSessionPane = ({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const runRef = useRef<RunRecord>(run);
   const renderedRunIdRef = useRef<string | null>(null);
+  const renderedTailRef = useRef('');
   const terminal = isTerminalState(run.status);
   const disableStop = terminal || isStopping;
 
@@ -54,7 +55,7 @@ export const TerminalSessionPane = ({
       fontFamily: 'monospace',
       fontSize: 14,
       cursorBlink: true,
-      convertEol: true,
+      convertEol: false,
       scrollback: 5000
     });
 
@@ -97,6 +98,7 @@ export const TerminalSessionPane = ({
     const unsubscribe = bridge.runs.onStream((event) => {
       if (event.runId === run.id && xtermRef.current) {
         xtermRef.current.write(event.chunk);
+        renderedTailRef.current += event.chunk;
       }
     });
 
@@ -116,11 +118,23 @@ export const TerminalSessionPane = ({
     if (renderedRunIdRef.current !== run.id) {
       term.clear();
       renderedRunIdRef.current = run.id;
+      renderedTailRef.current = run.tailLog;
       if (run.tailLog.length > 0) {
         term.write(run.tailLog);
       }
+      return;
     }
-  }, [run.id, run.tailLog]);
+
+    if (!terminal || run.tailLog === renderedTailRef.current) {
+      return;
+    }
+
+    term.clear();
+    renderedTailRef.current = run.tailLog;
+    if (run.tailLog.length > 0) {
+      term.write(run.tailLog);
+    }
+  }, [run.id, run.tailLog, terminal]);
 
   useEffect(() => {
     const container = containerRef.current;
