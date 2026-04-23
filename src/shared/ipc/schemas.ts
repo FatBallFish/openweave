@@ -120,6 +120,27 @@ export const noteNodeSchema = z.object({
 
 export const runRuntimeSchema = z.enum(['shell', 'codex', 'claude', 'opencode']);
 
+export const roleSchema = z.object({
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  description: z.string().default(''),
+  icon: z.string().default(''),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().default('#0078d4'),
+  createdAtMs: z.number().int().nonnegative(),
+  updatedAtMs: z.number().int().nonnegative()
+});
+
+export const roleCreateSchema = roleSchema.omit({ id: true });
+export const roleUpdateSchema = roleSchema;
+export const roleDeleteSchema = z.object({ id: z.string().trim().min(1) });
+
+export const runResizeSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  runId: z.string().trim().min(1),
+  cols: z.number().int().min(1).max(999),
+  rows: z.number().int().min(1).max(999)
+});
+
 export const terminalNodeSchema = z.object({
   id: z.string().trim().min(1),
   type: z.literal('terminal'),
@@ -450,5 +471,11 @@ export type PortalInputInput = z.infer<typeof portalInputSchema>;
 
 export const OpenSettingsSchema = z.object({});
 export type OpenSettingsInput = z.infer<typeof OpenSettingsSchema>;
+
+export type RoleInput = z.infer<typeof roleSchema>;
+export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
+export type RoleUpdateInput = z.infer<typeof roleUpdateSchema>;
+export type RoleDeleteInput = z.infer<typeof roleDeleteSchema>;
+export type RunResizeInput = z.infer<typeof runResizeSchema>;
 
 export { componentCapabilitySchema };
