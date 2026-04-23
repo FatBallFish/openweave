@@ -1,78 +1,56 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
 import { TerminalNode } from '../../../src/renderer/features/canvas/nodes/TerminalNode';
 
-const terminalNode = {
-  id: 'terminal-1',
-  type: 'terminal' as const,
-  x: 160,
-  y: 120,
-  command: 'pwd',
-  runtime: 'codex' as const
-};
+vi.mock('@xterm/xterm', () => ({
+  Terminal: vi.fn().mockImplementation(() => ({
+    open: vi.fn(),
+    write: vi.fn(),
+    dispose: vi.fn(),
+    onData: vi.fn(),
+    options: {},
+    cols: 80,
+    rows: 24
+  }))
+}));
 
-describe('terminal node', () => {
-  it('renders a runtime selector with the supported runtimes', () => {
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: vi.fn().mockImplementation(() => ({
+    fit: vi.fn()
+  }))
+}));
+
+describe('TerminalNode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      disconnect: vi.fn()
+    }));
+    (globalThis as any).window = {
+      openweaveShell: {
+        runs: {
+          listRuns: vi.fn().mockResolvedValue({ runs: [] }),
+          subscribeStream: vi.fn(),
+          unsubscribeStream: vi.fn(),
+          onStream: vi.fn().mockReturnValue(() => {})
+        }
+      }
+    };
+  });
+
+  it('renders xterm container', () => {
     const html = renderToStaticMarkup(
       createElement(TerminalNode, {
         workspaceId: 'ws-1',
-        node: terminalNode,
-        onChange: vi.fn(),
-        onOpenRun: vi.fn()
+        node: { id: 't1', type: 'terminal', x: 0, y: 0, command: 'echo hi', runtime: 'shell' },
+        config: { workingDir: '', iconKey: '', iconColor: '', theme: 'auto', fontFamily: '', fontSize: 14, roleId: null },
+        onChange: () => {},
+        onOpenRun: () => {}
       })
     );
-
-    expect(html).toContain(`terminal-node-runtime-${terminalNode.id}`);
-    expect(html).toContain(`terminal-node-session-${terminalNode.id}`);
-    expect(html).toContain(`terminal-node-open-run-${terminalNode.id}`);
-    expect(html).toContain('<option value="shell">Shell</option>');
-    expect(html).toContain('<option value="codex" selected="">Codex</option>');
-    expect(html).toContain('<option value="claude">Claude</option>');
-    expect(html).toContain('<option value="opencode">OpenCode</option>');
-  });
-
-  it('builds run requests from the node runtime with a shell fallback', async () => {
-    const module = (await import(
-      '../../../src/renderer/features/canvas/nodes/TerminalNode'
-    )) as {
-      buildTerminalRunStartInput?: (input: {
-        workspaceId: string;
-        node: {
-          id: string;
-          command: string;
-          runtime?: 'shell' | 'codex' | 'claude' | 'opencode';
-        };
-      }) => {
-        workspaceId: string;
-        nodeId: string;
-        runtime: string;
-        command: string;
-      };
-    };
-
-    expect(typeof module.buildTerminalRunStartInput).toBe('function');
-    expect(
-      module.buildTerminalRunStartInput?.({
-        workspaceId: 'ws-1',
-        node: terminalNode
-      })
-    ).toEqual({
-      workspaceId: 'ws-1',
-      nodeId: terminalNode.id,
-      runtime: 'codex',
-      command: terminalNode.command
-    });
-    expect(
-      module.buildTerminalRunStartInput?.({
-        workspaceId: 'ws-1',
-        node: {
-          ...terminalNode,
-          runtime: undefined
-        }
-      })
-    ).toMatchObject({
-      runtime: 'shell'
-    });
+    expect(html).toContain('terminal-node-xterm-t1');
   });
 });

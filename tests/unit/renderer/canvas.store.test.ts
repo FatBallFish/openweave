@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphSnapshotV2Input } from '../../../src/shared/ipc/schemas';
 

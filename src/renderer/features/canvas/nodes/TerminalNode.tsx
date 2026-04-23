@@ -1,10 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord } from '../../../../shared/ipc/contracts';
-import type { RunRuntimeInput, RunStartInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import type { RunRuntimeInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import { getXtermTheme } from './xterm-theme';
+
+export interface TerminalConfig {
+  workingDir: string;
+  iconKey: string;
+  iconColor: string;
+  theme: 'auto' | 'light' | 'dark';
+  fontFamily: string;
+  fontSize: number;
+  roleId: string | null;
+}
 
 interface TerminalNodeProps {
   workspaceId: string;
   node: TerminalNodeInput;
+  config: TerminalConfig;
   onChange: (patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>) => void;
   onOpenRun: (runId: string) => void;
 }
@@ -33,7 +47,7 @@ const getShellBridge = (): OpenWeaveShellBridge => {
 export const buildTerminalRunStartInput = (input: {
   workspaceId: string;
   node: Pick<TerminalNodeInput, 'id' | 'command'> & { runtime?: RunRuntimeInput };
-}): RunStartInput => {
+}): import('../../../../shared/ipc/schemas').RunStartInput => {
   return {
     workspaceId: input.workspaceId,
     nodeId: input.node.id,
@@ -42,66 +56,130 @@ export const buildTerminalRunStartInput = (input: {
   };
 };
 
+const isTerminalState = (status: RunRecord['status']): boolean => {
+  return status === 'completed' || status === 'failed' || status === 'stopped';
+};
+
 export const TerminalNode = ({
   workspaceId,
   node,
+  config,
   onChange,
   onOpenRun
 }: TerminalNodeProps): JSX.Element => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [draftCommand, setDraftCommand] = useState(node.command);
   const [draftRuntime, setDraftRuntime] = useState<RunRuntimeInput>(node.runtime);
   const latestRun = runs[0] ?? null;
-  const sessionLabel = latestRun ? `Session ${latestRun.id}` : 'Session ready';
-  const output = latestRun?.tailLog.length ? latestRun.tailLog : '(no output yet)';
-  const startRun = (): void => {
-    if (isStarting || draftCommand.trim().length === 0) {
-      return;
-    }
+  const latestRunRef = useRef<RunRecord | null>(null);
 
-    if (draftCommand !== node.command || draftRuntime !== node.runtime) {
-      onChange({
-        command: draftCommand,
-        runtime: draftRuntime
-      });
-    }
-
-    setIsStarting(true);
-    void getShellBridge()
-      .runs.startRun(
-        buildTerminalRunStartInput({
-          workspaceId,
-          node: {
-            ...node,
-            command: draftCommand,
-            runtime: draftRuntime
-          }
-        })
-      )
-      .then((response) => {
-        setRuns((currentRuns) => [response.run, ...currentRuns]);
-        onOpenRun(response.run.id);
-        setErrorMessage(null);
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : 'Failed to start run';
-        setErrorMessage(message);
-      })
-      .finally(() => {
-        setIsStarting(false);
-      });
-  };
-
+  // Initialize xterm.js
   useEffect(() => {
-    setDraftCommand(node.command);
-  }, [node.command]);
+    if (!containerRef.current) return;
 
+    const term = new Terminal({
+      theme: getXtermTheme(config.theme),
+      fontFamily: config.fontFamily || 'monospace',
+      fontSize: config.fontSize || 14,
+      cursorBlink: true,
+      convertEol: true,
+      scrollback: 1000
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(containerRef.current);
+    fitAddon.fit();
+
+    xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    // Capture keyboard input
+    term.onData((data) => {
+      const run = latestRunRef.current;
+      if (run && !isTerminalState(run.status)) {
+        try {
+          getShellBridge().runs.inputRun({
+            workspaceId,
+            runId: run.id,
+            input: data
+          });
+        } catch {
+          // Best-effort input
+        }
+      }
+    });
+
+    return () => {
+      term.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, []);
+
+  // Update theme/font when config changes
   useEffect(() => {
-    setDraftRuntime(node.runtime);
-  }, [node.runtime]);
+    const term = xtermRef.current;
+    if (!term) return;
+    term.options.theme = getXtermTheme(config.theme);
+    term.options.fontFamily = config.fontFamily || 'monospace';
+    term.options.fontSize = config.fontSize || 14;
+  }, [config.theme, config.fontFamily, config.fontSize]);
 
+  // Subscribe to real-time stream for active run
+  useEffect(() => {
+    if (!latestRun) return;
+
+    const bridge = getShellBridge();
+    bridge.runs.subscribeStream(latestRun.id);
+
+    const unsubscribe = bridge.runs.onStream((event) => {
+      if (event.runId === latestRun.id && xtermRef.current) {
+        xtermRef.current.write(event.chunk);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      bridge.runs.unsubscribeStream(latestRun.id);
+    };
+  }, [latestRun?.id]);
+
+  // ResizeObserver → fitAddon.fit() → resizeRun
+  useEffect(() => {
+    const container = containerRef.current;
+    const term = xtermRef.current;
+    if (!container || !term) return;
+
+    const observer = new ResizeObserver(() => {
+      fitAddonRef.current?.fit();
+      const cols = term.cols;
+      const rows = term.rows;
+      const run = latestRunRef.current;
+      if (run && !isTerminalState(run.status)) {
+        try {
+          getShellBridge().runs.resizeRun({
+            workspaceId,
+            runId: run.id,
+            cols,
+            rows
+          });
+        } catch {
+          // Best-effort resize
+        }
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Poll runs list (for history/fallback)
   useEffect(() => {
     let cancelled = false;
 
@@ -111,15 +189,11 @@ export const TerminalNode = ({
           workspaceId,
           nodeId: node.id
         });
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setRuns(response.runs);
         setErrorMessage(null);
       } catch (error) {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         const message = error instanceof Error ? error.message : 'Failed to load runs';
         setErrorMessage(message);
       }
@@ -135,6 +209,48 @@ export const TerminalNode = ({
       clearInterval(timer);
     };
   }, [workspaceId, node.id]);
+
+  useEffect(() => {
+    latestRunRef.current = latestRun;
+  }, [latestRun]);
+
+  // Sync draft with node prop
+  useEffect(() => {
+    setDraftCommand(node.command);
+  }, [node.command]);
+
+  useEffect(() => {
+    setDraftRuntime(node.runtime);
+  }, [node.runtime]);
+
+  const startRun = (): void => {
+    if (isStarting || draftCommand.trim().length === 0) return;
+
+    if (draftCommand !== node.command || draftRuntime !== node.runtime) {
+      onChange({ command: draftCommand, runtime: draftRuntime });
+    }
+
+    setIsStarting(true);
+    void getShellBridge()
+      .runs.startRun(
+        buildTerminalRunStartInput({
+          workspaceId,
+          node: { ...node, command: draftCommand, runtime: draftRuntime }
+        })
+      )
+      .then((response) => {
+        setRuns((currentRuns) => [response.run, ...currentRuns]);
+        onOpenRun(response.run.id);
+        setErrorMessage(null);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : 'Failed to start run';
+        setErrorMessage(message);
+      })
+      .finally(() => {
+        setIsStarting(false);
+      });
+  };
 
   return (
     <section className="ow-terminal-node" data-testid={`terminal-node-${node.id}`}>
@@ -160,7 +276,7 @@ export const TerminalNode = ({
         </label>
 
         <div className="ow-terminal-node__session" data-testid={`terminal-node-session-${node.id}`}>
-          {sessionLabel}
+          {latestRun ? `Session ${latestRun.id}` : 'Session ready'}
         </div>
 
         <button
@@ -168,9 +284,7 @@ export const TerminalNode = ({
           data-testid={`terminal-node-open-run-${node.id}`}
           disabled={!latestRun}
           onClick={() => {
-            if (!latestRun) {
-              return;
-            }
+            if (!latestRun) return;
             onOpenRun(latestRun.id);
           }}
           type="button"
@@ -211,21 +325,6 @@ export const TerminalNode = ({
         >
           {isStarting ? 'Starting...' : 'Run'}
         </button>
-        <button
-          className="ow-terminal-node__secondary-action nodrag nopan"
-          data-testid={`terminal-node-copy-command-${node.id}`}
-          onClick={() => {
-            if (typeof navigator !== 'undefined' && navigator.clipboard) {
-              void navigator.clipboard.writeText(draftCommand);
-            }
-          }}
-          type="button"
-        >
-          Copy command
-        </button>
-        <span data-testid={`terminal-node-last-status-${node.id}`}>
-          Last status: {latestRun?.status ?? 'none'}
-        </span>
       </div>
 
       {errorMessage ? (
@@ -234,34 +333,12 @@ export const TerminalNode = ({
         </p>
       ) : null}
 
-      <div className="ow-terminal-node__output">
-        <div className="ow-terminal-node__output-header">
-          <strong>Session output</strong>
-          <span>{getTerminalRuntimeLabel(draftRuntime)}</span>
-        </div>
-        <pre className="ow-terminal-node__output-surface" data-testid={`terminal-node-output-${node.id}`}>
-          {output}
-        </pre>
-      </div>
-
-      <div className="ow-terminal-node__runs" data-testid={`terminal-node-runs-${node.id}`}>
-        {runs.length === 0 ? (
-          <p className="ow-terminal-node__empty">No runs yet.</p>
-        ) : (
-          runs.map((run) => (
-            <button
-              className="ow-terminal-node__run-item nodrag nopan"
-              data-testid={`terminal-run-${run.id}`}
-              key={run.id}
-              onClick={() => onOpenRun(run.id)}
-              type="button"
-            >
-              <strong>{run.status}</strong>
-              <div>{run.summary ?? run.command}</div>
-            </button>
-          ))
-        )}
-      </div>
+      <div
+        ref={containerRef}
+        className="ow-terminal-node__xterm"
+        data-testid={`terminal-node-xterm-${node.id}`}
+        style={{ width: '100%', flex: 1, minHeight: 120, overflow: 'hidden' }}
+      />
     </section>
   );
 };
