@@ -20,7 +20,7 @@ describe('runtime adapters', () => {
     expect(runRuntimeSchema.parse('opencode')).toBe('opencode');
   });
 
-  it('launchShellRuntime starts a PTY shell with the provided cwd and env', async () => {
+  it('launchShellRuntime disables zsh prompt-sp when starting a PTY shell with a command', async () => {
     const ptyProcess = {
       pid: 1,
       write: vi.fn(),
@@ -34,7 +34,7 @@ describe('runtime adapters', () => {
     }));
 
     const { launchShellRuntime } = await import('../../../src/worker/adapters/shell-runtime');
-    const env = { PATH: '/usr/bin', SystemRoot: 'C:\\Windows' } as NodeJS.ProcessEnv;
+    const env = { PATH: '/usr/bin', SHELL: '/bin/zsh', SystemRoot: 'C:\\Windows' } as NodeJS.ProcessEnv;
     const processRef = launchShellRuntime({
       command: 'echo hello',
       cwd: '/tmp/workspace',
@@ -61,8 +61,8 @@ describe('runtime adapters', () => {
       );
     } else {
       expect(spawn).toHaveBeenCalledWith(
-        env.SHELL ?? process.env.SHELL ?? '/bin/sh',
-        ['-ilc', 'echo hello'],
+        '/bin/zsh',
+        ['-o', 'no_prompt_sp', '-ilc', 'echo hello'],
         expect.objectContaining({
           cwd: '/tmp/workspace',
           name: 'xterm-256color',
@@ -108,7 +108,50 @@ describe('runtime adapters', () => {
     } else {
       expect(spawn).toHaveBeenCalledWith(
         '/bin/zsh',
-        ['-il'],
+        ['-o', 'no_prompt_sp', '-il'],
+        expect.objectContaining({
+          cwd: '/tmp/workspace',
+          name: 'xterm-256color'
+        })
+      );
+    }
+  });
+
+  it('launchShellRuntime keeps non-zsh interactive shells unchanged', async () => {
+    const ptyProcess = {
+      pid: 1,
+      write: vi.fn(),
+      kill: vi.fn(),
+      onData: vi.fn(),
+      onExit: vi.fn()
+    };
+    const spawn = vi.fn(() => ptyProcess);
+    vi.doMock('node-pty', () => ({
+      spawn
+    }));
+
+    const { launchShellRuntime } = await import('../../../src/worker/adapters/shell-runtime');
+    const env = { PATH: '/usr/bin', SHELL: '/bin/sh' } as NodeJS.ProcessEnv;
+
+    launchShellRuntime({
+      command: '   ',
+      cwd: '/tmp/workspace',
+      env
+    });
+
+    if (process.platform === 'win32') {
+      expect(spawn).toHaveBeenCalledWith(
+        env.ComSpec ?? 'cmd.exe',
+        [],
+        expect.objectContaining({
+          cwd: '/tmp/workspace',
+          name: 'xterm-256color'
+        })
+      );
+    } else {
+      expect(spawn).toHaveBeenCalledWith(
+        '/bin/sh',
+        ['-i'],
         expect.objectContaining({
           cwd: '/tmp/workspace',
           name: 'xterm-256color'

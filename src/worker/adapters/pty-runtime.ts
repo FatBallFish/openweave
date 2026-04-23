@@ -21,6 +21,10 @@ export interface RuntimeAdapterProcess extends EventEmitter {
 
 const PTY_NAME = 'xterm-256color';
 
+const isZshShell = (shellPath: string): boolean => {
+  return path.basename(shellPath) === 'zsh';
+};
+
 const resolveShellLaunch = (
   command: string,
   env: NodeJS.ProcessEnv
@@ -36,12 +40,13 @@ const resolveShellLaunch = (
 
   const shell = env.SHELL ?? process.env.SHELL ?? '/bin/sh';
   const isInteractiveShell = /(?:bash|zsh|fish)$/.test(shell);
+  const zshArgs = isZshShell(shell) ? ['-o', 'no_prompt_sp'] : [];
   return {
     file: shell,
     args:
       trimmedCommand.length === 0
-        ? (isInteractiveShell ? ['-il'] : ['-i'])
-        : (isInteractiveShell ? ['-ilc', command] : ['-lc', command])
+        ? (isInteractiveShell ? [...zshArgs, '-il'] : ['-i'])
+        : (isInteractiveShell ? [...zshArgs, '-ilc', command] : ['-lc', command])
   };
 };
 
