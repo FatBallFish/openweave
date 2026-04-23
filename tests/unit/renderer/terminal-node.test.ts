@@ -945,4 +945,80 @@ describe('TerminalNode', () => {
     });
     container.remove();
   });
+
+  it('redraws instead of appending when active snapshot catch-up starts inside an ANSI sequence', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const shell = (globalThis as any).window.openweaveShell;
+    const fullScreenClear = 'prompt> \u001b[2J\u001b[Hpanel';
+    const partialOutput = fullScreenClear.slice(0, 10);
+
+    shell.runs.listRuns = vi
+      .fn()
+      .mockResolvedValueOnce({
+        runs: [createRun()]
+      })
+      .mockResolvedValue({
+        runs: [
+          createRun({
+            runtime: 'codex',
+            tailLog: fullScreenClear,
+            tailStartOffset: 0,
+            tailEndOffset: fullScreenClear.length
+          })
+        ]
+      });
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'codex' },
+          config: {
+            workingDir: '',
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: null
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    terminalInstances[0]?.write.mockClear();
+    terminalInstances[0]?.clear.mockClear();
+
+    await act(async () => {
+      streamHandler?.({
+        runId: 'run-1',
+        chunk: partialOutput,
+        chunkStartOffset: 0,
+        chunkEndOffset: partialOutput.length
+      });
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith(partialOutput);
+
+    terminalInstances[0]?.write.mockClear();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual([fullScreenClear]);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
 });

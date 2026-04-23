@@ -251,4 +251,65 @@ describe('TerminalSessionPane', () => {
     });
     container.remove();
   });
+
+  it('redraws instead of appending when active snapshot catch-up starts inside an ANSI sequence', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const fullScreenClear = 'prompt> \u001b[2J\u001b[Hpanel';
+    const partialOutput = fullScreenClear.slice(0, 10);
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: createRun({
+            runtime: 'codex'
+          }),
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+    });
+
+    terminalInstances[0]?.write.mockClear();
+    terminalInstances[0]?.clear.mockClear();
+
+    await act(async () => {
+      streamHandler?.({
+        runId: 'r1',
+        chunk: partialOutput,
+        chunkStartOffset: 0,
+        chunkEndOffset: partialOutput.length
+      });
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith(partialOutput);
+
+    terminalInstances[0]?.write.mockClear();
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: createRun({
+            runtime: 'codex',
+            tailLog: fullScreenClear,
+            tailStartOffset: 0,
+            tailEndOffset: fullScreenClear.length
+          }),
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual([fullScreenClear]);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
 });

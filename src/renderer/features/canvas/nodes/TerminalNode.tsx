@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../../shared/ipc/contracts';
 import type { RunRuntimeInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import { isAnsiSafeBoundary } from '../../terminal/ansi-boundary';
 import { getXtermTheme } from './xterm-theme';
 
 export interface TerminalConfig {
@@ -349,6 +350,10 @@ export const TerminalNode = ({
       }
 
       const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+      if (!isAnsiSafeBoundary(displayRun.tailLog, suffixStart)) {
+        redrawSnapshot();
+        return;
+      }
       const suffix = displayRun.tailLog.slice(suffixStart);
       if (suffix.length === 0) {
         renderedOffsetRef.current = tailEndOffset;

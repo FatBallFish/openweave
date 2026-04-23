@@ -2,6 +2,7 @@ import {JSX, useEffect, useRef} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../shared/ipc/contracts';
+import { isAnsiSafeBoundary } from '../terminal/ansi-boundary';
 import { getXtermTheme } from '../canvas/nodes/xterm-theme';
 
 interface TerminalSessionPaneProps {
@@ -186,6 +187,10 @@ export const TerminalSessionPane = ({
       }
 
       const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+      if (!isAnsiSafeBoundary(run.tailLog, suffixStart)) {
+        redrawSnapshot();
+        return;
+      }
       const suffix = run.tailLog.slice(suffixStart);
       if (suffix.length === 0) {
         renderedOffsetRef.current = tailEndOffset;
