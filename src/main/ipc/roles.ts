@@ -2,17 +2,17 @@ import crypto from 'node:crypto';
 import type { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc/contracts';
 import type {
-  RoleCreateInput,
-  RoleDeleteInput,
   RoleListResponse,
   RoleMutationResponse,
-  RoleDeleteResponse,
-  RoleUpdateInput
+  RoleDeleteResponse
 } from '../../shared/ipc/contracts';
 import {
   roleCreateSchema,
   roleDeleteSchema,
-  roleUpdateSchema
+  roleUpdateSchema,
+  type RoleCreateInput,
+  type RoleDeleteInput,
+  type RoleUpdateInput
 } from '../../shared/ipc/schemas';
 import type { RegistryRepository } from '../db/registry';
 

@@ -30,7 +30,14 @@ interface StopRunMessage {
   runId: string;
 }
 
-type IncomingMessage = StartRunMessage | InputRunMessage | StopRunMessage;
+interface ResizeRunMessage {
+  type: 'resize';
+  runId: string;
+  cols: number;
+  rows: number;
+}
+
+type IncomingMessage = StartRunMessage | InputRunMessage | StopRunMessage | ResizeRunMessage;
 
 interface StartedEvent {
   type: 'started';

@@ -42,6 +42,8 @@ import {
 interface RunsIpcMain {
   handle: (channel: string, listener: (...args: any[]) => unknown) => void;
   removeHandler: (channel: string) => void;
+  on: (channel: string, listener: (...args: any[]) => void) => void;
+  removeListener: (channel: string, listener: (...args: any[]) => void) => void;
 }
 
 export interface RunsIpcHandlers {
