@@ -283,6 +283,8 @@ describe('registered runs IPC handlers', () => {
       status: 'running',
       summary: null,
       tailLog: 'orphaned\n',
+      tailStartOffset: 24,
+      tailEndOffset: 33,
       createdAtMs: 1,
       startedAtMs: 2,
       completedAtMs: null
@@ -296,6 +298,10 @@ describe('registered runs IPC handlers', () => {
     expect(listed.runs).toHaveLength(1);
     expect(listed.runs[0]?.status).toBe('failed');
     expect(listed.runs[0]?.summary).toBe('Recovered after unclean shutdown');
+    expect(listed.runs[0]).toMatchObject({
+      tailStartOffset: 24,
+      tailEndOffset: 33
+    });
 
     const stopped = await ipcMain.invoke(IPC_CHANNELS.runStop, {
       workspaceId: workspace.id,
@@ -307,7 +313,11 @@ describe('registered runs IPC handlers', () => {
     repository = createWorkspaceRepository({
       dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
     });
-    expect(repository.getRun('run-orphaned')?.status).toBe('failed');
+    expect(repository.getRun('run-orphaned')).toMatchObject({
+      status: 'failed',
+      tailStartOffset: 24,
+      tailEndOffset: 33
+    });
     expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toHaveLength(1);
     repository.close();
   });

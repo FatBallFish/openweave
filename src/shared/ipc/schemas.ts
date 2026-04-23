@@ -141,6 +141,26 @@ export const runResizeSchema = z.object({
   rows: z.number().int().min(1).max(999)
 });
 
+export const runOutputOffsetSchema = z.number().int().nonnegative();
+
+export const runTailRangeSchema = z
+  .object({
+    tailStartOffset: runOutputOffsetSchema,
+    tailEndOffset: runOutputOffsetSchema
+  })
+  .refine((value) => value.tailStartOffset <= value.tailEndOffset, {
+    message: 'tailStartOffset must not exceed tailEndOffset'
+  });
+
+export const runStreamChunkRangeSchema = z
+  .object({
+    chunkStartOffset: runOutputOffsetSchema,
+    chunkEndOffset: runOutputOffsetSchema
+  })
+  .refine((value) => value.chunkStartOffset <= value.chunkEndOffset, {
+    message: 'chunkStartOffset must not exceed chunkEndOffset'
+  });
+
 export const terminalNodeSchema = z.object({
   id: z.string().trim().min(1),
   type: z.literal('terminal'),

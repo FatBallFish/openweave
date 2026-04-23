@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalSessionPane } from '../../../src/renderer/features/runs/TerminalSessionPane';
 
-let streamHandler: ((event: { runId: string; chunk: string }) => void) | null = null;
+let streamHandler:
+  | ((event: { runId: string; chunk: string; chunkStartOffset: number; chunkEndOffset: number }) => void)
+  | null = null;
 
 const terminalInstances: Array<{
   open: ReturnType<typeof vi.fn>;
@@ -45,6 +47,23 @@ vi.mock('@xterm/addon-fit', () => ({
   }))
 }));
 
+const createRun = (overrides: Record<string, unknown> = {}) => ({
+  id: 'r1',
+  workspaceId: 'ws1',
+  nodeId: 'n1',
+  runtime: 'shell',
+  command: '',
+  status: 'running',
+  summary: null,
+  tailLog: '',
+  tailStartOffset: 0,
+  tailEndOffset: 0,
+  createdAtMs: 1,
+  startedAtMs: 1,
+  completedAtMs: null,
+  ...overrides
+});
+
 describe('TerminalSessionPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,12 +79,14 @@ describe('TerminalSessionPane', () => {
         runs: {
           subscribeStream: vi.fn(),
           unsubscribeStream: vi.fn(),
-          onStream: vi.fn((handler: (event: { runId: string; chunk: string }) => void) => {
-            streamHandler = handler;
-            return () => {
-              streamHandler = null;
-            };
-          })
+          onStream: vi.fn(
+            (handler: (event: { runId: string; chunk: string; chunkStartOffset: number; chunkEndOffset: number }) => void) => {
+              streamHandler = handler;
+              return () => {
+                streamHandler = null;
+              };
+            }
+          )
         }
       }
     };
@@ -74,19 +95,7 @@ describe('TerminalSessionPane', () => {
   it('renders xterm container', () => {
     const html = renderToStaticMarkup(
       createElement(TerminalSessionPane, {
-        run: {
-          id: 'r1',
-          workspaceId: 'ws1',
-          nodeId: 'n1',
-          runtime: 'shell',
-          command: 'echo hi',
-          status: 'running',
-          summary: null,
-          tailLog: '',
-          createdAtMs: Date.now(),
-          startedAtMs: Date.now(),
-          completedAtMs: null
-        },
+        run: createRun({ command: 'echo hi' }),
         isStopping: false,
         onStop: () => {}
       })
@@ -102,19 +111,7 @@ describe('TerminalSessionPane', () => {
     await act(async () => {
       root.render(
         createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'shell',
-            command: '',
-            status: 'running',
-            summary: null,
-            tailLog: '',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: null
-          },
+          run: createRun(),
           isStopping: false,
           onStop: () => {}
         })
@@ -139,19 +136,7 @@ describe('TerminalSessionPane', () => {
     await act(async () => {
       root.render(
         createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'shell',
-            command: '',
-            status: 'running',
-            summary: null,
-            tailLog: '',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: null
-          },
+          run: createRun(),
           isStopping: false,
           onStop: () => {}
         })
@@ -174,7 +159,7 @@ describe('TerminalSessionPane', () => {
     container.remove();
   });
 
-  it('backfills tail output that arrived before stream subscription only on first paint', async () => {
+  it('catches up missed active output from offset snapshots without replaying gap chunks', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -182,78 +167,17 @@ describe('TerminalSessionPane', () => {
     await act(async () => {
       root.render(
         createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'shell',
-            command: '',
-            status: 'running',
-            summary: null,
-            tailLog: 'prompt> ',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: null
-          },
+          run: createRun(),
           isStopping: false,
           onStop: () => {}
         })
       );
-    });
-
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> ');
-
-    await act(async () => {
-      root.render(
-        createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'codex',
-            command: '',
-            status: 'running',
-            summary: null,
-            tailLog: 'prompt> \u001b[2J',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: null
-          },
-          isStopping: false,
-          onStop: () => {}
-        })
-      );
-    });
-
-    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      streamHandler?.({ runId: 'r1', chunk: 'typed' });
-      await Promise.resolve();
     });
 
     terminalInstances[0]?.write.mockClear();
 
     await act(async () => {
-      root.render(
-        createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'codex',
-            command: '',
-            status: 'running',
-            summary: null,
-            tailLog: 'prompt> typed\u001b[2K\rprompt> typed',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: null
-          },
-          isStopping: false,
-          onStop: () => {}
-        })
-      );
+      streamHandler?.({ runId: 'r1', chunk: 'typed', chunkStartOffset: 8, chunkEndOffset: 13 });
       await Promise.resolve();
     });
 
@@ -262,19 +186,11 @@ describe('TerminalSessionPane', () => {
     await act(async () => {
       root.render(
         createElement(TerminalSessionPane, {
-          run: {
-            id: 'r1',
-            workspaceId: 'ws1',
-            nodeId: 'n1',
-            runtime: 'codex',
-            command: '',
-            status: 'completed',
-            summary: 'done',
-            tailLog: 'prompt> final\r\n',
-            createdAtMs: Date.now(),
-            startedAtMs: Date.now(),
-            completedAtMs: Date.now()
-          },
+          run: createRun({
+            tailLog: 'prompt> typed',
+            tailStartOffset: 0,
+            tailEndOffset: 13
+          }),
           isStopping: false,
           onStop: () => {}
         })
@@ -282,8 +198,53 @@ describe('TerminalSessionPane', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(2);
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> final\r\n');
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual(['prompt> typed']);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('redraws active output when a newer snapshot no longer covers the rendered range', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: createRun({
+            tailLog: 'prompt> old',
+            tailStartOffset: 0,
+            tailEndOffset: 11
+          }),
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+    });
+
+    terminalInstances[0]?.clear.mockClear();
+    terminalInstances[0]?.write.mockClear();
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: createRun({
+            tailLog: 'next tail',
+            tailStartOffset: 50,
+            tailEndOffset: 59
+          }),
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('next tail');
 
     await act(async () => {
       root.unmount();

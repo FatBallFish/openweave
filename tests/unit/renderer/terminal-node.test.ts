@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalNode } from '../../../src/renderer/features/canvas/nodes/TerminalNode';
 
-let streamHandler: ((event: { runId: string; chunk: string }) => void) | null = null;
+let streamHandler:
+  | ((event: { runId: string; chunk: string; chunkStartOffset: number; chunkEndOffset: number }) => void)
+  | null = null;
 
 const terminalInstances: Array<{
   open: ReturnType<typeof vi.fn>;
@@ -68,6 +70,23 @@ vi.mock('@xterm/addon-fit', () => ({
   }))
 }));
 
+const createRun = (overrides: Record<string, unknown> = {}) => ({
+  id: 'run-1',
+  workspaceId: 'ws-1',
+  nodeId: 't1',
+  runtime: 'shell',
+  command: '',
+  status: 'running',
+  summary: null,
+  tailLog: '',
+  tailStartOffset: 0,
+  tailEndOffset: 0,
+  createdAtMs: 1,
+  startedAtMs: 1,
+  completedAtMs: null,
+  ...overrides
+});
+
 describe('TerminalNode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,12 +121,14 @@ describe('TerminalNode', () => {
           resizeRun: vi.fn(),
           subscribeStream: vi.fn(),
           unsubscribeStream: vi.fn(),
-          onStream: vi.fn((handler: (event: { runId: string; chunk: string }) => void) => {
+          onStream: vi.fn(
+            (handler: (event: { runId: string; chunk: string; chunkStartOffset: number; chunkEndOffset: number }) => void) => {
             streamHandler = handler;
             return () => {
               streamHandler = null;
             };
-          })
+            }
+          )
         }
       }
     };
@@ -205,7 +226,7 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
-  it('backfills missed startup output from the polled tail log only once per run', async () => {
+  it('appends the missing suffix from an active snapshot when offsets advance', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -224,6 +245,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> ',
+            tailStartOffset: 0,
+            tailEndOffset: 8,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -241,6 +264,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> \u001b[2J',
+            tailStartOffset: 0,
+            tailEndOffset: 12,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -276,7 +301,8 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(2);
+    expect(terminalInstances[0]?.write).toHaveBeenLastCalledWith('\u001b[2J');
 
     await act(async () => {
       root.unmount();
@@ -284,7 +310,7 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
-  it('does not patch an active run from polled tail log changes after initial hydration', async () => {
+  it('repairs an active run from the polled snapshot when offsets prove bytes are missing', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -303,6 +329,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> ',
+            tailStartOffset: 0,
+            tailEndOffset: 8,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -320,6 +348,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> hello\r\n',
+            tailStartOffset: 0,
+            tailEndOffset: 15,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -337,6 +367,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> hello\r\n',
+            tailStartOffset: 0,
+            tailEndOffset: 15,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -372,7 +404,8 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(2);
+    expect(terminalInstances[0]?.write).toHaveBeenLastCalledWith('hello\r\n');
     expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -458,7 +491,7 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
-  it('does not replay polled control-sequence updates after live stream output has started', async () => {
+  it('does not replay polled bytes after live stream output has already advanced the offset', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -477,6 +510,8 @@ describe('TerminalNode', () => {
             status: 'running',
             summary: null,
             tailLog: 'prompt> ',
+            tailStartOffset: 0,
+            tailEndOffset: 8,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -493,7 +528,9 @@ describe('TerminalNode', () => {
             command: '',
             status: 'running',
             summary: null,
-            tailLog: 'prompt> typed\u001b[2K\rprompt> typed',
+            tailLog: 'prompt> typed',
+            tailStartOffset: 0,
+            tailEndOffset: 13,
             createdAtMs: Date.now(),
             startedAtMs: Date.now(),
             completedAtMs: null
@@ -525,7 +562,7 @@ describe('TerminalNode', () => {
     terminalInstances[0]?.write.mockClear();
 
     await act(async () => {
-      streamHandler?.({ runId: 'run-1', chunk: 'typed' });
+      streamHandler?.({ runId: 'run-1', chunk: 'typed', chunkStartOffset: 8, chunkEndOffset: 13 });
       await Promise.resolve();
     });
 
@@ -773,6 +810,135 @@ describe('TerminalNode', () => {
     terminal.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 8 }));
 
     expect(canvasWheel).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('catches up missed active output from later snapshots without replaying gap chunks', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const shell = (globalThis as any).window.openweaveShell;
+
+    shell.runs.listRuns = vi
+      .fn()
+      .mockResolvedValueOnce({
+        runs: [createRun()]
+      })
+      .mockResolvedValue({
+        runs: [
+          createRun({
+            tailLog: 'prompt> typed',
+            tailStartOffset: 0,
+            tailEndOffset: 13
+          })
+        ]
+      });
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'shell' },
+          config: {
+            workingDir: '',
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: null
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    terminalInstances[0]?.write.mockClear();
+
+    await act(async () => {
+      streamHandler?.({ runId: 'run-1', chunk: 'typed', chunkStartOffset: 8, chunkEndOffset: 13 });
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.write).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual(['prompt> typed']);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('redraws active output when the polled snapshot skips past the rendered range', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const shell = (globalThis as any).window.openweaveShell;
+
+    shell.runs.listRuns = vi
+      .fn()
+      .mockResolvedValueOnce({
+        runs: [
+          createRun({
+            tailLog: 'prompt> old',
+            tailStartOffset: 0,
+            tailEndOffset: 11
+          })
+        ]
+      })
+      .mockResolvedValue({
+        runs: [
+          createRun({
+            tailLog: 'next tail',
+            tailStartOffset: 50,
+            tailEndOffset: 59
+          })
+        ]
+      });
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'shell' },
+          config: {
+            workingDir: '',
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: null
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    terminalInstances[0]?.clear.mockClear();
+    terminalInstances[0]?.write.mockClear();
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('next tail');
 
     await act(async () => {
       root.unmount();

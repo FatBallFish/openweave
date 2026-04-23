@@ -12,6 +12,7 @@ import {
 } from '../../../src/main/ipc/runs';
 import { IPC_CHANNELS } from '../../../src/shared/ipc/contracts';
 import { createRegistryRepository } from '../../../src/main/db/registry';
+import { createWorkspaceRepository } from '../../../src/main/db/workspace';
 import { RuntimeWorkerError } from '../../../src/worker/runtime-worker';
 import { createRuntimeBridge, type RuntimeBridge, type RuntimeStartRequest } from '../../../src/main/runtime/runtime-bridge';
 
@@ -343,6 +344,69 @@ describe('runtime launch', () => {
     expect(result.run.status).toBe('failed');
     expect(result.run.summary).toBe('[RUNTIME_UNSUPPORTED] Unsupported runtime: invalid-runtime');
     expect(result.run.tailLog).toContain('[RUNTIME_UNSUPPORTED] Unsupported runtime: invalid-runtime');
+    expect(result.run.tailStartOffset).toBe(0);
+    expect(result.run.tailEndOffset).toBe(result.run.tailLog.length);
+  });
+
+  it('persists truncated tail snapshot offsets for registered active runs', async () => {
+    const testDir = mkdtemp('openweave-runtime-tail-offsets-');
+    const dbFilePath = path.join(testDir, 'registry.sqlite');
+    const workspaceDbDir = path.join(testDir, 'workspaces');
+    const workspaceRoot = path.join(testDir, 'workspace-root');
+    fs.mkdirSync(workspaceDbDir, { recursive: true });
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+
+    const registry = createRegistryRepository({ dbFilePath });
+    const workspace = registry.createWorkspace({
+      name: 'Tail Offset Workspace',
+      rootDir: workspaceRoot
+    });
+    registry.close();
+
+    const ipcMain = new IpcMainStub();
+    const runtimeBridge = new HoldRuntimeBridge();
+    registerRunsIpcHandlers({
+      dbFilePath,
+      workspaceDbDir,
+      ipcMain,
+      runtimeBridge
+    });
+
+    const started = await ipcMain.invoke(IPC_CHANNELS.runStart, {
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'printf test'
+    });
+
+    runtimeBridge.emit('stdout', {
+      runId: started.run.id,
+      chunk: 'a'.repeat(3000)
+    });
+    runtimeBridge.emit('stderr', {
+      runId: started.run.id,
+      chunk: 'b'.repeat(2000)
+    });
+
+    const listed = await ipcMain.invoke(IPC_CHANNELS.runList, {
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1'
+    });
+    expect(listed.runs[0]).toMatchObject({
+      tailStartOffset: 904,
+      tailEndOffset: 5000
+    });
+    expect(listed.runs[0]?.tailLog).toHaveLength(4096);
+
+    const repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    expect(repository.getRun(started.run.id)).toMatchObject({
+      tailStartOffset: 904,
+      tailEndOffset: 5000
+    });
+    expect(repository.getRun(started.run.id)?.tailLog).toHaveLength(4096);
+    repository.close();
   });
 
   it('cleans managed workspace files when the workspace runs are disposed', async () => {

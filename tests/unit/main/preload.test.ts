@@ -10,6 +10,9 @@ describe('preload bridge', () => {
   it('exposes additive graph, component, and run controls with the expected IPC channels and payloads', async () => {
     const exposeInMainWorld = vi.fn();
     const invoke = vi.fn();
+    const send = vi.fn();
+    const on = vi.fn();
+    const removeListener = vi.fn();
 
     vi.doMock('electron', () => ({
       contextBridge: {
@@ -17,7 +20,9 @@ describe('preload bridge', () => {
       },
       ipcRenderer: {
         invoke,
-        on: vi.fn()
+        send,
+        on,
+        removeListener
       }
     }));
 
@@ -63,6 +68,12 @@ describe('preload bridge', () => {
       workspaceId: 'ws-1',
       runId: 'run-1'
     };
+    const streamPayload = {
+      runId: 'run-1',
+      chunk: 'prompt> ',
+      chunkStartOffset: 0,
+      chunkEndOffset: 8
+    };
 
     await bridge.graph.loadGraphSnapshot(graphLoadPayload);
     await bridge.graph.saveGraphSnapshot(graphSavePayload);
@@ -71,6 +82,17 @@ describe('preload bridge', () => {
     await bridge.components.uninstallComponent(uninstallPayload);
     await bridge.runs.inputRun(inputPayload);
     await bridge.runs.stopRun(stopPayload);
+    bridge.runs.subscribeStream('run-1');
+    bridge.runs.unsubscribeStream('run-1');
+
+    const streamCallback = vi.fn();
+    const unsubscribe = bridge.runs.onStream(streamCallback);
+    const onStreamRegistration = on.mock.calls.find(
+      (call) => call[0] === IPC_CHANNELS.runStream
+    );
+    expect(onStreamRegistration).toBeDefined();
+    onStreamRegistration?.[1]({}, streamPayload);
+    unsubscribe();
 
     expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.graphLoad, graphLoadPayload);
     expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.graphSave, graphSavePayload);
@@ -79,5 +101,12 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenNthCalledWith(5, IPC_CHANNELS.componentUninstall, uninstallPayload);
     expect(invoke).toHaveBeenNthCalledWith(6, IPC_CHANNELS.runInput, inputPayload);
     expect(invoke).toHaveBeenNthCalledWith(7, IPC_CHANNELS.runStop, stopPayload);
+    expect(send).toHaveBeenNthCalledWith(1, IPC_CHANNELS.runStreamSubscribe, { runId: 'run-1' });
+    expect(send).toHaveBeenNthCalledWith(2, IPC_CHANNELS.runStreamUnsubscribe, { runId: 'run-1' });
+    expect(streamCallback).toHaveBeenCalledWith(streamPayload);
+    expect(removeListener).toHaveBeenCalledWith(
+      IPC_CHANNELS.runStream,
+      expect.any(Function)
+    );
   });
 });

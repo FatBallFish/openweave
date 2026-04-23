@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS, type OpenWeaveShellBridge } from '../shared/ipc/contracts';
+import { IPC_CHANNELS, type OpenWeaveShellBridge, type RunStreamEvent } from '../shared/ipc/contracts';
 
 ipcRenderer.on(IPC_CHANNELS.appOpenSettings, () => {
   window.dispatchEvent(new CustomEvent('openweave:open-settings'));
@@ -103,8 +103,8 @@ const shellBridge: OpenWeaveShellBridge = {
     stopRun: (input: RunStopInput) => ipcRenderer.invoke(IPC_CHANNELS.runStop, input),
     subscribeStream: (runId: string) => ipcRenderer.send(IPC_CHANNELS.runStreamSubscribe, { runId }),
     unsubscribeStream: (runId: string) => ipcRenderer.send(IPC_CHANNELS.runStreamUnsubscribe, { runId }),
-    onStream: (callback: (data: { runId: string; chunk: string }) => void) => {
-      const handler = (_event: unknown, data: { runId: string; chunk: string }) => callback(data);
+    onStream: (callback: (event: RunStreamEvent) => void) => {
+      const handler = (_event: unknown, data: RunStreamEvent) => callback(data);
       ipcRenderer.on(IPC_CHANNELS.runStream, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.runStream, handler);
     },

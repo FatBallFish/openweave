@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import {JSX, useEffect, useRef} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { OpenWeaveShellBridge, RunRecord } from '../../../shared/ipc/contracts';
+import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../shared/ipc/contracts';
 import { getXtermTheme } from '../canvas/nodes/xterm-theme';
 
 interface TerminalSessionPaneProps {
@@ -29,6 +29,31 @@ const getShellBridge = (): OpenWeaveShellBridge => {
   return shell;
 };
 
+const getTailEndOffset = (run: RunRecord): number => {
+  return typeof run.tailEndOffset === 'number' ? run.tailEndOffset : run.tailLog.length;
+};
+
+const getTailStartOffset = (run: RunRecord): number => {
+  if (typeof run.tailStartOffset === 'number') {
+    return run.tailStartOffset;
+  }
+  return Math.max(0, getTailEndOffset(run) - run.tailLog.length);
+};
+
+const getChunkOffsets = (
+  event: RunStreamEvent,
+  renderedOffset: number
+): { chunkStartOffset: number; chunkEndOffset: number } => {
+  const chunkStartOffset =
+    typeof event.chunkStartOffset === 'number' ? event.chunkStartOffset : renderedOffset;
+  const chunkEndOffset =
+    typeof event.chunkEndOffset === 'number' ? event.chunkEndOffset : chunkStartOffset + event.chunk.length;
+  return {
+    chunkStartOffset,
+    chunkEndOffset
+  };
+};
+
 export const TerminalSessionPane = ({
   run,
   isStopping,
@@ -39,7 +64,8 @@ export const TerminalSessionPane = ({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const runRef = useRef<RunRecord>(run);
   const renderedRunIdRef = useRef<string | null>(null);
-  const renderedTailRef = useRef('');
+  const renderedOffsetRef = useRef(0);
+  const awaitingSnapshotRef = useRef(false);
   const terminal = isTerminalState(run.status);
   const disableStop = terminal || isStopping;
 
@@ -97,8 +123,24 @@ export const TerminalSessionPane = ({
 
     const unsubscribe = bridge.runs.onStream((event) => {
       if (event.runId === run.id && xtermRef.current) {
-        xtermRef.current.write(event.chunk);
-        renderedTailRef.current += event.chunk;
+        const { chunkStartOffset, chunkEndOffset } = getChunkOffsets(event, renderedOffsetRef.current);
+        if (chunkEndOffset <= renderedOffsetRef.current) {
+          return;
+        }
+        if (chunkStartOffset > renderedOffsetRef.current || awaitingSnapshotRef.current) {
+          awaitingSnapshotRef.current = true;
+          return;
+        }
+
+        const suffixStart = Math.max(0, renderedOffsetRef.current - chunkStartOffset);
+        const suffix = event.chunk.slice(suffixStart);
+        if (suffix.length === 0) {
+          renderedOffsetRef.current = chunkEndOffset;
+          return;
+        }
+
+        xtermRef.current.write(suffix);
+        renderedOffsetRef.current = chunkEndOffset;
       }
     });
 
@@ -115,26 +157,54 @@ export const TerminalSessionPane = ({
       return;
     }
 
-    if (renderedRunIdRef.current !== run.id) {
+    const redrawSnapshot = (): void => {
       term.clear();
       renderedRunIdRef.current = run.id;
-      renderedTailRef.current = run.tailLog;
+      renderedOffsetRef.current = getTailEndOffset(run);
+      awaitingSnapshotRef.current = false;
       if (run.tailLog.length > 0) {
         term.write(run.tailLog);
       }
+    };
+
+    if (renderedRunIdRef.current !== run.id) {
+      redrawSnapshot();
       return;
     }
 
-    if (!terminal || run.tailLog === renderedTailRef.current) {
+    const tailStartOffset = getTailStartOffset(run);
+    const tailEndOffset = getTailEndOffset(run);
+
+    if (!terminal) {
+      if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+        return;
+      }
+
+      if (tailStartOffset > renderedOffsetRef.current) {
+        redrawSnapshot();
+        return;
+      }
+
+      const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+      const suffix = run.tailLog.slice(suffixStart);
+      if (suffix.length === 0) {
+        renderedOffsetRef.current = tailEndOffset;
+        awaitingSnapshotRef.current = false;
+        return;
+      }
+
+      term.write(suffix);
+      renderedOffsetRef.current = tailEndOffset;
+      awaitingSnapshotRef.current = false;
       return;
     }
 
-    term.clear();
-    renderedTailRef.current = run.tailLog;
-    if (run.tailLog.length > 0) {
-      term.write(run.tailLog);
+    if (tailEndOffset === renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+      return;
     }
-  }, [run.id, run.tailLog, terminal]);
+
+    redrawSnapshot();
+  }, [run.id, run.tailLog, run.tailStartOffset, run.tailEndOffset, terminal]);
 
   useEffect(() => {
     const container = containerRef.current;

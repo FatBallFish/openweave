@@ -1,7 +1,7 @@
 import {JSX, useEffect, useRef, useState} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { OpenWeaveShellBridge, RunRecord } from '../../../../shared/ipc/contracts';
+import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../../shared/ipc/contracts';
 import type { RunRuntimeInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
 import { getXtermTheme } from './xterm-theme';
 
@@ -60,6 +60,31 @@ const isTerminalState = (status: RunRecord['status']): boolean => {
   return status === 'completed' || status === 'failed' || status === 'stopped';
 };
 
+const getTailEndOffset = (run: RunRecord): number => {
+  return typeof run.tailEndOffset === 'number' ? run.tailEndOffset : run.tailLog.length;
+};
+
+const getTailStartOffset = (run: RunRecord): number => {
+  if (typeof run.tailStartOffset === 'number') {
+    return run.tailStartOffset;
+  }
+  return Math.max(0, getTailEndOffset(run) - run.tailLog.length);
+};
+
+const getChunkOffsets = (
+  event: RunStreamEvent,
+  renderedOffset: number
+): { chunkStartOffset: number; chunkEndOffset: number } => {
+  const chunkStartOffset =
+    typeof event.chunkStartOffset === 'number' ? event.chunkStartOffset : renderedOffset;
+  const chunkEndOffset =
+    typeof event.chunkEndOffset === 'number' ? event.chunkEndOffset : chunkStartOffset + event.chunk.length;
+  return {
+    chunkStartOffset,
+    chunkEndOffset
+  };
+};
+
 export const TerminalNode = ({
   workspaceId,
   node,
@@ -79,7 +104,8 @@ export const TerminalNode = ({
   const activeRunRef = useRef<RunRecord | null>(null);
   const isStartingRef = useRef(false);
   const renderedRunIdRef = useRef<string | null>(null);
-  const renderedTailRef = useRef('');
+  const renderedOffsetRef = useRef(0);
+  const awaitingSnapshotRef = useRef(false);
   const deferredFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -190,8 +216,24 @@ export const TerminalNode = ({
 
     const unsubscribe = bridge.runs.onStream((event) => {
       if (event.runId === activeRun.id && xtermRef.current) {
-        xtermRef.current.write(event.chunk);
-        renderedTailRef.current += event.chunk;
+        const { chunkStartOffset, chunkEndOffset } = getChunkOffsets(event, renderedOffsetRef.current);
+        if (chunkEndOffset <= renderedOffsetRef.current) {
+          return;
+        }
+        if (chunkStartOffset > renderedOffsetRef.current || awaitingSnapshotRef.current) {
+          awaitingSnapshotRef.current = true;
+          return;
+        }
+
+        const suffixStart = Math.max(0, renderedOffsetRef.current - chunkStartOffset);
+        const suffix = event.chunk.slice(suffixStart);
+        if (suffix.length === 0) {
+          renderedOffsetRef.current = chunkEndOffset;
+          return;
+        }
+
+        xtermRef.current.write(suffix);
+        renderedOffsetRef.current = chunkEndOffset;
       }
     });
 
@@ -273,34 +315,59 @@ export const TerminalNode = ({
 
     if (!displayRun) {
       renderedRunIdRef.current = null;
-      renderedTailRef.current = '';
+      renderedOffsetRef.current = 0;
+      awaitingSnapshotRef.current = false;
       return;
     }
 
-    if (renderedRunIdRef.current !== displayRun.id) {
+    const redrawSnapshot = (): void => {
       term.clear();
       renderedRunIdRef.current = displayRun.id;
-      renderedTailRef.current = displayRun.tailLog;
+      renderedOffsetRef.current = getTailEndOffset(displayRun);
+      awaitingSnapshotRef.current = false;
       if (displayRun.tailLog.length > 0) {
         term.write(displayRun.tailLog);
       }
+    };
+
+    if (renderedRunIdRef.current !== displayRun.id) {
+      redrawSnapshot();
       return;
     }
 
-    if (displayRun.tailLog === renderedTailRef.current) {
-      return;
-    }
+    const tailStartOffset = getTailStartOffset(displayRun);
+    const tailEndOffset = getTailEndOffset(displayRun);
 
     if (activeRun?.id === displayRun.id && !isTerminalState(displayRun.status)) {
+      if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+        return;
+      }
+
+      if (tailStartOffset > renderedOffsetRef.current) {
+        redrawSnapshot();
+        return;
+      }
+
+      const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+      const suffix = displayRun.tailLog.slice(suffixStart);
+      if (suffix.length === 0) {
+        renderedOffsetRef.current = tailEndOffset;
+        awaitingSnapshotRef.current = false;
+        return;
+      }
+
+      term.write(suffix);
+      renderedOffsetRef.current = tailEndOffset;
+      awaitingSnapshotRef.current = false;
       return;
     }
 
-    term.clear();
-    renderedTailRef.current = displayRun.tailLog;
-    if (displayRun.tailLog.length > 0) {
-      term.write(displayRun.tailLog);
+    if (tailEndOffset === renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+      return;
     }
-  }, [displayRun?.id, displayRun?.tailLog]);
+
+    redrawSnapshot();
+  }, [activeRun?.id, displayRun?.id, displayRun?.tailLog, displayRun?.tailStartOffset, displayRun?.tailEndOffset, displayRun?.status]);
 
   useEffect(() => {
     isStartingRef.current = isStarting;

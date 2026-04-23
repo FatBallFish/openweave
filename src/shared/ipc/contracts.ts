@@ -218,6 +218,8 @@ export interface RunRecord {
   status: RunStatusInput;
   summary: string | null;
   tailLog: string;
+  tailStartOffset: number;
+  tailEndOffset: number;
   createdAtMs: number;
   startedAtMs: number | null;
   completedAtMs: number | null;
@@ -226,6 +228,8 @@ export interface RunRecord {
 export interface RunStreamEvent {
   runId: string;
   chunk: string;
+  chunkStartOffset: number;
+  chunkEndOffset: number;
 }
 
 export interface RoleRecord {

@@ -7,12 +7,15 @@ import {
   type RunInputResponse,
   type RunListResponse,
   type RunMutationResponse,
-  type RunRecord
+  type RunRecord,
+  type RunStreamEvent
 } from '../../shared/ipc/contracts';
 import {
   runGetSchema,
   runInputSchema,
   runListSchema,
+  runStreamChunkRangeSchema,
+  runTailRangeSchema,
   runResizeSchema,
   runStartSchema,
   runStopSchema,
@@ -110,6 +113,38 @@ const appendTailLog = (tail: string, chunk: string): string => {
   return nextTail.slice(nextTail.length - MAX_TAIL_LOG_LENGTH);
 };
 
+const createTailRange = (tailLog: string, tailEndOffset: number): Pick<RunRecord, 'tailStartOffset' | 'tailEndOffset'> => {
+  return runTailRangeSchema.parse({
+    tailStartOffset: Math.max(0, tailEndOffset - tailLog.length),
+    tailEndOffset
+  });
+};
+
+const appendRunOutput = (
+  run: RunRecord,
+  chunk: string
+): {
+  updatedRun: RunRecord;
+  chunkStartOffset: number;
+  chunkEndOffset: number;
+} => {
+  const chunkStartOffset = run.tailEndOffset;
+  const chunkEndOffset = chunkStartOffset + chunk.length;
+  const tailLog = appendTailLog(run.tailLog, chunk);
+
+  return {
+    updatedRun: {
+      ...run,
+      tailLog,
+      ...createTailRange(tailLog, chunkEndOffset)
+    },
+    ...runStreamChunkRangeSchema.parse({
+      chunkStartOffset,
+      chunkEndOffset
+    })
+  };
+};
+
 const buildSummary = (tailLog: string): string => {
   const nonEmptyLines = tailLog
     .split('\n')
@@ -191,13 +226,17 @@ class InMemoryRunsService {
     });
 
     this.runtimeBridge.on('stdout', (event) => {
-      this.appendOutput(event);
-      this.broadcastStream(event.runId, event.chunk);
+      const streamEvent = this.appendOutput(event);
+      if (streamEvent) {
+        this.broadcastStream(streamEvent);
+      }
     });
 
     this.runtimeBridge.on('stderr', (event) => {
-      this.appendOutput(event);
-      this.broadcastStream(event.runId, event.chunk);
+      const streamEvent = this.appendOutput(event);
+      if (streamEvent) {
+        this.broadcastStream(streamEvent);
+      }
     });
 
     this.runtimeBridge.on('exit', (event) => {
@@ -219,6 +258,8 @@ class InMemoryRunsService {
       status: 'queued',
       summary: null,
       tailLog: '',
+      tailStartOffset: 0,
+      tailEndOffset: 0,
       createdAtMs: this.now(),
       startedAtMs: null,
       completedAtMs: null
@@ -241,11 +282,13 @@ class InMemoryRunsService {
       });
     } catch (error) {
       const errorMessage = toErrorMessage(error);
+      const failedTailLog = appendTailLog('', `${errorMessage}\n`);
       const failedRun: RunRecord = {
         ...run,
         status: 'failed',
         summary: errorMessage,
-        tailLog: appendTailLog('', `${errorMessage}\n`),
+        tailLog: failedTailLog,
+        ...createTailRange(failedTailLog, `${errorMessage}\n`.length),
         completedAtMs: this.now()
       };
       this.storeRun(failedRun);
@@ -356,14 +399,14 @@ class InMemoryRunsService {
     }
   }
 
-  private broadcastStream(runId: string, chunk: string): void {
+  private broadcastStream(event: RunStreamEvent): void {
     const { webContents } = require('electron');
-    const subscribers = this.streamSubscribers.get(runId);
+    const subscribers = this.streamSubscribers.get(event.runId);
     if (!subscribers) return;
     for (const wcId of subscribers) {
       const wc = webContents.fromId(wcId);
       if (wc && !wc.isDestroyed()) {
-        wc.send(IPC_CHANNELS.runStream, { runId, chunk });
+        wc.send(IPC_CHANNELS.runStream, event);
       }
     }
   }
@@ -382,16 +425,20 @@ class InMemoryRunsService {
     this.streamSubscribers.clear();
   }
 
-  private appendOutput(event: RuntimeStreamEvent): void {
+  private appendOutput(event: RuntimeStreamEvent): RunStreamEvent | null {
     const run = this.runs.get(event.runId);
     if (!run || isTerminalRunStatus(run.status)) {
-      return;
+      return null;
     }
 
-    this.storeRun({
-      ...run,
-      tailLog: appendTailLog(run.tailLog, event.chunk)
-    });
+    const { updatedRun, chunkStartOffset, chunkEndOffset } = appendRunOutput(run, event.chunk);
+    this.storeRun(updatedRun);
+    return {
+      runId: event.runId,
+      chunk: event.chunk,
+      chunkStartOffset,
+      chunkEndOffset
+    };
   }
 
   private completeRun(event: RuntimeExitEvent): void {
@@ -403,11 +450,14 @@ class InMemoryRunsService {
     const stopRequested = this.stopIntents.delete(event.runId);
     const status = deriveExitStatus(event, stopRequested);
     const tailLog = event.tail.length > 0 ? appendTailLog('', event.tail) : run.tailLog;
+    const tailEndOffset =
+      event.tail.length > 0 ? Math.max(run.tailEndOffset, event.tail.length) : run.tailEndOffset;
     const summary = status === 'stopped' ? STOPPED_RUN_SUMMARY : buildSummary(tailLog);
     this.storeRun({
       ...run,
       status,
       tailLog,
+      ...createTailRange(tailLog, tailEndOffset),
       summary,
       completedAtMs: this.now()
     });
