@@ -1,4 +1,10 @@
 import { useEffect } from 'react';
+import {
+  getMergedConfig,
+  SHORTCUT_DEFINITIONS,
+  type ShortcutConfig
+} from '../workbench/shortcuts-config';
+import { settingsStore } from '../workbench/settings.store';
 
 export type CanvasShortcutAction =
   | 'open-command-palette'
@@ -59,6 +65,24 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   );
 };
 
+const configMatchesEvent = (config: ShortcutConfig, event: CanvasShortcutLike): boolean => {
+  if (!config.key) return false;
+  if (config.key.toLowerCase() !== event.key.toLowerCase()) return false;
+
+  const configHasPrimaryModifier = config.ctrlKey || config.metaKey;
+  const eventHasPrimaryModifier = event.ctrlKey || event.metaKey;
+
+  if (configHasPrimaryModifier) {
+    if (!eventHasPrimaryModifier) return false;
+  } else {
+    if (event.ctrlKey || event.metaKey) return false;
+  }
+
+  if (config.shiftKey !== event.shiftKey) return false;
+  if (config.altKey !== event.altKey) return false;
+  return true;
+};
+
 export const getCanvasShortcutAction = (
   event: CanvasShortcutLike
 ): CanvasShortcutAction | null => {
@@ -66,60 +90,20 @@ export const getCanvasShortcutAction = (
     return null;
   }
 
-  const key = event.key.toLowerCase();
-  const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+  const overrides = settingsStore.getState().shortcuts;
 
-  if (hasPrimaryModifier && event.shiftKey && key === 'i') {
-    return 'toggle-inspector';
-  }
-
-  if (hasPrimaryModifier && key === 'k') {
-    return 'open-command-palette';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && key === '/') {
-    return 'open-quick-add';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && !event.shiftKey) {
-    switch (key) {
-      case '1':
-        return 'add-terminal';
-      case '2':
-        return 'add-note';
-      case '3':
-        return 'add-portal';
-      case '4':
-        return 'add-file-tree';
-      case '5':
-        return 'add-text';
-      case 'escape':
-        return 'escape';
-      default:
-        return null;
+  for (const def of SHORTCUT_DEFINITIONS) {
+    const config = getMergedConfig(def.id, overrides);
+    if (configMatchesEvent(config, event)) {
+      return def.id as CanvasShortcutAction;
     }
-  }
-
-  if (key === 'escape') {
-    return 'escape';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && !event.shiftKey) {
-    if (key === 'backspace' || key === 'delete') {
-      return 'delete-selected';
+    if (def.aliases) {
+      for (const alias of def.aliases) {
+        if (configMatchesEvent(alias, event)) {
+          return def.id as CanvasShortcutAction;
+        }
+      }
     }
-  }
-
-  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'z') {
-    return 'undo';
-  }
-
-  if (hasPrimaryModifier && event.shiftKey && !event.altKey && key === 'z') {
-    return 'redo';
-  }
-
-  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'y') {
-    return 'redo';
   }
 
   return null;
