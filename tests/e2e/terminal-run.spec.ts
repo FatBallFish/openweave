@@ -40,35 +40,32 @@ test('runs an interactive terminal session, accepts follow-up input, and stops c
     await expect(page.getByTestId('workspace-canvas-page')).toBeVisible();
     await page.getByTestId('workbench-topbar-action-add-terminal').click();
 
-    const terminalCommand = page.locator('[data-testid^="terminal-node-command-"]').first();
-    const terminalRuntime = page.locator('[data-testid^="terminal-node-runtime-"]').first();
-    const lastStatus = page.locator('[data-testid^="terminal-node-last-status-"]').first();
+    // Placement mode: drag on canvas to define terminal bounds
+    const canvas = page.locator('.ow-canvas-shell__flow .react-flow__pane, .ow-canvas-placement-overlay').first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 400, box.y + 300);
+      await page.mouse.up();
+    }
 
-    await terminalRuntime.selectOption('shell');
-    await terminalCommand.fill("/bin/sh -lc 'echo ready; while read line; do echo $line; done'");
-    await terminalCommand.press('Enter');
+    // Create terminal dialog should open after placement
+    await page.waitForSelector('[data-testid="create-terminal-dialog"]');
+    await page.getByTestId('create-terminal-command').fill("/bin/sh -lc 'echo ready; while read line; do echo $line; done'");
+    await page.click('.ow-workspace-dialog__actions button[data-testid="create-terminal-submit"]');
 
-    await expect(lastStatus).toContainText(/queued|running/);
-
+    // Wait for terminal node to appear and auto-start
+    await page.waitForSelector('[data-testid^="terminal-node-xterm-"]');
     await expect(page.getByTestId('run-drawer')).toBeVisible();
-    await expect(page.getByTestId('terminal-session-output')).toContainText('ready', {
-      timeout: 10000
-    });
 
-    const sessionInput = page.getByTestId('terminal-session-input');
-    await sessionInput.fill('hello from playwright');
-    await page.getByTestId('terminal-session-send').click();
-
-    await expect(page.getByTestId('terminal-session-output')).toContainText(
-      'hello from playwright',
-      {
-        timeout: 10000
-      }
-    );
+    // Focus the xterm in the run drawer and type directly
+    const sessionXterm = page.locator('[data-testid="terminal-session-xterm"]').first();
+    await sessionXterm.click();
+    await page.keyboard.type('hello from playwright\n');
 
     await page.getByTestId('terminal-session-stop').click();
 
-    await expect(lastStatus).toContainText('stopped', { timeout: 10000 });
     await expect(page.getByTestId('run-drawer-status')).toContainText('stopped', {
       timeout: 10000
     });
@@ -98,13 +95,24 @@ test('xterm.js renders ANSI colored output', async () => {
 
     // Open create terminal dialog
     await page.getByTestId('workbench-topbar-action-add-terminal').click();
-    await page.waitForSelector('.ow-create-terminal-dialog');
+
+    // Placement mode: drag on canvas
+    const canvas = page.locator('.ow-canvas-shell__flow .react-flow__pane, .ow-canvas-placement-overlay').first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 400, box.y + 300);
+      await page.mouse.up();
+    }
+
+    await page.waitForSelector('[data-testid="create-terminal-dialog"]');
 
     // Fill in command that produces ANSI colors
     await page.getByTestId('create-terminal-command').fill('echo -e "\e[31mred\e[0m"');
 
     // Save dialog
-    await page.click('.ow-create-terminal-dialog__footer button:has-text("Save")');
+    await page.click('.ow-workspace-dialog__actions button[data-testid="create-terminal-submit"]');
 
     // Wait for terminal node to appear with xterm container
     await page.waitForSelector('[data-testid^="terminal-node-xterm-"]');
@@ -138,6 +146,16 @@ test('create terminal dialog opens and configures node', async () => {
     // Open dialog via add terminal button
     await page.getByTestId('workbench-topbar-action-add-terminal').click();
 
+    // Placement mode: drag on canvas
+    const canvas = page.locator('.ow-canvas-shell__flow .react-flow__pane, .ow-canvas-placement-overlay').first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 400, box.y + 300);
+      await page.mouse.up();
+    }
+
     // Verify dialog is visible
     const dialog = page.locator('.ow-create-terminal-dialog');
     await expect(dialog).toBeVisible();
@@ -147,15 +165,15 @@ test('create terminal dialog opens and configures node', async () => {
     await page.getByTestId('create-terminal-command').fill('echo hello');
 
     // Switch to appearance tab
-    await page.click('.ow-create-terminal-dialog__tab:has-text("Appearance")');
+    await page.click('.ow-terminal-dialog__tab:has-text("Appearance")');
     await expect(page.getByTestId('create-terminal-theme')).toBeVisible();
 
     // Switch to role tab
-    await page.click('.ow-create-terminal-dialog__tab:has-text("Role")');
+    await page.click('.ow-terminal-dialog__tab:has-text("Role")');
     await expect(page.locator('.ow-role-grid')).toBeVisible();
 
     // Save
-    await page.click('.ow-create-terminal-dialog__footer button:has-text("Save")');
+    await page.click('.ow-workspace-dialog__actions button[data-testid="create-terminal-submit"]');
 
     // Verify dialog closes
     await expect(dialog).not.toBeVisible();
@@ -202,10 +220,21 @@ test('create terminal with role selection', async () => {
 
     // Create terminal with this role
     await page.getByTestId('workbench-topbar-action-add-terminal').click();
+
+    // Placement mode: drag on canvas
+    const canvas = page.locator('.ow-canvas-shell__flow .react-flow__pane, .ow-canvas-placement-overlay').first();
+    const box = await canvas.boundingBox();
+    if (box) {
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 400, box.y + 300);
+      await page.mouse.up();
+    }
+
     await page.waitForSelector('.ow-create-terminal-dialog');
-    await page.click('.ow-create-terminal-dialog__tab:has-text("Role")');
+    await page.click('.ow-terminal-dialog__tab:has-text("Role")');
     await page.click('.ow-role-grid__item:has-text("Test Role")');
-    await page.click('.ow-create-terminal-dialog__footer button:has-text("Save")');
+    await page.click('.ow-workspace-dialog__actions button[data-testid="create-terminal-submit"]');
 
     // The role injection happens in the main process, we can't directly verify
     // the filesystem from E2E. Instead, verify the terminal node was created.

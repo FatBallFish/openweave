@@ -1,8 +1,7 @@
 import { canvasStore } from '../../canvas/canvas.store';
-import { getTerminalRuntimeLabel, TerminalNode } from '../../canvas/nodes/TerminalNode';
+import { TerminalNode } from '../../canvas/nodes/TerminalNode';
 import type { TerminalConfig } from '../../canvas/nodes/TerminalNode';
-import { BuiltinNodeFrame } from '../host-shell/BuiltinNodeFrame';
-import { getBuiltinNodeStateLabel, resolveBuiltinNodeState } from '../host-shell/node-state';
+import { resolveBuiltinNodeState } from '../host-shell/node-state';
 import type { BuiltinHostProps } from './types';
 
 export const TerminalHost = ({
@@ -30,36 +29,39 @@ export const TerminalHost = ({
   };
 
   return (
-    <BuiltinNodeFrame
-      footer={[
-        `cwd ${config.workingDir || workspaceRootDir}`,
-        `Runtime ${getTerminalRuntimeLabel(runtime)}`,
-        'Session drawer linked'
-      ]}
-      iconLabel="TR"
-      kind="terminal"
-      nodeId={node.id}
-      state={state}
-      stateLabel={getBuiltinNodeStateLabel(state)}
-      subtitle="Session-first execution"
-      title={node.title}
+    <article
+      className="ow-builtin-node-frame ow-terminal-host"
+      data-node-kind="terminal"
+      data-node-state={state}
+      data-testid={`builtin-node-frame-${node.id}`}
     >
-      <TerminalNode
-        workspaceId={workspaceId}
-        node={{
-          id: node.id,
-          type: 'terminal',
-          x: node.bounds.x,
-          y: node.bounds.y,
-          command: typeof node.config.command === 'string' ? node.config.command : '',
-          runtime
-        }}
-        config={config}
-        onChange={(patch) => {
-          void canvasStore.updateTerminalNode(node.id, patch);
-        }}
-        onOpenRun={onOpenRun}
-      />
-    </BuiltinNodeFrame>
+      <header className="ow-terminal-host__header" data-testid={`builtin-node-header-${node.id}`}>
+        <div className="ow-terminal-host__traffic-lights">
+          <span className="ow-terminal-host__light ow-terminal-host__light--close" />
+          <span className="ow-terminal-host__light ow-terminal-host__light--minimize" />
+          <span className="ow-terminal-host__light ow-terminal-host__light--maximize" />
+        </div>
+        <span className="ow-terminal-host__title">{node.title}</span>
+        <span className="ow-terminal-host__spacer" />
+      </header>
+      <div className="ow-terminal-host__body">
+        <TerminalNode
+          workspaceId={workspaceId}
+          node={{
+            id: node.id,
+            type: 'terminal',
+            x: node.bounds.x,
+            y: node.bounds.y,
+            command: typeof node.config.command === 'string' ? node.config.command : '',
+            runtime
+          }}
+          config={config}
+          onChange={(patch) => {
+            void canvasStore.updateTerminalNode(node.id, patch);
+          }}
+          onOpenRun={onOpenRun}
+        />
+      </div>
+    </article>
   );
 };

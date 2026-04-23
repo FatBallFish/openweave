@@ -33,6 +33,7 @@ export const App = (): JSX.Element => {
   const [fitViewRequestId, setFitViewRequestId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createTerminalDialogOpen, setCreateTerminalDialogOpen] = useState(false);
+  const [pendingTerminalBounds, setPendingTerminalBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [placementMode, setPlacementMode] = useState<{ type: string } | null>(null);
   const disabled = activeWorkspace === null || canvasLoading;
 
@@ -91,7 +92,7 @@ export const App = (): JSX.Element => {
   }, []);
 
   const addTerminal = useCallback(() => {
-    setCreateTerminalDialogOpen(true);
+    setPlacementMode({ type: 'terminal' });
   }, []);
 
   const addNote = useCallback(() => {
@@ -111,10 +112,6 @@ export const App = (): JSX.Element => {
   }, []);
 
   const togglePlacement = useCallback((type: string) => {
-    if (type === 'terminal') {
-      setCreateTerminalDialogOpen(true);
-      return;
-    }
     setPlacementMode((current) => (current?.type === type ? null : { type }));
   }, []);
 
@@ -125,14 +122,25 @@ export const App = (): JSX.Element => {
   const handleCreateTerminalSave = useCallback(
     (config: Record<string, unknown>) => {
       setCreateTerminalDialogOpen(false);
-      void canvasStore.addTerminalNode(config);
+      if (pendingTerminalBounds) {
+        void canvasStore.addNodeAtBounds('builtin.terminal', pendingTerminalBounds, activeWorkspace?.rootDir ?? '', config);
+        setPendingTerminalBounds(null);
+      } else {
+        void canvasStore.addTerminalNode(config);
+      }
     },
-    []
+    [pendingTerminalBounds, activeWorkspace?.rootDir]
   );
 
   const handlePlacementComplete = useCallback(
     (type: string, bounds: { x: number; y: number; width: number; height: number }) => {
       const componentType = `builtin.${type}`;
+      if (componentType === 'builtin.terminal') {
+        setPendingTerminalBounds(bounds);
+        setCreateTerminalDialogOpen(true);
+        setPlacementMode(null);
+        return;
+      }
       void canvasStore.addNodeAtBounds(componentType, bounds, activeWorkspace?.rootDir ?? '');
       setPlacementMode(null);
     },
@@ -329,7 +337,10 @@ export const App = (): JSX.Element => {
     <CreateTerminalDialog
       open={createTerminalDialogOpen}
       workspaceRootDir={activeWorkspace?.rootDir ?? ''}
-      onClose={() => setCreateTerminalDialogOpen(false)}
+      onClose={() => {
+        setCreateTerminalDialogOpen(false);
+        setPendingTerminalBounds(null);
+      }}
       onSave={handleCreateTerminalSave}
     />
     </>

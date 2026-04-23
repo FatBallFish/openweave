@@ -68,12 +68,10 @@ describe('builtin hosts', () => {
     expect(noteHtml).toContain('Editable markdown');
     expect(noteHtml).toContain('# hello');
     expect(terminalHtml).toContain('builtin-node-frame-node-terminal-1');
-    expect(terminalHtml).toContain('terminal-node-runtime-node-terminal-1');
-    expect(terminalHtml).toContain('terminal-node-session-node-terminal-1');
-    expect(terminalHtml).toContain('Open run');
-    expect(terminalHtml).toContain('cwd');
-    expect(terminalHtml).toContain('<option value=\"codex\" selected=\"\">Codex</option>');
-    expect(terminalHtml).toContain('terminal-node-command-node-terminal-1');
+    expect(terminalHtml).toContain('ow-terminal-host');
+    expect(terminalHtml).toContain('ow-terminal-host__header');
+    expect(terminalHtml).toContain('ow-terminal-host__traffic-lights');
+    expect(terminalHtml).toContain('terminal-node-xterm-node-terminal-1');
   });
 
   it('renders file-tree and portal hosts with their existing product controls', () => {

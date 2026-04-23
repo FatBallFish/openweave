@@ -2,7 +2,16 @@ import { useState, useCallback, useEffect } from 'react';
 import type { JSX } from 'react';
 import { createPortal } from 'react-dom';
 import type { RoleRecord } from '../../../shared/ipc/contracts';
+import { useI18n } from '../../i18n/provider';
 import { RoleEditorDialog } from './RoleEditorDialog';
+import {
+  DEFAULT_WORKSPACE_ICON_COLOR,
+  WORKSPACE_COLOR_OPTIONS,
+  WORKSPACE_ICON_OPTIONS,
+  WorkspaceGlyph,
+  normalizeWorkspaceIconColor,
+  normalizeWorkspaceIconKey
+} from '../workspaces/workspace-icons';
 
 interface CreateTerminalDialogProps {
   open: boolean;
@@ -11,21 +20,22 @@ interface CreateTerminalDialogProps {
   onSave: (config: Record<string, unknown>) => void;
 }
 
-const QUICK_START_PRESETS: Record<string, { command: string; runtime: string }> = {
-  'claude-code': { command: 'claude', runtime: 'claude' },
-  codex: { command: 'codex', runtime: 'codex' },
-  opencode: { command: 'opencode', runtime: 'opencode' },
-  shell: { command: '', runtime: 'shell' }
+const QUICK_START_PRESETS: Record<string, { command: string; runtime: string; name: string }> = {
+  'claude-code': { command: '', runtime: 'claude', name: 'Claude Code' },
+  codex: { command: '', runtime: 'codex', name: 'Codex' },
+  opencode: { command: '', runtime: 'opencode', name: 'OpenCode' },
+  shell: { command: '', runtime: 'shell', name: 'Shell' }
 };
 
 export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }: CreateTerminalDialogProps): JSX.Element | null => {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<'details' | 'appearance' | 'role'>('details');
   const [name, setName] = useState('');
   const [command, setCommand] = useState('');
   const [runtime, setRuntime] = useState('shell');
   const [workingDir, setWorkingDir] = useState(workspaceRootDir);
   const [iconKey, setIconKey] = useState('');
-  const [iconColor, setIconColor] = useState('#0078d4');
+  const [iconColor, setIconColor] = useState(DEFAULT_WORKSPACE_ICON_COLOR);
   const [theme, setTheme] = useState<'auto' | 'light' | 'dark'>('auto');
   const [fontFamily, setFontFamily] = useState('');
   const [fontSize, setFontSize] = useState(14);
@@ -33,6 +43,22 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [roleEditorOpen, setRoleEditorOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleRecord | null>(null);
+
+  // Reset form and sync workingDir when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    setActiveTab('details');
+    setName('');
+    setCommand('');
+    setRuntime('shell');
+    setWorkingDir(workspaceRootDir);
+    setIconKey('');
+    setIconColor(DEFAULT_WORKSPACE_ICON_COLOR);
+    setTheme('auto');
+    setFontFamily('');
+    setFontSize(14);
+    setSelectedRoleId(null);
+  }, [open, workspaceRootDir]);
 
   // Load roles when dialog opens
   useEffect(() => {
@@ -55,7 +81,7 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
     if (config) {
       setCommand(config.command);
       setRuntime(config.runtime);
-      setName(preset === 'shell' ? 'Shell' : preset);
+      setName(config.name);
     }
   }, []);
 
@@ -89,143 +115,255 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
+  const isCustomColor = !WORKSPACE_COLOR_OPTIONS.some(
+    (c) => c.toUpperCase() === iconColor.toUpperCase()
+  );
+
   if (!open) return null;
 
-  return createPortal(
-    <div className="ow-create-terminal-dialog" role="dialog" aria-modal="true">
-      <div className="ow-create-terminal-dialog__backdrop" onClick={onClose} />
-      <section className="ow-create-terminal-dialog__surface">
-        <header>
-          <h2>New Terminal</h2>
+  const dialogTitle = t('terminal.dialog.createTitle');
+
+  const content = (
+    <div className="ow-workspace-dialog ow-create-terminal-dialog" role="dialog" aria-modal="true" data-testid="create-terminal-dialog">
+      <div className="ow-workspace-dialog__backdrop" onClick={onClose} />
+      <section className="ow-workspace-dialog__surface" aria-label={dialogTitle}>
+        <header className="ow-workspace-dialog__header">
+          <h2>{dialogTitle}</h2>
         </header>
 
-        {/* Quick Start */}
-        <div className="ow-create-terminal-dialog__quick-start">
-          {Object.keys(QUICK_START_PRESETS).map((preset) => (
-            <button key={preset} onClick={() => handleQuickStart(preset)} type="button">
-              {preset}
-            </button>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div className="ow-create-terminal-dialog__tabs">
-          {(['details', 'appearance', 'role'] as const).map((tab) => (
-            <button
-              key={tab}
-              className={`ow-create-terminal-dialog__tab${activeTab === tab ? ' is-active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-              type="button"
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Details Tab */}
-        {activeTab === 'details' && (
-          <div className="ow-create-terminal-dialog__panel">
-            <div className="ow-create-terminal-dialog__field">
-              <label>Name</label>
-              <input data-testid="create-terminal-name" value={name} onChange={(e) => setName(e.target.value)} type="text" />
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Initial Command</label>
-              <input data-testid="create-terminal-command" value={command} onChange={(e) => setCommand(e.target.value)} type="text" />
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Working Directory</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input data-testid="create-terminal-working-dir" value={workingDir} onChange={(e) => setWorkingDir(e.target.value)} type="text" style={{ flex: 1 }} />
-                <button onClick={handleBrowse} type="button">Browse</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Appearance Tab */}
-        {activeTab === 'appearance' && (
-          <div className="ow-create-terminal-dialog__panel">
-            <div className="ow-create-terminal-dialog__field">
-              <label>Icon</label>
-              <input value={iconKey} onChange={(e) => setIconKey(e.target.value)} type="text" placeholder="Emoji or icon name" />
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Icon Color</label>
-              <input value={iconColor} onChange={(e) => setIconColor(e.target.value)} type="color" />
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Theme</label>
-              <select data-testid="create-terminal-theme" value={theme} onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}>
-                <option value="auto">Auto</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Font Family</label>
-              <input value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} type="text" placeholder="monospace" />
-            </div>
-            <div className="ow-create-terminal-dialog__field">
-              <label>Font Size</label>
-              <input value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} type="number" min={8} max={72} />
-            </div>
-          </div>
-        )}
-
-        {/* Role Tab */}
-        {activeTab === 'role' && (
-          <div className="ow-create-terminal-dialog__panel">
-            <p className="ow-create-terminal-dialog__label">Select Role</p>
-            <div className="ow-role-grid">
-              <button
-                className="ow-role-grid__item ow-role-grid__new"
-                onClick={() => { setEditingRole(null); setRoleEditorOpen(true); }}
-                type="button"
-              >
-                <span>+</span>
-                <span>New</span>
-              </button>
-              {roles.map((role) => (
+        <form
+          className="ow-workspace-dialog__form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSave();
+          }}
+        >
+          {/* Quick Start */}
+          <div className="ow-workspace-dialog__field">
+            <span>{t('terminal.dialog.quickStart')}</span>
+            <div className="ow-terminal-quick-start">
+              {Object.entries(QUICK_START_PRESETS).map(([key, preset]) => (
                 <button
-                  key={role.id}
-                  className={`ow-role-grid__item${selectedRoleId === role.id ? ' is-active' : ''}`}
-                  onClick={() => setSelectedRoleId(role.id)}
+                  key={key}
                   type="button"
+                  className="ow-terminal-quick-start__btn"
+                  onClick={() => handleQuickStart(key)}
+                  data-testid={`quick-start-${key}`}
                 >
-                  <div style={{ fontSize: 24 }}>{role.icon || '👤'}</div>
-                  <div style={{ fontSize: 11, marginTop: 4 }}>{role.name}</div>
+                  {preset.name}
                 </button>
               ))}
             </div>
+          </div>
 
-            {selectedRole && (
-              <div className="ow-create-terminal-dialog__role-detail">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong>{selectedRole.name}</strong>
-                  <button
-                    onClick={() => { setEditingRole(selectedRole); setRoleEditorOpen(true); }}
-                    type="button"
-                  >
-                    Edit
+          <div className="ow-workspace-dialog__divider" />
+
+          {/* Tabs */}
+          <div className="ow-terminal-dialog__tabs">
+            {(['details', 'appearance', 'role'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`ow-terminal-dialog__tab${activeTab === tab ? ' is-active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+                data-testid={`terminal-tab-${tab}`}
+              >
+                {t(`terminal.dialog.tab.${tab}`)}
+              </button>
+            ))}
+          </div>
+
+          {/* Details Tab */}
+          {activeTab === 'details' && (
+            <>
+              <label className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.nameLabel')}</span>
+                <input
+                  data-testid="create-terminal-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+
+              <label className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.commandLabel')}</span>
+                <input
+                  data-testid="create-terminal-command"
+                  type="text"
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                />
+              </label>
+
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.workingDirLabel')}</span>
+                <div className="ow-workspace-dialog__directory-row">
+                  <input
+                    data-testid="create-terminal-working-dir"
+                    type="text"
+                    value={workingDir}
+                    spellCheck={false}
+                    onChange={(e) => setWorkingDir(e.target.value)}
+                  />
+                  <button type="button" onClick={() => void handleBrowse()}>
+                    {t('terminal.dialog.browse')}
                   </button>
                 </div>
-                <p style={{ fontSize: 12, color: '#555', marginTop: 6 }}>{selectedRole.description}</p>
               </div>
-            )}
+            </>
+          )}
 
-            <p style={{ fontSize: 10, color: '#888', marginTop: 12 }}>
-              Roles are managed by OpenWeave. A copy of instructions will be placed in the project's .openweave folder for agent startup.
-              <br /><br />
-              Suggestion: add .openweave to .gitignore.
-            </p>
+          {/* Appearance Tab */}
+          {activeTab === 'appearance' && (
+            <>
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.iconLabel')}</span>
+                <div className="ow-workspace-icon-grid" role="radiogroup" aria-label={t('terminal.dialog.iconLabel')}>
+                  {WORKSPACE_ICON_OPTIONS.map((iconOption) => {
+                    const selected = iconOption.key === (iconKey || normalizeWorkspaceIconKey(''));
+                    return (
+                      <button
+                        key={iconOption.key}
+                        type="button"
+                        className={`ow-workspace-icon-grid__option${selected ? ' is-selected' : ''}`}
+                        onClick={() => setIconKey(iconOption.key)}
+                        title={iconOption.label}
+                        aria-label={iconOption.label}
+                        aria-pressed={selected}
+                      >
+                        <WorkspaceGlyph iconKey={iconOption.key} color={iconColor} muted={!selected} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.colorLabel')}</span>
+                <div className="ow-workspace-color-picker">
+                  {WORKSPACE_COLOR_OPTIONS.map((color) => {
+                    const selected = color.toUpperCase() === iconColor.toUpperCase();
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`ow-workspace-color-picker__chip${selected ? ' is-selected' : ''}`}
+                        aria-label={color}
+                        aria-pressed={selected}
+                        onClick={() => setIconColor(color)}
+                        style={{ '--workspace-color': color } as React.CSSProperties}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.themeLabel')}</span>
+                <select
+                  data-testid="create-terminal-theme"
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}
+                >
+                  <option value="auto">{t('terminal.dialog.theme.auto')}</option>
+                  <option value="light">{t('terminal.dialog.theme.light')}</option>
+                  <option value="dark">{t('terminal.dialog.theme.dark')}</option>
+                </select>
+              </div>
+
+              <label className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.fontFamilyLabel')}</span>
+                <input
+                  type="text"
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value)}
+                  placeholder="monospace"
+                />
+              </label>
+
+              <label className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.fontSizeLabel')}</span>
+                <input
+                  type="number"
+                  min={8}
+                  max={72}
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                />
+              </label>
+            </>
+          )}
+
+          {/* Role Tab */}
+          {activeTab === 'role' && (
+            <>
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.dialog.role.select')}</span>
+                <div className="ow-role-grid">
+                  <button
+                    className="ow-role-grid__item ow-role-grid__new"
+                    onClick={() => { setEditingRole(null); setRoleEditorOpen(true); }}
+                    type="button"
+                  >
+                    <span>+</span>
+                    <span>{t('terminal.dialog.role.new')}</span>
+                  </button>
+                  {roles.map((role) => (
+                    <button
+                      key={role.id}
+                      className={`ow-role-grid__item${selectedRoleId === role.id ? ' is-active' : ''}`}
+                      onClick={() => setSelectedRoleId(role.id)}
+                      type="button"
+                    >
+                      <div style={{ fontSize: 24 }}>{role.icon || '👤'}</div>
+                      <div style={{ fontSize: 11, marginTop: 4 }}>{role.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedRole && (
+                <div className="ow-terminal-dialog__role-detail">
+                  <div className="ow-terminal-dialog__role-header">
+                    <strong>{selectedRole.name}</strong>
+                    <button
+                      className="ow-toolbar-button"
+                      onClick={() => { setEditingRole(selectedRole); setRoleEditorOpen(true); }}
+                      type="button"
+                    >
+                      {t('terminal.dialog.role.edit')}
+                    </button>
+                  </div>
+                  <p className="ow-terminal-dialog__role-desc">{selectedRole.description}</p>
+                </div>
+              )}
+
+              <p className="ow-terminal-dialog__role-tip">{t('terminal.dialog.role.tip')}</p>
+            </>
+          )}
+
+          <div className="ow-workspace-dialog__divider" />
+
+          <div className="ow-workspace-dialog__actions">
+            <button
+              className="ow-toolbar-button"
+              data-testid="create-terminal-cancel"
+              type="button"
+              onClick={onClose}
+            >
+              {t('terminal.dialog.cancel')}
+            </button>
+            <button
+              className="ow-toolbar-button ow-toolbar-button--primary"
+              data-testid="create-terminal-submit"
+              type="submit"
+            >
+              {t('terminal.dialog.save')}
+            </button>
           </div>
-        )}
-
-        <footer className="ow-create-terminal-dialog__footer">
-          <button onClick={onClose} type="button">Cancel</button>
-          <button onClick={handleSave} type="button">Save</button>
-        </footer>
+        </form>
       </section>
 
       <RoleEditorDialog
@@ -248,7 +386,8 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
           }
         }}
       />
-    </div>,
-    document.body
+    </div>
   );
+
+  return createPortal(content, document.body);
 };

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import { createPortal } from 'react-dom';
 import type { RoleRecord } from '../../../shared/ipc/contracts';
+import { useI18n } from '../../i18n/provider';
 
 interface RoleEditorDialogProps {
   open: boolean;
@@ -14,6 +15,7 @@ const ICON_OPTIONS = ['💻', '🐍', '⚛️', '🔧', '🐳', '🎨', '🧪', 
 const COLOR_OPTIONS = ['#0078d4', '#e81123', '#107c10', '#ff8c00', '#881798', '#00b7c3', '#ffb900', '#5c2d91'];
 
 export const RoleEditorDialog = ({ open, role, onClose, onSave }: RoleEditorDialogProps): JSX.Element | null => {
+  const { t } = useI18n();
   const isEdit = role !== null;
   const [name, setName] = useState(role?.name ?? '');
   const [description, setDescription] = useState(role?.description ?? '');
@@ -33,32 +35,55 @@ export const RoleEditorDialog = ({ open, role, onClose, onSave }: RoleEditorDial
     });
   };
 
+  const dialogTitle = isEdit ? t('terminal.dialog.roleEditor.editTitle') : t('terminal.dialog.roleEditor.createTitle');
+
   const content = (
-    <div className="ow-role-editor-dialog" role="dialog" aria-modal="true">
-      <div className="ow-role-editor-dialog__backdrop" onClick={onClose} />
-      <section className="ow-role-editor-dialog__surface">
-        <header className="ow-role-editor-dialog__header">
-          <h3>{isEdit ? 'Edit Role' : 'Create Role'}</h3>
-          <button className="ow-role-editor-dialog__close" onClick={onClose} type="button">×</button>
+    <div className="ow-workspace-dialog ow-role-editor-dialog" role="dialog" aria-modal="true">
+      <div className="ow-workspace-dialog__backdrop" onClick={onClose} />
+      <section className="ow-workspace-dialog__surface ow-workspace-dialog__surface--group" aria-label={dialogTitle}>
+        <header className="ow-workspace-dialog__header">
+          <h2>{dialogTitle}</h2>
         </header>
 
-        <div className="ow-role-editor-dialog__body">
-          <div className="ow-role-editor-dialog__field">
-            <label>Role Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} type="text" />
-          </div>
+        <form
+          className="ow-workspace-dialog__form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSave();
+          }}
+        >
+          <label className="ow-workspace-dialog__field ow-role-editor-dialog__field">
+            <span>{t('terminal.dialog.roleEditor.nameLabel')}</span>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </label>
 
-          <div className="ow-role-editor-dialog__field">
-            <label>Role Description</label>
+          <label className="ow-workspace-dialog__field ow-role-editor-dialog__field">
+            <span>{t('terminal.dialog.roleEditor.descriptionLabel')}</span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
+              style={{
+                width: '100%',
+                border: '1px solid var(--ow-color-border)',
+                borderRadius: 10,
+                padding: '9px 10px',
+                fontSize: 13,
+                color: 'var(--ow-color-text-strong)',
+                background: 'rgba(var(--ow-surface-rgb), 0.9)',
+                fontFamily: 'inherit',
+                resize: 'vertical'
+              }}
             />
-          </div>
+          </label>
 
-          <div className="ow-role-editor-dialog__field">
-            <label>Icon</label>
+          <div className="ow-workspace-dialog__field">
+            <span>{t('terminal.dialog.roleEditor.iconLabel')}</span>
             <div className="ow-role-editor-dialog__icon-grid">
               {ICON_OPTIONS.map((i) => (
                 <button
@@ -73,8 +98,8 @@ export const RoleEditorDialog = ({ open, role, onClose, onSave }: RoleEditorDial
             </div>
           </div>
 
-          <div className="ow-role-editor-dialog__field">
-            <label>Color</label>
+          <div className="ow-workspace-dialog__field">
+            <span>{t('terminal.dialog.roleEditor.colorLabel')}</span>
             <div className="ow-role-editor-dialog__color-grid">
               {COLOR_OPTIONS.map((c) => (
                 <button
@@ -88,14 +113,20 @@ export const RoleEditorDialog = ({ open, role, onClose, onSave }: RoleEditorDial
               ))}
             </div>
           </div>
-        </div>
 
-        <footer className="ow-role-editor-dialog__footer">
-          <button onClick={onClose} type="button">Cancel</button>
-          <button onClick={handleSave} type="button" disabled={name.trim().length === 0}>
-            Save
-          </button>
-        </footer>
+          <div className="ow-workspace-dialog__actions ow-role-editor-dialog__footer">
+            <button className="ow-toolbar-button" type="button" onClick={onClose}>
+              {t('terminal.dialog.roleEditor.cancel')}
+            </button>
+            <button
+              className="ow-toolbar-button ow-toolbar-button--primary"
+              type="submit"
+              disabled={name.trim().length === 0}
+            >
+              {t('terminal.dialog.roleEditor.save')}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   );

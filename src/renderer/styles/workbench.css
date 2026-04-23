@@ -4947,3 +4947,210 @@ select:focus-visible {
   justify-content: center;
   padding: 20px;
 }
+
+/* Terminal dialog tabs & quick start */
+.ow-terminal-quick-start {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.ow-terminal-quick-start__btn {
+  padding: 8px 10px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-strong);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ow-terminal-quick-start__btn:hover {
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  border-color: rgba(var(--ow-accent-rgb), 0.35);
+}
+
+.ow-terminal-dialog__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--ow-color-border);
+  padding-bottom: 2px;
+}
+
+.ow-terminal-dialog__tab {
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ow-color-text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ow-terminal-dialog__tab:hover {
+  color: var(--ow-color-text-strong);
+  background: rgba(var(--ow-surface-rgb), 0.5);
+}
+
+.ow-terminal-dialog__tab.is-active {
+  color: var(--ow-color-accent-strong);
+  border-bottom: 2px solid var(--ow-color-accent-strong);
+}
+
+.ow-terminal-dialog__role-detail {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ow-color-border);
+  background: rgba(var(--ow-surface-rgb), 0.6);
+}
+
+.ow-terminal-dialog__role-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ow-terminal-dialog__role-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ow-color-text-soft);
+  line-height: 1.5;
+}
+
+.ow-terminal-dialog__role-tip {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ow-color-text-soft);
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+/* Refactored terminal node — full xterm, minimal chrome */
+.ow-terminal-node {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+}
+
+.ow-terminal-node__xterm {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.ow-terminal-node__xterm .xterm {
+  height: 100%;
+}
+
+.ow-terminal-node__error {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--ow-state-failed);
+  background: rgba(var(--ow-state-failed-rgb, 232, 17, 35), 0.08);
+  border-bottom: 1px solid rgba(var(--ow-state-failed-rgb, 232, 17, 35), 0.15);
+}
+
+/* macOS Terminal-style host */
+.ow-terminal-host {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--terminal-bg, #1e1e1e);
+  box-shadow: var(--ow-shadow-panel);
+}
+
+.ow-terminal-host::before {
+  display: none;
+}
+
+.ow-terminal-host__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #ececec, #d9d9d9);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px 12px 0 0;
+  user-select: none;
+}
+
+.ow-terminal-host__traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ow-terminal-host__light {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+}
+
+.ow-terminal-host__light--close {
+  background: #ff5f56;
+  border: 1px solid #e0443e;
+}
+
+.ow-terminal-host__light--minimize {
+  background: #ffbd2e;
+  border: 1px solid #dea123;
+}
+
+.ow-terminal-host__light--maximize {
+  background: #27c93f;
+  border: 1px solid #1aab29;
+}
+
+.ow-terminal-host__title {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ow-terminal-host__spacer {
+  width: 52px;
+}
+
+.ow-terminal-host__body {
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
+}
+
+.ow-terminal-host__body .ow-terminal-node {
+  height: 100%;
+}
+
+.ow-terminal-host__body .ow-terminal-node__xterm {
+  border-radius: 0 0 12px 12px;
+}
+
+/* Dark theme adjustments for terminal host */
+[data-theme='dark'] .ow-terminal-host__header {
+  background: linear-gradient(180deg, #3a3a3a, #2d2d2d);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='dark'] .ow-terminal-host__title {
+  color: #d4d4d4;
+}
