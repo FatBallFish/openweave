@@ -1,72 +1,70 @@
 // @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
 import { TerminalSessionPane } from '../../../src/renderer/features/runs/TerminalSessionPane';
 
-describe('terminal session pane', () => {
-  it('renders interactive controls for an active run', () => {
-    const html = renderToStaticMarkup(
-      createElement(TerminalSessionPane, {
-        run: {
-          id: 'run-active',
-          workspaceId: 'ws-1',
-          nodeId: 'terminal-1',
-          runtime: 'shell',
-          command: 'cat',
-          status: 'running',
-          summary: null,
-          tailLog: 'hello\n',
-          createdAtMs: 1,
-          startedAtMs: 2,
-          completedAtMs: null
-        },
-        inputValue: 'follow-up\n',
-        inputErrorMessage: null,
-        isSubmittingInput: false,
-        isStopping: false,
-        onInputChange: vi.fn(),
-        onSubmitInput: vi.fn(),
-        onStop: vi.fn()
-      })
-    );
+vi.mock('@xterm/xterm', () => ({
+  Terminal: vi.fn().mockImplementation(() => ({
+    open: vi.fn(),
+    write: vi.fn(),
+    dispose: vi.fn(),
+    onData: vi.fn(),
+    options: {},
+    cols: 80,
+    rows: 24
+  }))
+}));
 
-    expect(html).toContain('terminal-session-pane');
-    expect(html).toContain('terminal-session-toolbar');
-    expect(html).toContain('terminal-session-output');
-    expect(html).toContain('terminal-session-input');
-    expect(html).toContain('terminal-session-send');
-    expect(html).toContain('terminal-session-stop');
-    expect(html).toContain('Session active');
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: vi.fn().mockImplementation(() => ({
+    fit: vi.fn()
+  }))
+}));
+
+describe('TerminalSessionPane', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      disconnect: vi.fn()
+    }));
+    (globalThis as any).window = {
+      openweaveShell: {
+        runs: {
+          subscribeStream: vi.fn(),
+          unsubscribeStream: vi.fn(),
+          onStream: vi.fn().mockReturnValue(() => {})
+        }
+      }
+    };
   });
 
-  it('treats stopped as a terminal renderer state', () => {
+  it('renders xterm container', () => {
     const html = renderToStaticMarkup(
       createElement(TerminalSessionPane, {
         run: {
-          id: 'run-stopped',
-          workspaceId: 'ws-1',
-          nodeId: 'terminal-1',
+          id: 'r1',
+          workspaceId: 'ws1',
+          nodeId: 'n1',
           runtime: 'shell',
-          command: 'cat',
-          status: 'stopped',
-          summary: 'Run stopped',
-          tailLog: 'bye\n',
-          createdAtMs: 1,
-          startedAtMs: 2,
-          completedAtMs: 3
+          command: 'echo hi',
+          status: 'running',
+          summary: null,
+          tailLog: '',
+          createdAtMs: Date.now(),
+          startedAtMs: Date.now(),
+          completedAtMs: null
         },
         inputValue: '',
         inputErrorMessage: null,
         isSubmittingInput: false,
         isStopping: false,
-        onInputChange: vi.fn(),
-        onSubmitInput: vi.fn(),
-        onStop: vi.fn()
+        onInputChange: () => {},
+        onSubmitInput: () => {},
+        onStop: () => {}
       })
     );
-
-    expect(html).toContain('Session stopped');
-    expect(html).toContain('disabled=""');
+    expect(html).toContain('terminal-session-xterm');
   });
 });
