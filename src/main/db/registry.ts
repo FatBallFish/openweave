@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync as NodeDatabaseSync } from 'node:sqlite';
 import type { ComponentManifestV1 } from '../../shared/components/manifest';
-import type { WorkspaceGroupRecord, WorkspaceRecord } from '../../shared/ipc/contracts';
+import type { RoleRecord, WorkspaceGroupRecord, WorkspaceRecord } from '../../shared/ipc/contracts';
 import {
   workspaceCreateSchema,
   workspaceGroupCreateSchema,
@@ -388,6 +388,51 @@ SET is_enabled = @is_enabled,
 WHERE name = @name AND version = @version
 `;
 
+const selectRolesSql = `
+SELECT id, name, description, icon, color, created_at_ms, updated_at_ms
+FROM roles
+ORDER BY updated_at_ms DESC
+`;
+
+const selectRoleByIdSql = `
+SELECT id, name, description, icon, color, created_at_ms, updated_at_ms
+FROM roles
+WHERE id = @id
+`;
+
+const upsertRoleSql = `
+INSERT INTO roles (id, name, description, icon, color, created_at_ms, updated_at_ms)
+VALUES (@id, @name, @description, @icon, @color, @created_at_ms, @updated_at_ms)
+ON CONFLICT(id) DO UPDATE SET
+  name = excluded.name,
+  description = excluded.description,
+  icon = excluded.icon,
+  color = excluded.color,
+  updated_at_ms = excluded.updated_at_ms
+`;
+
+const deleteRoleSql = `
+DELETE FROM roles WHERE id = @id
+`;
+
+const mapRoleRow = (row: {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  created_at_ms: number;
+  updated_at_ms: number;
+}): RoleRecord => ({
+  id: row.id,
+  name: row.name,
+  description: row.description,
+  icon: row.icon,
+  color: row.color,
+  createdAtMs: row.created_at_ms,
+  updatedAtMs: row.updated_at_ms
+});
+
 export interface RegistryRepositoryOptions {
   dbFilePath: string;
   now?: () => number;
@@ -472,6 +517,10 @@ export interface RegistryRepository {
     version: string,
     status: { isEnabled: boolean; isInstalled: boolean }
   ) => void;
+  listRoles: () => RoleRecord[];
+  getRole: (id: string) => RoleRecord | null;
+  saveRole: (role: RoleRecord) => RoleRecord;
+  deleteRole: (id: string) => boolean;
   deleteWorkspace: (workspaceId: string) => boolean;
   close: () => void;
 }
@@ -598,6 +647,32 @@ const readMigrationSql = (): string => {
   return fallbackMigrationSql;
 };
 
+const readRolesMigrationSql = (): string => {
+  const candidates = [
+    path.resolve(__dirname, 'migrations/registry/002_roles.sql'),
+    path.resolve(process.cwd(), 'src/main/db/migrations/registry/002_roles.sql')
+  ];
+
+  for (const migrationPath of candidates) {
+    if (fs.existsSync(migrationPath)) {
+      return fs.readFileSync(migrationPath, 'utf8');
+    }
+  }
+
+  return `
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  icon TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#0078d4',
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_roles_updated_at_ms ON roles (updated_at_ms DESC);
+`;
+};
+
 const getWorkspaceById = (db: NodeDatabaseSync, workspaceId: string): WorkspaceRecord => {
   const row = db.prepare(selectWorkspaceByIdSql).get({ id: workspaceId }) as WorkspaceRow | undefined;
   if (!row) {
@@ -654,6 +729,7 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
   // (CREATE INDEX in migration SQL may reference columns added here)
   ensureWorkspaceSchema(db);
   db.exec(readMigrationSql());
+  db.exec(readRolesMigrationSql());
   ensureWorkspaceGroupSchema(db);
   ensureComponentPackageSchema(db);
 
@@ -972,6 +1048,41 @@ export const createRegistryRepository = (options: RegistryRepositoryOptions): Re
         is_installed: status.isInstalled ? 1 : 0,
         updated_at_ms: now()
       });
+    },
+    listRoles: (): RoleRecord[] => {
+      const rows = db.prepare(selectRolesSql).all() as unknown as Array<{
+        id: string; name: string; description: string; icon: string;
+        color: string; created_at_ms: number; updated_at_ms: number;
+      }>;
+      return rows.map(mapRoleRow);
+    },
+    getRole: (id: string): RoleRecord | null => {
+      const row = db.prepare(selectRoleByIdSql).get({ id }) as unknown as {
+        id: string; name: string; description: string; icon: string;
+        color: string; created_at_ms: number; updated_at_ms: number;
+      } | undefined;
+      return row ? mapRoleRow(row) : null;
+    },
+    saveRole: (role: RoleRecord): RoleRecord => {
+      db.prepare(upsertRoleSql).run({
+        id: role.id,
+        name: role.name,
+        description: role.description,
+        icon: role.icon,
+        color: role.color,
+        created_at_ms: role.createdAtMs,
+        updated_at_ms: role.updatedAtMs
+      });
+      const saved = db.prepare(selectRoleByIdSql).get({ id: role.id }) as unknown as {
+        id: string; name: string; description: string; icon: string;
+        color: string; created_at_ms: number; updated_at_ms: number;
+      } | undefined;
+      if (!saved) throw new Error(`Role not found after save: ${role.id}`);
+      return mapRoleRow(saved);
+    },
+    deleteRole: (id: string): boolean => {
+      const result = db.prepare(deleteRoleSql).run({ id });
+      return (result.changes ?? 0) > 0;
     },
     deleteWorkspace: (workspaceId: string): boolean => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
