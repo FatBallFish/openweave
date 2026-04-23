@@ -126,16 +126,16 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
           <div className="ow-create-terminal-dialog__panel">
             <div className="ow-create-terminal-dialog__field">
               <label>Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} type="text" />
+              <input data-testid="create-terminal-name" value={name} onChange={(e) => setName(e.target.value)} type="text" />
             </div>
             <div className="ow-create-terminal-dialog__field">
               <label>Initial Command</label>
-              <input value={command} onChange={(e) => setCommand(e.target.value)} type="text" />
+              <input data-testid="create-terminal-command" value={command} onChange={(e) => setCommand(e.target.value)} type="text" />
             </div>
             <div className="ow-create-terminal-dialog__field">
               <label>Working Directory</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input value={workingDir} onChange={(e) => setWorkingDir(e.target.value)} type="text" style={{ flex: 1 }} />
+                <input data-testid="create-terminal-working-dir" value={workingDir} onChange={(e) => setWorkingDir(e.target.value)} type="text" style={{ flex: 1 }} />
                 <button onClick={handleBrowse} type="button">Browse</button>
               </div>
             </div>
@@ -155,7 +155,7 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
             </div>
             <div className="ow-create-terminal-dialog__field">
               <label>Theme</label>
-              <select value={theme} onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}>
+              <select data-testid="create-terminal-theme" value={theme} onChange={(e) => setTheme(e.target.value as 'auto' | 'light' | 'dark')}>
                 <option value="auto">Auto</option>
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
