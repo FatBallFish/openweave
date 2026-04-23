@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -31,6 +31,18 @@ const applyWindowsPackagingDefaults = () => {
 
   process.env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/';
   process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron-builder-binaries/';
+};
+
+const resolveElectronDist = () => {
+  const electronDistDir = path.join(projectDir, 'node_modules', 'electron', 'dist');
+  const electronExecutableName = process.platform === 'win32' ? 'electron.exe' : 'Electron';
+  const electronExecutablePath = path.join(electronDistDir, electronExecutableName);
+
+  if (fs.existsSync(electronExecutablePath)) {
+    return electronDistDir;
+  }
+
+  return null;
 };
 
 const resolveRequestedPlatform = (rawPlatform) => {
@@ -71,6 +83,39 @@ const runCommand = (command, args, options = {}) => {
   }
 };
 
+const isRetryableFsError = (error) =>
+  error &&
+  typeof error === 'object' &&
+  ['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error.code);
+
+const sleep = (durationMs) => {
+  const sharedArray = new SharedArrayBuffer(4);
+  const view = new Int32Array(sharedArray);
+  Atomics.wait(view, 0, 0, durationMs);
+};
+
+const removePathWithRetry = (targetPath, retries = 6, delayMs = 250) => {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      fs.rmSync(targetPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!isRetryableFsError(error) || attempt === retries) {
+        throw error;
+      }
+      sleep(delayMs * (attempt + 1));
+    }
+  }
+};
+
+const resetOutputDirectory = (outputDir) => {
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  for (const childName of fs.readdirSync(outputDir)) {
+    removePathWithRetry(path.join(outputDir, childName));
+  }
+};
+
 const requestedPlatform = resolveRequestedPlatform(process.argv[2]);
 const requestedArch = process.env.OPENWEAVE_PACKAGE_ARCH ?? process.arch;
 applyWindowsPackagingDefaults();
@@ -89,14 +134,13 @@ if (!fs.existsSync(electronBuilderCliPath)) {
   throw new Error(`electron-builder CLI not found: ${electronBuilderCliPath}`);
 }
 
-fs.rmSync(plan.outputDir, { recursive: true, force: true });
-fs.mkdirSync(plan.outputDir, { recursive: true });
+resetOutputDirectory(plan.outputDir);
 
 console.log(`[package-release] Building OpenWeave for ${plan.platformName} (${requestedArch})...`);
 runCommand(resolveNpmCommand(), ['run', 'build']);
 
 console.log(`[package-release] Packaging artifacts into ${plan.outputDir}...`);
-runCommand(process.execPath, [
+const builderArgs = [
   electronBuilderCliPath,
   '--config',
   configPath,
@@ -104,6 +148,13 @@ runCommand(process.execPath, [
   '--publish',
   'never',
   `-c.directories.output=${plan.outputDir}`
-]);
+];
+const electronDist = resolveElectronDist();
+if (electronDist) {
+  console.log(`[package-release] Using local Electron dist: ${electronDist}`);
+  builderArgs.push(`-c.electronDist=${electronDist}`);
+}
+
+runCommand(process.execPath, builderArgs);
 
 console.log(`[package-release] Done: ${plan.outputDir}`);
