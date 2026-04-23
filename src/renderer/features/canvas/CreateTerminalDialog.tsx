@@ -74,6 +74,7 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
 
   const handleSave = useCallback(() => {
     onSave({
+      title: name.trim() || undefined,
       command,
       runtime,
       workingDir,
@@ -84,7 +85,7 @@ export const CreateTerminalDialog = ({ open, workspaceRootDir, onClose, onSave }
       fontSize,
       roleId: selectedRoleId
     });
-  }, [command, runtime, workingDir, iconKey, iconColor, theme, fontFamily, fontSize, selectedRoleId, onSave]);
+  }, [name, command, runtime, workingDir, iconKey, iconColor, theme, fontFamily, fontSize, selectedRoleId, onSave]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 

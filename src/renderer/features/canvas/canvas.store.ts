@@ -212,7 +212,10 @@ const createNoteGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord 
   };
 };
 
-const createTerminalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
+const createTerminalGraphNode = (
+  existingNodes: GraphNodeRecord[],
+  config?: Record<string, unknown>
+): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.terminal');
   const now = Date.now();
   const bounds = getStarterBounds(
@@ -224,10 +227,11 @@ const createTerminalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRec
     id: createNodeId('terminal'),
     componentType: 'builtin.terminal',
     componentVersion: manifest.version,
-    title: manifest.node.defaultTitle,
+    title: typeof config?.title === 'string' ? config.title : manifest.node.defaultTitle,
     bounds,
     config: {
-      ...(manifest.schema.config ?? {})
+      ...(manifest.schema.config ?? {}),
+      ...(config ?? {})
     },
     state: {
       ...(manifest.schema.state ?? {})
@@ -435,13 +439,13 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
-  addTerminalNode: async (): Promise<void> => {
+  addTerminalNode: async (config?: Record<string, unknown>): Promise<void> => {
     if (!state.workspaceId || state.loading) {
       return;
     }
 
     const workspaceId = state.workspaceId;
-    const newNode = createTerminalGraphNode(state.graphSnapshot.nodes);
+    const newNode = createTerminalGraphNode(state.graphSnapshot.nodes, config);
     historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
@@ -539,7 +543,8 @@ export const canvasStore = {
       width: number;
       height: number;
     },
-    rootDir?: string
+    rootDir?: string,
+    config?: Record<string, unknown>
   ): Promise<void> => {
     if (!state.workspaceId || state.loading) {
       return;
@@ -554,7 +559,7 @@ export const canvasStore = {
         newNode = createNoteGraphNode(existingNodes);
         break;
       case 'builtin.terminal':
-        newNode = createTerminalGraphNode(existingNodes);
+        newNode = createTerminalGraphNode(existingNodes, config);
         break;
       case 'builtin.file-tree':
         newNode = createFileTreeGraphNode(existingNodes, rootDir ?? '');

@@ -6,6 +6,7 @@ import { CommandPalette, type CommandPaletteItem } from './features/workbench/Co
 import { WorkbenchShell } from './features/workbench/WorkbenchShell';
 import { SettingsDialog } from './features/workbench/SettingsDialog';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
+import { CreateTerminalDialog } from './features/canvas/CreateTerminalDialog';
 import { useWorkspacesStore } from './features/workspaces/workspaces.store';
 import { useI18n } from './i18n/provider';
 import { useTheme } from './hooks/useTheme';
@@ -31,6 +32,7 @@ export const App = (): JSX.Element => {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [fitViewRequestId, setFitViewRequestId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createTerminalDialogOpen, setCreateTerminalDialogOpen] = useState(false);
   const [placementMode, setPlacementMode] = useState<{ type: string } | null>(null);
   const disabled = activeWorkspace === null || canvasLoading;
 
@@ -89,7 +91,7 @@ export const App = (): JSX.Element => {
   }, []);
 
   const addTerminal = useCallback(() => {
-    void canvasStore.addTerminalNode();
+    setCreateTerminalDialogOpen(true);
   }, []);
 
   const addNote = useCallback(() => {
@@ -109,12 +111,24 @@ export const App = (): JSX.Element => {
   }, []);
 
   const togglePlacement = useCallback((type: string) => {
+    if (type === 'terminal') {
+      setCreateTerminalDialogOpen(true);
+      return;
+    }
     setPlacementMode((current) => (current?.type === type ? null : { type }));
   }, []);
 
   const cancelPlacement = useCallback(() => {
     setPlacementMode(null);
   }, []);
+
+  const handleCreateTerminalSave = useCallback(
+    (config: Record<string, unknown>) => {
+      setCreateTerminalDialogOpen(false);
+      void canvasStore.addTerminalNode(config);
+    },
+    []
+  );
 
   const handlePlacementComplete = useCallback(
     (type: string, bounds: { x: number; y: number; width: number; height: number }) => {
@@ -312,6 +326,12 @@ export const App = (): JSX.Element => {
       onTogglePlacement={togglePlacement}
     />
     <SettingsDialog open={settingsOpen} onClose={closeSettings} />
+    <CreateTerminalDialog
+      open={createTerminalDialogOpen}
+      workspaceRootDir={activeWorkspace?.rootDir ?? ''}
+      onClose={() => setCreateTerminalDialogOpen(false)}
+      onSave={handleCreateTerminalSave}
+    />
     </>
   );
 };
