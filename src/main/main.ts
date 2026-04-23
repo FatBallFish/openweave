@@ -25,6 +25,8 @@ import {
   registerRunsIpcHandlers
 } from './ipc/runs';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
+import { disposeRolesIpcHandlers, registerRolesIpcHandlers } from './ipc/roles';
+import { createRegistryRepository } from './db/registry';
 import { IPC_CHANNELS } from '../shared/ipc/contracts';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
@@ -218,6 +220,7 @@ void app.whenReady().then(() => {
     dbFilePath: registryDbFilePath,
     artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal')
   });
+  registerRolesIpcHandlers({ registry: createRegistryRepository({ dbFilePath: registryDbFilePath }) });
   createMainWindow();
 
   app.on('activate', () => {
@@ -248,4 +251,5 @@ app.on('will-quit', () => {
   disposeBranchWorkspaceIpcHandlers();
   disposeCanvasIpcHandlers();
   disposeWorkspaceIpcHandlers();
+  disposeRolesIpcHandlers();
 });
