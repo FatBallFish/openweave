@@ -28,6 +28,7 @@ import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc
 import { disposeRolesIpcHandlers, registerRolesIpcHandlers } from './ipc/roles';
 import { createRegistryRepository } from './db/registry';
 import { IPC_CHANNELS } from '../shared/ipc/contracts';
+import { installBuiltinSkills, uninstallBuiltinSkills } from './skills/app-skill-manager';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
 if (configuredUserDataDir) {
@@ -221,6 +222,7 @@ void app.whenReady().then(() => {
     artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal')
   });
   registerRolesIpcHandlers({ registry: createRegistryRepository({ dbFilePath: registryDbFilePath }) });
+  installBuiltinSkills();
   createMainWindow();
 
   app.on('activate', () => {
@@ -237,6 +239,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  uninstallBuiltinSkills();
   if (crashRecoveryMarkerPath) {
     try {
       fs.rmSync(crashRecoveryMarkerPath, { force: true });

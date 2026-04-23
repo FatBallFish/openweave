@@ -100,7 +100,24 @@ const shellBridge: OpenWeaveShellBridge = {
     getRun: (input: RunGetInput) => ipcRenderer.invoke(IPC_CHANNELS.runGet, input),
     listRuns: (input: RunListInput) => ipcRenderer.invoke(IPC_CHANNELS.runList, input),
     inputRun: (input: RunInputInput) => ipcRenderer.invoke(IPC_CHANNELS.runInput, input),
-    stopRun: (input: RunStopInput) => ipcRenderer.invoke(IPC_CHANNELS.runStop, input)
+    stopRun: (input: RunStopInput) => ipcRenderer.invoke(IPC_CHANNELS.runStop, input),
+    subscribeStream: (runId: string) => ipcRenderer.send(IPC_CHANNELS.runStreamSubscribe, { runId }),
+    unsubscribeStream: (runId: string) => ipcRenderer.send(IPC_CHANNELS.runStreamUnsubscribe, { runId }),
+    onStream: (callback: (data: { runId: string; chunk: string }) => void) => {
+      const handler = (_event: unknown, data: { runId: string; chunk: string }) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.runStream, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.runStream, handler);
+    },
+    resizeRun: (input: { runId: string; cols: number; rows: number }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.runResize, input)
+  },
+  roles: {
+    listRoles: () => ipcRenderer.invoke(IPC_CHANNELS.roleList),
+    createRole: (input: { name: string; description: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.roleCreate, input),
+    updateRole: (input: { id: string; name?: string; description?: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.roleUpdate, input),
+    deleteRole: (input: { id: string }) => ipcRenderer.invoke(IPC_CHANNELS.roleDelete, input)
   },
   files: {
     loadFileTree: (input: FileTreeLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.fileTreeLoad, input)

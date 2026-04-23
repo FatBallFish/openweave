@@ -22,6 +22,7 @@ import {
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository, type WorkspaceRepository } from '../db/workspace';
 import { sanitizePathWithinRoot } from '../workspace/path-boundary';
+import { injectRole } from '../terminal/role-injector';
 
 export interface CanvasIpcHandlers {
   load: (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
@@ -61,11 +62,33 @@ const sanitizeCanvasStateForWorkspace = (
 
 const sanitizeGraphSnapshotForWorkspace = (
   graphSnapshot: GraphSnapshotV2Input,
-  workspaceRootDir: string
+  workspaceRootDir: string,
+  registry?: RegistryRepository
 ): GraphSnapshotV2Input => {
   return {
     ...graphSnapshot,
     nodes: graphSnapshot.nodes.map((node) => {
+      if (node.componentType === 'builtin.terminal' && node.config.roleId && registry) {
+        const role = registry.getRole(String(node.config.roleId));
+        if (role) {
+          const workingDir = String(node.config.workingDir || workspaceRootDir || '');
+          if (workingDir) {
+            const roleDir = injectRole({
+              workingDir,
+              terminalId: node.id,
+              roleDescription: role.description
+            });
+            return {
+              ...node,
+              config: {
+                ...node.config,
+                workingDir: roleDir
+              }
+            };
+          }
+        }
+      }
+
       if (node.componentType !== 'builtin.file-tree') {
         return node;
       }
@@ -86,7 +109,10 @@ const sanitizeGraphSnapshotForWorkspace = (
   };
 };
 
-export const createCanvasIpcHandlers = (deps: CanvasIpcDependencies): CanvasIpcHandlers => {
+export const createCanvasIpcHandlers = (
+  deps: CanvasIpcDependencies,
+  registry?: RegistryRepository
+): CanvasIpcHandlers => {
   return {
     load: async (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => {
       const parsed = canvasLoadSchema.parse(input);
@@ -112,14 +138,18 @@ export const createCanvasIpcHandlers = (deps: CanvasIpcDependencies): CanvasIpcH
       const workspaceRootDir = deps.resolveWorkspaceRootDir(parsed.workspaceId);
       const loadedGraph = deps.getWorkspaceRepository(parsed.workspaceId).loadGraphSnapshot();
       return {
-        graphSnapshot: sanitizeGraphSnapshotForWorkspace(loadedGraph, workspaceRootDir)
+        graphSnapshot: sanitizeGraphSnapshotForWorkspace(loadedGraph, workspaceRootDir, registry)
       };
     },
     graphSave: async (_event: IpcMainInvokeEvent, input: GraphSaveV2Input) => {
       const parsed = graphSaveSchemaV2.parse(input);
       deps.assertWorkspaceExists(parsed.workspaceId);
       const workspaceRootDir = deps.resolveWorkspaceRootDir(parsed.workspaceId);
-      const sanitizedGraph = sanitizeGraphSnapshotForWorkspace(parsed.graphSnapshot, workspaceRootDir);
+      const sanitizedGraph = sanitizeGraphSnapshotForWorkspace(
+        parsed.graphSnapshot,
+        workspaceRootDir,
+        registry
+      );
       return {
         graphSnapshot: deps.getWorkspaceRepository(parsed.workspaceId).saveGraphSnapshot(
           sanitizedGraph
@@ -225,16 +255,18 @@ export interface RegisterCanvasIpcHandlersOptions {
 
 export const registerCanvasIpcHandlers = (options: RegisterCanvasIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
-  const handlers = createCanvasIpcHandlers({
-    assertWorkspaceExists: (workspaceId: string) =>
-      assertWorkspaceExists(workspaceId, options.workspaceDbDir, options.registryDbFilePath),
-    resolveWorkspaceRootDir: (workspaceId: string) =>
-      resetCanvasContext(options.workspaceDbDir, options.registryDbFilePath).registry.getWorkspace(
-        workspaceId
-      ).rootDir,
-    getWorkspaceRepository: (workspaceId: string) =>
-      resolveWorkspaceRepository(workspaceId, options.workspaceDbDir, options.registryDbFilePath)
-  });
+  const context = resetCanvasContext(options.workspaceDbDir, options.registryDbFilePath);
+  const handlers = createCanvasIpcHandlers(
+    {
+      assertWorkspaceExists: (workspaceId: string) =>
+        assertWorkspaceExists(workspaceId, options.workspaceDbDir, options.registryDbFilePath),
+      resolveWorkspaceRootDir: (workspaceId: string) =>
+        context.registry.getWorkspace(workspaceId).rootDir,
+      getWorkspaceRepository: (workspaceId: string) =>
+        resolveWorkspaceRepository(workspaceId, options.workspaceDbDir, options.registryDbFilePath)
+    },
+    context.registry
+  );
 
   ipcMain.removeHandler(IPC_CHANNELS.canvasLoad);
   ipcMain.removeHandler(IPC_CHANNELS.canvasSave);
