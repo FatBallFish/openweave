@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../../i18n/provider';
 import { settingsStore, useSettingsStore } from './settings.store';
+import { RoleSettingsPanel } from './RoleSettingsPanel';
 
 type SettingsTab = 'general' | 'terminal' | 'role' | 'page' | 'shortcuts' | 'data' | 'about';
 
@@ -126,7 +127,7 @@ export const SettingsDialog = ({ open, onClose }: SettingsDialogProps): JSX.Elem
               </div>
             )}
             {activeTab === 'terminal' && <div className="ow-settings-dialog__placeholder" />}
-            {activeTab === 'role' && <div className="ow-settings-dialog__placeholder" />}
+            {activeTab === 'role' && <RoleSettingsPanel />}
             {activeTab === 'page' && (
               <div className="ow-settings-dialog__groups">
                 <section className="ow-settings-dialog__group">
