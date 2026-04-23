@@ -15,6 +15,7 @@ export interface RuntimeAdapterProcess extends EventEmitter {
   stderr: PassThrough;
   write: (input: string) => void;
   kill: (signal?: string) => void;
+  resize: (cols: number, rows: number) => void;
 }
 
 const PTY_NAME = 'xterm-color';
@@ -71,6 +72,13 @@ export const launchPtyRuntime = (input: RuntimeAdapterInput): RuntimeAdapterProc
       requestedSignal = signal ?? 'SIGTERM';
       terminal.kill(requestedSignal);
     };
+    runtimeProcess.resize = (cols: number, rows: number): void => {
+      try {
+        terminal.resize(cols, rows);
+      } catch {
+        // PTY may not support resize
+      }
+    };
 
     terminal.onData((chunk: string) => {
       stdout.write(chunk);
@@ -95,6 +103,9 @@ export const launchPtyRuntime = (input: RuntimeAdapterInput): RuntimeAdapterProc
     runtimeProcess.kill = (signal?: string): void => {
       requestedSignal = signal ?? 'SIGTERM';
       child.kill(requestedSignal as NodeJS.Signals);
+    };
+    runtimeProcess.resize = (): void => {
+      // child_process.spawn fallback does not support resize
     };
 
     child.stdout?.on('data', (chunk: Buffer | string) => {

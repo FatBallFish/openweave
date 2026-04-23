@@ -324,6 +324,23 @@ const handleMessage = (message: unknown): void => {
     return;
   }
 
+  if (typedMessage.type === 'resize') {
+    if (
+      typeof typedMessage.runId === 'string' &&
+      typeof typedMessage.cols === 'number' &&
+      typeof typedMessage.rows === 'number' &&
+      activeRun &&
+      activeRun.runId === typedMessage.runId
+    ) {
+      try {
+        activeRun.runtimeProcess.resize(typedMessage.cols, typedMessage.rows);
+      } catch {
+        // Best-effort resize
+      }
+    }
+    return;
+  }
+
   if (
     typedMessage.type !== 'start' ||
     typeof typedMessage.runId !== 'string' ||

@@ -13,12 +13,14 @@ import {
   runGetSchema,
   runInputSchema,
   runListSchema,
+  runResizeSchema,
   runStartSchema,
   runStopSchema,
   workspaceIdSchema,
   type RunGetInput,
   type RunInputInput,
   type RunListInput,
+  type RunResizeInput,
   type RunStartInput,
   type RunRuntimeInput,
   type RunStopInput,
@@ -48,6 +50,9 @@ export interface RunsIpcHandlers {
   listRuns: (_event: IpcMainInvokeEvent, input: RunListInput) => Promise<RunListResponse>;
   inputRun: (_event: IpcMainInvokeEvent, input: RunInputInput) => Promise<RunInputResponse>;
   stopRun: (_event: IpcMainInvokeEvent, input: RunStopInput) => Promise<RunMutationResponse>;
+  subscribeStream: (runId: string, webContentsId: number) => void;
+  unsubscribeStream: (runId: string, webContentsId: number) => void;
+  resizeRun: (_event: IpcMainInvokeEvent, input: RunResizeInput) => Promise<void>;
   disposeWorkspaceRuns: (workspaceId: string) => void;
 }
 
@@ -144,6 +149,8 @@ class InMemoryRunsService {
 
   private readonly stopIntents = new Set<string>();
 
+  private readonly streamSubscribers = new Map<string, Set<number>>();
+
   private readonly assertWorkspaceExists: (workspaceId: string) => void;
 
   private readonly resolveWorkspaceRootDir?: (workspaceId: string) => string;
@@ -206,10 +213,12 @@ class InMemoryRunsService {
 
     this.runtimeBridge.on('stdout', (event) => {
       this.appendOutput(event);
+      this.broadcastStream(event.runId, event.chunk);
     });
 
     this.runtimeBridge.on('stderr', (event) => {
       this.appendOutput(event);
+      this.broadcastStream(event.runId, event.chunk);
     });
 
     this.runtimeBridge.on('exit', (event) => {
@@ -343,9 +352,55 @@ class InMemoryRunsService {
     }
   }
 
+  public subscribeStream(runId: string, webContentsId: number): void {
+    const set = this.streamSubscribers.get(runId) ?? new Set();
+    set.add(webContentsId);
+    this.streamSubscribers.set(runId, set);
+  }
+
+  public unsubscribeStream(runId: string, webContentsId: number): void {
+    const set = this.streamSubscribers.get(runId);
+    if (set) {
+      set.delete(webContentsId);
+      if (set.size === 0) {
+        this.streamSubscribers.delete(runId);
+      }
+    }
+  }
+
+  public unsubscribeAllStreams(webContentsId: number): void {
+    for (const [runId, set] of this.streamSubscribers) {
+      set.delete(webContentsId);
+      if (set.size === 0) {
+        this.streamSubscribers.delete(runId);
+      }
+    }
+  }
+
+  private broadcastStream(runId: string, chunk: string): void {
+    const { webContents } = require('electron');
+    const subscribers = this.streamSubscribers.get(runId);
+    if (!subscribers) return;
+    for (const wcId of subscribers) {
+      const wc = webContents.fromId(wcId);
+      if (wc && !wc.isDestroyed()) {
+        wc.send(IPC_CHANNELS.runStream, { runId, chunk });
+      }
+    }
+  }
+
+  public resizeRun(runId: string, cols: number, rows: number): void {
+    const run = this.runs.get(runId);
+    if (!run || isTerminalRunStatus(run.status)) {
+      throw new Error(`Run not active: ${runId}`);
+    }
+    this.runtimeBridge.resize(runId, cols, rows);
+  }
+
   public dispose(): void {
     this.runtimeBridge.dispose();
     this.runs.clear();
+    this.streamSubscribers.clear();
   }
 
   private appendOutput(event: RuntimeStreamEvent): void {
@@ -452,6 +507,15 @@ export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandler
       return {
         run: service.stopRun(input)
       };
+    },
+    subscribeStream: (runId: string, webContentsId: number): void => {
+      service.subscribeStream(runId, webContentsId);
+    },
+    unsubscribeStream: (runId: string, webContentsId: number): void => {
+      service.unsubscribeStream(runId, webContentsId);
+    },
+    resizeRun: async (_event: IpcMainInvokeEvent, input: RunResizeInput): Promise<void> => {
+      service.resizeRun(input.runId, input.cols, input.rows);
     },
     disposeWorkspaceRuns: (workspaceId: string): void => {
       service.disposeWorkspaceRuns(workspaceId);
@@ -646,11 +710,30 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
   ipcMain.removeHandler(IPC_CHANNELS.runList);
   ipcMain.removeHandler(IPC_CHANNELS.runInput);
   ipcMain.removeHandler(IPC_CHANNELS.runStop);
+  ipcMain.removeHandler(IPC_CHANNELS.runStreamSubscribe);
+  ipcMain.removeHandler(IPC_CHANNELS.runStreamUnsubscribe);
+  ipcMain.removeHandler(IPC_CHANNELS.runResize);
+
   ipcMain.handle(IPC_CHANNELS.runStart, handlers.startRun);
   ipcMain.handle(IPC_CHANNELS.runGet, handlers.getRun);
   ipcMain.handle(IPC_CHANNELS.runList, handlers.listRuns);
   ipcMain.handle(IPC_CHANNELS.runInput, handlers.inputRun);
   ipcMain.handle(IPC_CHANNELS.runStop, handlers.stopRun);
+
+  ipcMain.on(IPC_CHANNELS.runStreamSubscribe, (_event, { runId }) => {
+    const wcId = (_event as any).sender.id as number;
+    context.service.subscribeStream(runId, wcId);
+  });
+
+  ipcMain.on(IPC_CHANNELS.runStreamUnsubscribe, (_event, { runId }) => {
+    const wcId = (_event as any).sender.id as number;
+    context.service.unsubscribeStream(runId, wcId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.runResize, async (_event, input) => {
+    const parsed = runResizeSchema.parse(input);
+    context.service.resizeRun(parsed.runId, parsed.cols, parsed.rows);
+  });
 };
 
 export const disposeRunsForWorkspace = (workspaceId: string): void => {

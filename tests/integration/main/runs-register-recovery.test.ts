@@ -18,6 +18,7 @@ import type { RuntimeBridge, RuntimeStartRequest } from '../../../src/main/runti
 class IpcMainStub {
   public readonly handlers = new Map<string, (...args: any[]) => unknown>();
   public readonly removed: string[] = [];
+  public readonly listeners = new Map<string, Set<(...args: any[]) => void>>();
 
   public handle(channel: string, listener: (...args: any[]) => unknown): void {
     this.handlers.set(channel, listener);
@@ -26,6 +27,12 @@ class IpcMainStub {
   public removeHandler(channel: string): void {
     this.removed.push(channel);
     this.handlers.delete(channel);
+  }
+
+  public on(channel: string, listener: (...args: any[]) => void): void {
+    const set = this.listeners.get(channel) ?? new Set();
+    set.add(listener);
+    this.listeners.set(channel, set);
   }
 
   public async invoke(channel: string, payload: unknown): Promise<any> {
@@ -117,7 +124,10 @@ describe('registered runs IPC handlers', () => {
       IPC_CHANNELS.runGet,
       IPC_CHANNELS.runList,
       IPC_CHANNELS.runInput,
-      IPC_CHANNELS.runStop
+      IPC_CHANNELS.runStop,
+      IPC_CHANNELS.runStreamSubscribe,
+      IPC_CHANNELS.runStreamUnsubscribe,
+      IPC_CHANNELS.runResize
     ]);
 
     const started = await ipcMain.invoke(IPC_CHANNELS.runStart, {
