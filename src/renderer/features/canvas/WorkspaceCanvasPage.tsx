@@ -13,6 +13,7 @@ interface WorkspaceCanvasPageProps {
   onOpenCommandPalette: () => void;
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
+  onAddTerminal: () => void;
   placementMode?: { type: string } | null;
   onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onPlacementCancel?: () => void;
@@ -26,6 +27,7 @@ export const WorkspaceCanvasPage = ({
   onOpenCommandPalette,
   onOpenQuickAdd,
   onSelectNode,
+  onAddTerminal,
   placementMode,
   onPlacementComplete,
   onPlacementCancel
@@ -71,9 +73,7 @@ export const WorkspaceCanvasPage = ({
           onSelectNode={onSelectNode}
           onOpenRun={openRun}
           onCreateBranchWorkspace={openBranchDialog}
-          onAddTerminal={() => {
-            void canvasStore.addTerminalNode();
-          }}
+          onAddTerminal={onAddTerminal}
           onAddNote={() => {
             void canvasStore.addNoteNode();
           }}

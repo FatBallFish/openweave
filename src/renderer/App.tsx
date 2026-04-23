@@ -250,6 +250,7 @@ export const App = (): JSX.Element => {
       onOpenCommandPalette={openCommandPalette}
       onOpenQuickAdd={openQuickAdd}
       onSelectNode={selectNode}
+      onAddTerminal={addTerminal}
       placementMode={placementMode}
       onPlacementComplete={handlePlacementComplete}
       onPlacementCancel={cancelPlacement}
