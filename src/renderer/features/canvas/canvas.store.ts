@@ -66,6 +66,10 @@ const getBridge = (): OpenWeaveShellBridge['graph'] => {
   return shell.graph;
 };
 
+const getShellBridge = (): OpenWeaveShellBridge | null => {
+  return (window as Window & { openweaveShell?: OpenWeaveShellBridge }).openweaveShell ?? null;
+};
+
 const createNodeId = (prefix: string): string => {
   const fallbackId = `${prefix}-${Date.now()}`;
   const generatedId =
@@ -362,6 +366,39 @@ const updateGraphNode = (
     ...graphSnapshot,
     nodes: graphSnapshot.nodes.map((node) => (node.id === nodeId ? updater(node) : node))
   };
+};
+
+const isActiveRunStatus = (status: string): boolean => {
+  return status !== 'completed' && status !== 'failed' && status !== 'stopped';
+};
+
+const stopActiveRunsForTerminalNodes = async (
+  workspaceId: string,
+  nodes: GraphNodeRecord[]
+): Promise<void> => {
+  const shell = getShellBridge();
+  if (!shell?.runs) {
+    return;
+  }
+
+  const terminalNodes = nodes.filter((node) => node.componentType === 'builtin.terminal');
+  if (terminalNodes.length === 0) {
+    return;
+  }
+
+  for (const node of terminalNodes) {
+    const response = await shell.runs.listRuns({
+      workspaceId,
+      nodeId: node.id
+    });
+    const activeRuns = response.runs.filter((run) => isActiveRunStatus(run.status));
+    for (const run of activeRuns) {
+      await shell.runs.stopRun({
+        workspaceId,
+        runId: run.id
+      });
+    }
+  }
 };
 
 export const canvasStore = {
@@ -851,6 +888,14 @@ export const canvasStore = {
     const workspaceId = state.workspaceId;
     const nodesToDelete = state.graphSnapshot.nodes.filter((node) => nodeIds.includes(node.id));
     if (nodesToDelete.length === 0) {
+      return;
+    }
+
+    try {
+      await stopActiveRunsForTerminalNodes(workspaceId, nodesToDelete);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to stop terminal run(s)';
+      setState({ errorMessage });
       return;
     }
 

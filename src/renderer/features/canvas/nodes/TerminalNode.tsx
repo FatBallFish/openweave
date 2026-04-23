@@ -73,10 +73,10 @@ export const TerminalNode = ({
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [draftCommand, setDraftCommand] = useState(node.command);
-  const [draftRuntime, setDraftRuntime] = useState<RunRuntimeInput>(node.runtime);
   const latestRun = runs[0] ?? null;
   const latestRunRef = useRef<RunRecord | null>(null);
+  const isStartingRef = useRef(false);
+  const renderedRunIdRef = useRef<string | null>(null);
 
   // Initialize xterm.js
   useEffect(() => {
@@ -95,6 +95,7 @@ export const TerminalNode = ({
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
     fitAddon.fit();
+    term.focus();
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -214,28 +215,36 @@ export const TerminalNode = ({
     latestRunRef.current = latestRun;
   }, [latestRun]);
 
-  // Sync draft with node prop
   useEffect(() => {
-    setDraftCommand(node.command);
-  }, [node.command]);
+    const term = xtermRef.current;
+    if (!term || !latestRun) {
+      return;
+    }
+
+    if (renderedRunIdRef.current !== latestRun.id) {
+      term.clear();
+      renderedRunIdRef.current = latestRun.id;
+      if (latestRun.tailLog.length > 0) {
+        term.write(latestRun.tailLog);
+      }
+    }
+  }, [latestRun?.id, latestRun?.tailLog]);
 
   useEffect(() => {
-    setDraftRuntime(node.runtime);
-  }, [node.runtime]);
+    isStartingRef.current = isStarting;
+  }, [isStarting]);
 
   const startRun = (): void => {
-    if (isStarting || draftCommand.trim().length === 0) return;
+    if (isStartingRef.current) return;
 
-    if (draftCommand !== node.command || draftRuntime !== node.runtime) {
-      onChange({ command: draftCommand, runtime: draftRuntime });
-    }
+    const effectiveRuntime = node.runtime ?? 'shell';
 
     setIsStarting(true);
     void getShellBridge()
       .runs.startRun(
         buildTerminalRunStartInput({
           workspaceId,
-          node: { ...node, command: draftCommand, runtime: draftRuntime }
+          node: { ...node, command: node.command, runtime: effectiveRuntime }
         })
       )
       .then((response) => {
@@ -252,81 +261,19 @@ export const TerminalNode = ({
       });
   };
 
+  // Auto-start terminal on mount if no active run
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!latestRunRef.current && !isStartingRef.current) {
+        startRun();
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <section className="ow-terminal-node" data-testid={`terminal-node-${node.id}`}>
-      <div className="ow-terminal-node__toolbar" data-testid="terminal-node-toolbar">
-        <label className="ow-terminal-node__runtime">
-          Runtime
-          <select
-            className="nodrag nopan"
-            data-testid={`terminal-node-runtime-${node.id}`}
-            onChange={(event) => {
-              const nextRuntime = event.currentTarget.value as RunRuntimeInput;
-              setDraftRuntime(nextRuntime);
-              onChange({ runtime: nextRuntime });
-            }}
-            value={draftRuntime}
-          >
-            {TERMINAL_NODE_RUNTIME_OPTIONS.map((runtime) => (
-              <option key={runtime} value={runtime}>
-                {runtimeLabelByValue[runtime]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="ow-terminal-node__session" data-testid={`terminal-node-session-${node.id}`}>
-          {latestRun ? `Session ${latestRun.id}` : 'Session ready'}
-        </div>
-
-        <button
-          className="ow-terminal-node__secondary-action nodrag nopan"
-          data-testid={`terminal-node-open-run-${node.id}`}
-          disabled={!latestRun}
-          onClick={() => {
-            if (!latestRun) return;
-            onOpenRun(latestRun.id);
-          }}
-          type="button"
-        >
-          Open run
-        </button>
-      </div>
-
-      <label className="ow-terminal-node__command">
-        Command
-        <input
-          className="nodrag nopan"
-          data-testid={`terminal-node-command-${node.id}`}
-          onBlur={() => {
-            if (draftCommand !== node.command) {
-              onChange({ command: draftCommand });
-            }
-          }}
-          onChange={(event) => setDraftCommand(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              startRun();
-            }
-          }}
-          type="text"
-          value={draftCommand}
-        />
-      </label>
-
-      <div className="ow-terminal-node__actions">
-        <button
-          className="nodrag nopan"
-          data-testid={`terminal-node-run-${node.id}`}
-          disabled={isStarting || draftCommand.trim().length === 0}
-          onClick={startRun}
-          type="button"
-        >
-          {isStarting ? 'Starting...' : 'Run'}
-        </button>
-      </div>
-
       {errorMessage ? (
         <p className="ow-terminal-node__error" data-testid={`terminal-node-error-${node.id}`}>
           {errorMessage}
@@ -335,9 +282,18 @@ export const TerminalNode = ({
 
       <div
         ref={containerRef}
-        className="ow-terminal-node__xterm"
+        className="ow-terminal-node__xterm nodrag nopan"
         data-testid={`terminal-node-xterm-${node.id}`}
-        style={{ width: '100%', flex: 1, minHeight: 120, overflow: 'hidden' }}
+        style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+        tabIndex={0}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          xtermRef.current?.focus();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          xtermRef.current?.focus();
+        }}
       />
     </section>
   );

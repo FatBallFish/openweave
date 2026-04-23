@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fileTreeLoadSchema,
   portalLoadSchema,
+  runStartSchema,
   workspaceBranchCreateSchema,
   workspaceCreateSchema
 } from '../../../src/shared/ipc/schemas';
@@ -56,5 +57,16 @@ describe('workspaceCreateSchema', () => {
         url: 'file:///tmp/demo.html'
       })
     ).toThrow('URL scheme not allowed');
+  });
+
+  it('accepts empty initial commands for terminal run starts', () => {
+    const result = runStartSchema.parse({
+      workspaceId: 'ws-1',
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: ''
+    });
+
+    expect(result.command).toBe('');
   });
 });

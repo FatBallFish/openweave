@@ -2,12 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphSnapshotV2Input } from '../../../src/shared/ipc/schemas';
 
-const setBridge = (bridge: Record<string, unknown>): void => {
+const setBridge = (
+  graph: Record<string, unknown>,
+  runs: Record<string, unknown> = {}
+): void => {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: {
       openweaveShell: {
-        graph: bridge
+        graph,
+        runs
       }
     }
   });
@@ -511,6 +515,84 @@ describe('canvas store', () => {
     expect(canvasStore.getState().graphSnapshot.nodes).toHaveLength(1);
     expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe('node-terminal-1');
     expect(canvasStore.getState().selectedNodeId).toBeNull();
+  });
+
+  it('stops active runs for deleted terminal nodes', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    const listRuns = vi.fn().mockResolvedValue({
+      runs: [
+        {
+          id: 'run-active',
+          workspaceId: 'ws-1',
+          nodeId: 'node-terminal-1',
+          runtime: 'codex',
+          command: '',
+          status: 'running',
+          summary: null,
+          tailLog: '',
+          createdAtMs: 1,
+          startedAtMs: 1,
+          completedAtMs: null
+        },
+        {
+          id: 'run-done',
+          workspaceId: 'ws-1',
+          nodeId: 'node-terminal-1',
+          runtime: 'codex',
+          command: '',
+          status: 'completed',
+          summary: null,
+          tailLog: '',
+          createdAtMs: 1,
+          startedAtMs: 1,
+          completedAtMs: 2
+        }
+      ]
+    });
+    const stopRun = vi.fn().mockResolvedValue({
+      run: {
+        id: 'run-active',
+        workspaceId: 'ws-1',
+        nodeId: 'node-terminal-1',
+        runtime: 'codex',
+        command: '',
+        status: 'stopped',
+        summary: null,
+        tailLog: '',
+        createdAtMs: 1,
+        startedAtMs: 1,
+        completedAtMs: 2
+      }
+    });
+    setBridge(
+      {
+        loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: createGraphSnapshot() }),
+        saveGraphSnapshot
+      },
+      {
+        listRuns,
+        stopRun
+      }
+    );
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await (canvasStore as unknown as { deleteNodes: (ids: string[]) => Promise<void> }).deleteNodes([
+      'node-terminal-1'
+    ]);
+
+    expect(listRuns).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      nodeId: 'node-terminal-1'
+    });
+    expect(stopRun).toHaveBeenCalledTimes(1);
+    expect(stopRun).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      runId: 'run-active'
+    });
   });
 
   it('undo removes a newly added node', async () => {

@@ -6,12 +6,7 @@ import { getXtermTheme } from '../canvas/nodes/xterm-theme';
 
 interface TerminalSessionPaneProps {
   run: RunRecord;
-  inputValue: string;
-  inputErrorMessage: string | null;
-  isSubmittingInput: boolean;
   isStopping: boolean;
-  onInputChange: (value: string) => void;
-  onSubmitInput: () => void;
   onStop: () => void;
 }
 
@@ -36,21 +31,15 @@ const getShellBridge = (): OpenWeaveShellBridge => {
 
 export const TerminalSessionPane = ({
   run,
-  inputValue,
-  inputErrorMessage,
-  isSubmittingInput,
   isStopping,
-  onInputChange,
-  onSubmitInput,
   onStop
 }: TerminalSessionPaneProps): JSX.Element => {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const runRef = useRef<RunRecord>(run);
+  const renderedRunIdRef = useRef<string | null>(null);
   const terminal = isTerminalState(run.status);
-  const disableInput = terminal || isSubmittingInput || isStopping;
-  const disableSend = disableInput || inputValue.trim().length === 0;
   const disableStop = terminal || isStopping;
 
   useEffect(() => {
@@ -73,6 +62,7 @@ export const TerminalSessionPane = ({
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
     fitAddon.fit();
+    term.focus();
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -118,6 +108,21 @@ export const TerminalSessionPane = ({
 
   // ResizeObserver
   useEffect(() => {
+    const term = xtermRef.current;
+    if (!term) {
+      return;
+    }
+
+    if (renderedRunIdRef.current !== run.id) {
+      term.clear();
+      renderedRunIdRef.current = run.id;
+      if (run.tailLog.length > 0) {
+        term.write(run.tailLog);
+      }
+    }
+  }, [run.id, run.tailLog]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     const observer = new ResizeObserver(() => {
@@ -135,53 +140,32 @@ export const TerminalSessionPane = ({
           Runtime {run.runtime}
         </span>
         <span className="ow-terminal-session-pane__chip">Command {run.command}</span>
+        <button
+          className="ow-toolbar-button"
+          data-testid="terminal-session-stop"
+          disabled={disableStop}
+          onClick={onStop}
+          type="button"
+        >
+          Stop
+        </button>
       </div>
 
       <div
         ref={containerRef}
-        className="ow-terminal-session-pane__xterm"
+        className="ow-terminal-session-pane__xterm nodrag nopan"
         data-testid="terminal-session-xterm"
         style={{ width: '100%', height: 360, overflow: 'hidden' }}
-      />
-
-      <form
-        className="ow-terminal-session-pane__form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!disableSend) onSubmitInput();
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          xtermRef.current?.focus();
         }}
-      >
-        <label className="ow-terminal-session-pane__input-field">
-          Send input
-          <input
-            data-testid="terminal-session-input"
-            disabled={disableInput}
-            onChange={(e) => onInputChange(e.currentTarget.value)}
-            type="text"
-            value={inputValue}
-          />
-        </label>
-
-        <div className="ow-terminal-session-pane__actions">
-          <button data-testid="terminal-session-send" disabled={disableSend} type="submit">
-            Send
-          </button>
-          <button
-            data-testid="terminal-session-stop"
-            disabled={disableStop}
-            onClick={onStop}
-            type="button"
-          >
-            Stop
-          </button>
-        </div>
-      </form>
-
-      {inputErrorMessage ? (
-        <p className="ow-terminal-session-pane__error" data-testid="terminal-session-error">
-          {inputErrorMessage}
-        </p>
-      ) : null}
+        onClick={(event) => {
+          event.stopPropagation();
+          xtermRef.current?.focus();
+        }}
+      />
     </section>
   );
 };

@@ -1,19 +1,40 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalSessionPane } from '../../../src/renderer/features/runs/TerminalSessionPane';
 
+const terminalInstances: Array<{
+  open: ReturnType<typeof vi.fn>;
+  write: ReturnType<typeof vi.fn>;
+  clear: ReturnType<typeof vi.fn>;
+  dispose: ReturnType<typeof vi.fn>;
+  onData: ReturnType<typeof vi.fn>;
+  focus: ReturnType<typeof vi.fn>;
+  loadAddon: ReturnType<typeof vi.fn>;
+  options: Record<string, unknown>;
+  cols: number;
+  rows: number;
+}> = [];
+
 vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(),
-    options: {},
-    cols: 80,
-    rows: 24
-  }))
+  Terminal: vi.fn().mockImplementation(() => {
+    const instance = {
+      open: vi.fn(),
+      write: vi.fn(),
+      clear: vi.fn(),
+      dispose: vi.fn(),
+      onData: vi.fn(),
+      focus: vi.fn(),
+      loadAddon: vi.fn(),
+      options: {},
+      cols: 80,
+      rows: 24
+    };
+    terminalInstances.push(instance);
+    return instance;
+  })
 }));
 
 vi.mock('@xterm/addon-fit', () => ({
@@ -25,6 +46,8 @@ vi.mock('@xterm/addon-fit', () => ({
 describe('TerminalSessionPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    terminalInstances.length = 0;
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     global.ResizeObserver = vi.fn().mockImplementation(() => ({
       observe: vi.fn(),
       disconnect: vi.fn()
@@ -56,15 +79,112 @@ describe('TerminalSessionPane', () => {
           startedAtMs: Date.now(),
           completedAtMs: null
         },
-        inputValue: '',
-        inputErrorMessage: null,
-        isSubmittingInput: false,
         isStopping: false,
-        onInputChange: () => {},
-        onSubmitInput: () => {},
         onStop: () => {}
       })
     );
     expect(html).toContain('terminal-session-xterm');
+  });
+
+  it('refocuses the xterm when the session surface is clicked', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: {
+            id: 'r1',
+            workspaceId: 'ws1',
+            nodeId: 'n1',
+            runtime: 'shell',
+            command: '',
+            status: 'running',
+            summary: null,
+            tailLog: '',
+            createdAtMs: Date.now(),
+            startedAtMs: Date.now(),
+            completedAtMs: null
+          },
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+    });
+
+    const terminal = terminalInstances[0];
+    expect(terminal?.focus).toHaveBeenCalledTimes(1);
+
+    const surface = container.querySelector('[data-testid="terminal-session-xterm"]');
+    expect(surface).not.toBeNull();
+    surface?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    surface?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(terminal?.focus).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('backfills tail output that arrived before stream subscription only on first paint', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: {
+            id: 'r1',
+            workspaceId: 'ws1',
+            nodeId: 'n1',
+            runtime: 'shell',
+            command: '',
+            status: 'running',
+            summary: null,
+            tailLog: 'prompt> ',
+            createdAtMs: Date.now(),
+            startedAtMs: Date.now(),
+            completedAtMs: null
+          },
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+    });
+
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> ');
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalSessionPane, {
+          run: {
+            id: 'r1',
+            workspaceId: 'ws1',
+            nodeId: 'n1',
+            runtime: 'codex',
+            command: '',
+            status: 'running',
+            summary: null,
+            tailLog: 'prompt> \u001b[2J',
+            createdAtMs: Date.now(),
+            startedAtMs: Date.now(),
+            completedAtMs: null
+          },
+          isStopping: false,
+          onStop: () => {}
+        })
+      );
+    });
+
+    expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

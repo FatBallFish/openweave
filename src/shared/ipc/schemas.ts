@@ -340,7 +340,7 @@ export const runStartSchema = z.object({
   workspaceId: workspaceIdSchema,
   nodeId: z.string().trim().min(1),
   runtime: runRuntimeSchema,
-  command: z.string().trim().min(1)
+  command: z.string()
 });
 
 export const runGetSchema = z.object({
