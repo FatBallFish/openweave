@@ -23,6 +23,7 @@ import { createRegistryRepository, type RegistryRepository } from '../db/registr
 import { createWorkspaceRepository, type WorkspaceRepository } from '../db/workspace';
 import { sanitizePathWithinRoot } from '../workspace/path-boundary';
 import { injectRole, cleanupRoleInjection } from '../terminal/role-injector';
+import { createNoteFileIpcHandlers } from './note-files';
 
 export interface CanvasIpcHandlers {
   load: (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
@@ -298,6 +299,23 @@ export const registerCanvasIpcHandlers = (options: RegisterCanvasIpcHandlersOpti
   ipcMain.handle(IPC_CHANNELS.canvasSave, handlers.save);
   ipcMain.handle(IPC_CHANNELS.graphLoad, handlers.graphLoad);
   ipcMain.handle(IPC_CHANNELS.graphSave, handlers.graphSave);
+
+  ipcMain.removeHandler(IPC_CHANNELS.noteFileCreate);
+  ipcMain.removeHandler(IPC_CHANNELS.noteFileRead);
+  ipcMain.removeHandler(IPC_CHANNELS.noteFileWrite);
+  ipcMain.removeHandler(IPC_CHANNELS.noteFileDelete);
+  ipcMain.removeHandler(IPC_CHANNELS.noteFileRename);
+
+  const noteFileHandlers = createNoteFileIpcHandlers({
+    resolveWorkspaceRootDir: (workspaceId: string) =>
+      context.registry.getWorkspace(workspaceId).rootDir
+  });
+
+  ipcMain.handle(IPC_CHANNELS.noteFileCreate, noteFileHandlers.create);
+  ipcMain.handle(IPC_CHANNELS.noteFileRead, noteFileHandlers.read);
+  ipcMain.handle(IPC_CHANNELS.noteFileWrite, noteFileHandlers.write);
+  ipcMain.handle(IPC_CHANNELS.noteFileDelete, noteFileHandlers.delete);
+  ipcMain.handle(IPC_CHANNELS.noteFileRename, noteFileHandlers.rename);
 };
 
 export const disposeCanvasWorkspaceRepository = (workspaceId: string): void => {

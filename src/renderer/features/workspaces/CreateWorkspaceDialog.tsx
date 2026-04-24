@@ -124,7 +124,19 @@ export const CreateWorkspaceDialog = ({
           <h2>{dialogTitle}</h2>
         </header>
 
-        <form className="ow-workspace-dialog__form" onSubmit={(event) => void handleSubmit(event)}>
+        <form
+          className="ow-workspace-dialog__form"
+          onSubmit={(event) => void handleSubmit(event)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+              const target = e.target as HTMLElement;
+              if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+                e.preventDefault();
+                target.select();
+              }
+            }
+          }}
+        >
           <label className="ow-workspace-dialog__field">
             <span>{t('workspace.dialog.nameLabel')}</span>
             <input

@@ -557,6 +557,12 @@ export const WorkspaceListPage = ({
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+              e.preventDefault();
+              e.currentTarget.select();
+            }
+          }}
           placeholder={t('workspace.searchPlaceholder')}
           data-testid="workspace-search-input"
         />
@@ -920,6 +926,12 @@ export const WorkspaceListPage = ({
                     type="text"
                     value={groupNameInput}
                     onChange={(event) => setGroupNameInput(event.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                        e.preventDefault();
+                        e.currentTarget.select();
+                      }
+                    }}
                     required
                     minLength={1}
                     autoFocus={true}

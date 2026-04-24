@@ -208,6 +208,8 @@ export const englishLanguagePack: LanguagePack = {
     'terminal.dialog.roleEditor.cancel': 'Cancel',
     'terminal.dialog.roleEditor.save': 'Save',
     'terminal.contextMenu.edit': 'Edit',
+    'noteToolbar.opacity': 'Opacity',
+    'noteToolbar.fontSize': 'Size',
     'terminal.contextMenu.simulate': 'Simulate Node Message',
     'terminal.simulate.title': 'Simulate Node Message',
     'terminal.simulate.noRun': 'No active run. Please start the terminal first.',

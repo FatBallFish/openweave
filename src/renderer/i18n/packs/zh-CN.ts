@@ -208,6 +208,8 @@ export const chineseLanguagePack: LanguagePack = {
     'terminal.dialog.roleEditor.cancel': '取消',
     'terminal.dialog.roleEditor.save': '保存',
     'terminal.contextMenu.edit': '编辑',
+    'noteToolbar.opacity': '不透明度',
+    'noteToolbar.fontSize': '字号',
     'terminal.contextMenu.simulate': '模拟节点通信',
     'terminal.simulate.title': '模拟节点通信',
     'terminal.simulate.noRun': '没有活跃的运行会话。请先启动终端。',

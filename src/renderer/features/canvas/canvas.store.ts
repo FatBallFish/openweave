@@ -470,6 +470,14 @@ export const canvasStore = {
     setState({ errorMessage: null, recentAction: 'Added note' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
+      const shell = getShellBridge();
+      if (shell?.notes) {
+        shell.notes.createFile({
+          workspaceId,
+          nodeId: newNode.id,
+          title: newNode.title
+        }).catch(() => { /* fire-and-forget */ });
+      }
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -634,7 +642,7 @@ export const canvasStore = {
   },
   updateNoteNode: async (
     nodeId: string,
-    patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'>>
+    patch: Partial<Pick<NoteNodeInput, 'x' | 'y' | 'contentMd'> & { viewMode?: string; title?: string; backgroundColor?: string; opacity?: number; fontSize?: number }>
   ): Promise<void> => {
     if (!state.workspaceId) {
       return;
@@ -653,9 +661,14 @@ export const canvasStore = {
           x: patch.x ?? node.bounds.x,
           y: patch.y ?? node.bounds.y
         },
+        title: patch.title !== undefined ? patch.title : node.title,
         state: {
           ...node.state,
-          ...(patch.contentMd !== undefined ? { content: patch.contentMd } : {})
+          ...(patch.contentMd !== undefined ? { content: patch.contentMd } : {}),
+          ...(patch.viewMode !== undefined ? { viewMode: patch.viewMode } : {}),
+          ...(patch.backgroundColor !== undefined ? { backgroundColor: patch.backgroundColor } : {}),
+          ...(patch.opacity !== undefined ? { opacity: patch.opacity } : {}),
+          ...(patch.fontSize !== undefined ? { fontSize: patch.fontSize } : {})
         },
         updatedAtMs: Date.now()
       };
@@ -670,6 +683,56 @@ export const canvasStore = {
         return;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to update note node';
+      setState({ errorMessage });
+    }
+  },
+  renameNoteNode: async (nodeId: string, newTitle: string): Promise<void> => {
+    if (!state.workspaceId) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const node = state.graphSnapshot.nodes.find((n) => n.id === nodeId);
+    if (!node || node.componentType !== 'builtin.note') {
+      return;
+    }
+
+    const oldTitle = node.title;
+    if (oldTitle === newTitle) {
+      return;
+    }
+
+    // Validate uniqueness via IPC
+    const shell = getShellBridge();
+    if (shell?.notes) {
+      try {
+        await shell.notes.renameFile({
+          workspaceId,
+          nodeId,
+          oldTitle,
+          newTitle
+        });
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (n) => ({
+      ...n,
+      title: newTitle,
+      updatedAtMs: Date.now()
+    }));
+
+    historyStore.push({ kind: 'renameNode', nodeId, oldTitle, newTitle });
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ errorMessage: null, recentAction: `Renamed note to "${newTitle}"` });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to rename note node';
       setState({ errorMessage });
     }
   },
@@ -928,6 +991,19 @@ export const canvasStore = {
     setState({ errorMessage: null, recentAction: `Deleted ${nodesToDelete.length} node(s)` });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot, null, nodeIds);
+      // Clean up note files for deleted note nodes
+      const shell = getShellBridge();
+      if (shell?.notes) {
+        for (const noteNode of nodesToDelete) {
+          if (noteNode.componentType === 'builtin.note') {
+            shell.notes.deleteFile({
+              workspaceId,
+              nodeId: noteNode.id,
+              title: noteNode.title
+            }).catch(() => { /* fire-and-forget */ });
+          }
+        }
+      }
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;
@@ -989,6 +1065,14 @@ export const canvasStore = {
         }));
         break;
       }
+      case 'renameNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          title: entry.oldTitle,
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
     }
 
     applyGraphSnapshot(nextGraphSnapshot);
@@ -1046,6 +1130,14 @@ export const canvasStore = {
         nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
           ...node,
           bounds: { ...entry.to },
+          updatedAtMs: Date.now()
+        }));
+        break;
+      }
+      case 'renameNode': {
+        nextGraphSnapshot = updateGraphNode(nextGraphSnapshot, entry.nodeId, (node) => ({
+          ...node,
+          title: entry.newTitle,
           updatedAtMs: Date.now()
         }));
         break;

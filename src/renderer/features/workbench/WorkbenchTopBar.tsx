@@ -54,7 +54,7 @@ export const WorkbenchTopBar = ({
         <span className="ow-workbench-topbar__cluster-label">{t('topbar.clusterCreate')}</span>
         <IconButton
           disabled={disabled}
-          icon={icon('M4 6h16M4 12h8M4 18h16M17 10l3 2-3 2')}
+          icon={icon('M4 5h16v14H4z M7 10l3 3-3 3 M12 16h3')}
           label={t('topbar.addTerminal')}
           onClick={() => onTogglePlacement?.('terminal')}
           primary={true}
@@ -63,7 +63,7 @@ export const WorkbenchTopBar = ({
         />
         <IconButton
           disabled={disabled}
-          icon={icon('M6 5h12v14H6zM9 9h6M9 13h6')}
+          icon={icon('M7 3h10l4 4v14H7z M9 10h8M9 14h8M9 18h5')}
           label={t('topbar.addNote')}
           onClick={() => onTogglePlacement?.('note')}
           primary={true}
@@ -72,7 +72,7 @@ export const WorkbenchTopBar = ({
         />
         <IconButton
           disabled={disabled}
-          icon={icon('M4 12h16M12 4v16')}
+          icon={icon('M12 2a10 10 0 100 20 10 10 0 000-20z M2 12h20 M12 2a5 8 0 010 20')}
           label={t('topbar.addPortal')}
           onClick={() => onTogglePlacement?.('portal')}
           primary={true}
@@ -81,7 +81,7 @@ export const WorkbenchTopBar = ({
         />
         <IconButton
           disabled={disabled}
-          icon={icon('M4 7h16M4 12h16M4 17h10')}
+          icon={icon('M2 6h8l2 2h10v10H2z')}
           label={t('topbar.addFileTree')}
           onClick={() => onTogglePlacement?.('file-tree')}
           primary={true}
@@ -90,7 +90,7 @@ export const WorkbenchTopBar = ({
         />
         <IconButton
           disabled={disabled}
-          icon={icon('M7 6h10M7 12h10M7 18h6')}
+          icon={icon('M5 5h14M5 10h14M5 15h10M5 20h12')}
           label={t('topbar.addText')}
           onClick={() => onTogglePlacement?.('text')}
           primary={true}

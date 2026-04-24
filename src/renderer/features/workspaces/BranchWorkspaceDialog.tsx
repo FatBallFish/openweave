@@ -56,7 +56,18 @@ export const BranchWorkspaceDialog = ({
       <p data-testid="branch-workspace-source" style={{ marginTop: 0 }}>
         Source workspace: {sourceWorkspace.name}
       </p>
-      <form onSubmit={(event) => void handleSubmit(event)}>
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+            const target = e.target as HTMLElement;
+            if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+              e.preventDefault();
+              target.select();
+            }
+          }
+        }}
+      >
         <label style={{ display: 'block', marginBottom: '12px' }}>
           Branch name
           <input

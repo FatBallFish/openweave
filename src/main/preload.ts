@@ -13,6 +13,11 @@ import type {
   FileTreeLoadInput,
   GraphLoadV2Input,
   GraphSaveV2Input,
+  NoteFileCreateInput,
+  NoteFileDeleteInput,
+  NoteFileReadInput,
+  NoteFileRenameInput,
+  NoteFileWriteInput,
   PortalCaptureInput,
   PortalClickInput,
   PortalInputInput,
@@ -118,6 +123,18 @@ const shellBridge: OpenWeaveShellBridge = {
     updateRole: (input: { id: string; name?: string; description?: string }) =>
       ipcRenderer.invoke(IPC_CHANNELS.roleUpdate, input),
     deleteRole: (input: { id: string }) => ipcRenderer.invoke(IPC_CHANNELS.roleDelete, input)
+  },
+  notes: {
+    createFile: (input: NoteFileCreateInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.noteFileCreate, input),
+    readFile: (input: NoteFileReadInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.noteFileRead, input),
+    writeFile: (input: NoteFileWriteInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.noteFileWrite, input),
+    deleteFile: (input: NoteFileDeleteInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.noteFileDelete, input),
+    renameFile: (input: NoteFileRenameInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.noteFileRename, input)
   },
   files: {
     loadFileTree: (input: FileTreeLoadInput) => ipcRenderer.invoke(IPC_CHANNELS.fileTreeLoad, input)

@@ -129,6 +129,16 @@ const classifyWheelEvent = (event: WheelEvent): 'pan' | 'zoom' => {
   return 'zoom';
 };
 
+const isInsideNoWheelSurface = (event: Event): boolean => {
+  if (typeof event.composedPath === 'function') {
+    return event.composedPath().some(
+      (target) => target instanceof Element && target.classList.contains('nowheel')
+    );
+  }
+
+  return event.target instanceof Element && event.target.closest('.nowheel') !== null;
+};
+
 const WheelHandler = (): null => {
   const { getViewport, setViewport } = useReactFlow();
 
@@ -140,6 +150,9 @@ const WheelHandler = (): null => {
 
     const handleWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
+      if (isInsideNoWheelSurface(wheelEvent)) {
+        return;
+      }
       wheelEvent.preventDefault();
 
       const { x, y, zoom } = getViewport();

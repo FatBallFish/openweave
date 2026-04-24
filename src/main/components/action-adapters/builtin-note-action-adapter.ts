@@ -5,6 +5,7 @@ import {
   hasCapability,
   isSupportedReadMode
 } from './shared';
+import { writeNoteFile } from '../notes/note-file-service';
 
 export const createBuiltinNoteActionAdapter = (): ComponentActionAdapter => {
   return {
@@ -50,6 +51,14 @@ export const createBuiltinNoteActionAdapter = (): ComponentActionAdapter => {
       };
 
       context.saveGraph(nextGraph);
+
+      if (context.workspaceRootDir) {
+        try {
+          writeNoteFile(context.workspaceRootDir, context.node.title, context.node.id, content);
+        } catch {
+          // File write failure is non-blocking
+        }
+      }
 
       return {
         nodeId: context.node.id,

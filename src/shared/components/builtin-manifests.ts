@@ -39,13 +39,17 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
         mode: 'markdown'
       },
       state: {
-        content: ''
+        content: '',
+        viewMode: 'edit',
+        backgroundColor: '#fef3c7',
+        opacity: 0.7,
+        fontSize: 10
       }
     },
     capabilities: ['read', 'write'],
     actions: [],
     permissions: {
-      fs: 'none',
+      fs: 'write',
       network: 'none',
       process: 'none'
     }

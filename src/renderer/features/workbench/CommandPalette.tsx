@@ -105,6 +105,12 @@ export const CommandPalette = ({
                   className="ow-command-palette__search-input"
                   data-testid="command-palette-search"
                   onChange={(event) => setQuery(event.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                      e.preventDefault();
+                      e.currentTarget.select();
+                    }
+                  }}
                   placeholder={
                     mode === 'quick-add'
                       ? t('commandPalette.filterQuickAdd')

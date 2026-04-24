@@ -34,7 +34,8 @@ describe('builtin hosts', () => {
         mode: 'markdown'
       },
       state: {
-        content: '# hello'
+        content: '# hello',
+        viewMode: 'edit'
       },
       capabilities: ['read', 'write'],
       createdAtMs: 1,
@@ -63,15 +64,47 @@ describe('builtin hosts', () => {
       updatedAtMs: 4
     });
 
-    expect(noteHtml).toContain('builtin-node-frame-node-note-1');
-    expect(noteHtml).toContain('note-host-editor-node-note-1');
-    expect(noteHtml).toContain('Editable markdown');
+    expect(noteHtml).toContain('note-sticky-node-note-1');
+    expect(noteHtml).toContain('note-sticky-editor-node-note-1');
+    expect(noteHtml).toContain('note-sticky-title-node-note-1');
+    expect(noteHtml).toContain('ow-note-sticky__body nowheel');
+    expect(noteHtml).toContain('ow-note-sticky__editor nowheel');
     expect(noteHtml).toContain('# hello');
+    expect(noteHtml).toContain('ow-note-sticky');
     expect(terminalHtml).toContain('builtin-node-frame-node-terminal-1');
     expect(terminalHtml).toContain('ow-terminal-host');
     expect(terminalHtml).toContain('ow-terminal-host__header');
     expect(terminalHtml).toContain('ow-terminal-host__traffic-lights');
     expect(terminalHtml).toContain('terminal-node-xterm-node-terminal-1');
+  });
+
+  it('marks note preview as a canvas wheel opt-out surface', () => {
+    const previewHtml = renderHost({
+      id: 'node-note-preview-1',
+      componentType: 'builtin.note',
+      componentVersion: '1.0.0',
+      title: 'Preview note',
+      bounds: {
+        x: 24,
+        y: 32,
+        width: 320,
+        height: 240
+      },
+      config: {
+        mode: 'markdown'
+      },
+      state: {
+        content: '# preview',
+        viewMode: 'preview'
+      },
+      capabilities: ['read', 'write'],
+      createdAtMs: 13,
+      updatedAtMs: 14
+    });
+
+    expect(previewHtml).toContain('note-sticky-preview-node-note-preview-1');
+    expect(previewHtml).toContain('ow-note-sticky__body nowheel');
+    expect(previewHtml).toContain('ow-note-sticky__preview nowheel');
   });
 
   it('renders file-tree and portal hosts with their existing product controls', () => {
