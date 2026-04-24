@@ -52,7 +52,7 @@ export const lightXtermTheme: ITheme = {
 
 export const getXtermTheme = (terminalTheme: 'auto' | 'light' | 'dark'): ITheme => {
   const appTheme = terminalTheme === 'auto'
-    ? (document.documentElement.classList.contains('dark') ? 'dark' : 'light')
+    ? (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light')
     : terminalTheme;
   return appTheme === 'dark' ? darkXtermTheme : lightXtermTheme;
 };

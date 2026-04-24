@@ -158,8 +158,9 @@ export const TerminalNode = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const xtermTheme = getXtermTheme(config.theme);
     const term = new Terminal({
-      theme: getXtermTheme(config.theme),
+      theme: xtermTheme,
       fontFamily: config.fontFamily || 'monospace',
       fontSize: config.fontSize || 14,
       cursorBlink: true,
@@ -172,6 +173,8 @@ export const TerminalNode = ({
     term.open(containerRef.current);
     fitAddon.fit();
     term.focus();
+    // Sync container background to xterm theme
+    containerRef.current.style.background = xtermTheme.background ?? '';
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -203,10 +206,39 @@ export const TerminalNode = ({
   useEffect(() => {
     const term = xtermRef.current;
     if (!term) return;
-    term.options.theme = getXtermTheme(config.theme);
+    const xtermTheme = getXtermTheme(config.theme);
+    term.options.theme = xtermTheme;
     term.options.fontFamily = config.fontFamily || 'monospace';
     term.options.fontSize = config.fontSize || 14;
+    // Sync container background to xterm theme so rounded corners match
+    const container = containerRef.current;
+    if (container) {
+      container.style.background = xtermTheme.background ?? '';
+    }
   }, [config.theme, config.fontFamily, config.fontSize]);
+
+  // Listen for app theme changes when terminal theme is "auto"
+  useEffect(() => {
+    if (config.theme !== 'auto') return;
+
+    const observer = new MutationObserver(() => {
+      const term = xtermRef.current;
+      if (!term) return;
+      const xtermTheme = getXtermTheme('auto');
+      term.options.theme = xtermTheme;
+      const container = containerRef.current;
+      if (container) {
+        container.style.background = xtermTheme.background ?? '';
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, [config.theme]);
 
   // Subscribe to real-time stream for active run
   useEffect(() => {

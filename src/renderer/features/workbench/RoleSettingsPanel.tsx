@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { RoleRecord } from '../../../shared/ipc/contracts';
 import { RoleEditorDialog } from '../canvas/RoleEditorDialog';
+import { useI18n } from '../../i18n/provider';
 
 export const RoleSettingsPanel = (): JSX.Element => {
+  const { t } = useI18n();
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleRecord | null>(null);
@@ -67,10 +69,15 @@ export const RoleSettingsPanel = (): JSX.Element => {
         </button>
         {roles.map((role) => (
           <div key={role.id} className="ow-role-settings-panel__card">
-            <div className="ow-role-settings-panel__card-icon" style={{ color: role.color }}>
-              {role.icon || '👤'}
+            <div className="ow-role-settings-panel__card-header">
+              <div className="ow-role-settings-panel__card-icon" style={{ color: role.color }}>
+                {role.icon || '👤'}
+              </div>
+              <div className="ow-role-settings-panel__card-name">{role.name}</div>
             </div>
-            <div className="ow-role-settings-panel__card-name">{role.name}</div>
+            {role.description && (
+              <div className="ow-role-settings-panel__card-desc">{role.description}</div>
+            )}
             <div className="ow-role-settings-panel__card-actions">
               <button onClick={() => handleEdit(role)} type="button">Edit</button>
               <button onClick={() => handleDelete(role.id)} type="button">Delete</button>

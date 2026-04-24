@@ -175,6 +175,7 @@ export const chineseLanguagePack: LanguagePack = {
     'commandPalette.noMatchHint': '试试输入节点类型、分组名称或快捷键。',
     'commandPalette.items': '项',
     'terminal.dialog.createTitle': '新建终端',
+    'terminal.dialog.editTitle': '编辑终端',
     'terminal.dialog.cancel': '取消',
     'terminal.dialog.save': '保存',
     'terminal.dialog.quickStart': '快速开始',
@@ -205,6 +206,15 @@ export const chineseLanguagePack: LanguagePack = {
     'terminal.dialog.roleEditor.iconLabel': '图标',
     'terminal.dialog.roleEditor.colorLabel': '颜色',
     'terminal.dialog.roleEditor.cancel': '取消',
-    'terminal.dialog.roleEditor.save': '保存'
+    'terminal.dialog.roleEditor.save': '保存',
+    'terminal.contextMenu.edit': '编辑',
+    'terminal.contextMenu.simulate': '模拟节点通信',
+    'terminal.simulate.title': '模拟节点通信',
+    'terminal.simulate.noRun': '没有活跃的运行会话。请先启动终端。',
+    'terminal.simulate.activeRun': '活跃运行',
+    'terminal.simulate.messageLabel': '消息',
+    'terminal.simulate.messagePlaceholder': '输入要发送给终端的消息...',
+    'terminal.simulate.close': '关闭',
+    'terminal.simulate.send': '发送'
   }
 };

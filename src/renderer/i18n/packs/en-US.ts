@@ -175,6 +175,7 @@ export const englishLanguagePack: LanguagePack = {
     'commandPalette.noMatchHint': 'Try a node type, section name, or keyboard hint.',
     'commandPalette.items': 'items',
     'terminal.dialog.createTitle': 'New Terminal',
+    'terminal.dialog.editTitle': 'Edit Terminal',
     'terminal.dialog.cancel': 'Cancel',
     'terminal.dialog.save': 'Save',
     'terminal.dialog.quickStart': 'Quick Start',
@@ -205,6 +206,15 @@ export const englishLanguagePack: LanguagePack = {
     'terminal.dialog.roleEditor.iconLabel': 'Icon',
     'terminal.dialog.roleEditor.colorLabel': 'Color',
     'terminal.dialog.roleEditor.cancel': 'Cancel',
-    'terminal.dialog.roleEditor.save': 'Save'
+    'terminal.dialog.roleEditor.save': 'Save',
+    'terminal.contextMenu.edit': 'Edit',
+    'terminal.contextMenu.simulate': 'Simulate Node Message',
+    'terminal.simulate.title': 'Simulate Node Message',
+    'terminal.simulate.noRun': 'No active run. Please start the terminal first.',
+    'terminal.simulate.activeRun': 'Active run',
+    'terminal.simulate.messageLabel': 'Message',
+    'terminal.simulate.messagePlaceholder': 'Enter message to send to terminal...',
+    'terminal.simulate.close': 'Close',
+    'terminal.simulate.send': 'Send'
   }
 };

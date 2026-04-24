@@ -4155,7 +4155,8 @@ select:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.ow-workspace-dialog__field input[type='text'] {
+.ow-workspace-dialog__field input[type='text'],
+.ow-workspace-dialog__field input[type='number'] {
   width: 100%;
   border: 1px solid var(--ow-color-border);
   border-radius: 10px;
@@ -4165,7 +4166,8 @@ select:focus-visible {
   background: rgba(var(--ow-surface-rgb), 0.9);
 }
 
-.ow-workspace-dialog__field input[type='text']:focus {
+.ow-workspace-dialog__field input[type='text']:focus,
+.ow-workspace-dialog__field input[type='number']:focus {
   outline: none;
   border-color: rgba(var(--ow-accent-rgb), 0.45);
 }
@@ -4810,12 +4812,22 @@ select:focus-visible {
 .ow-terminal-node__xterm,
 .ow-terminal-session-pane__xterm {
   border-radius: 4px;
-  background: var(--terminal-bg, #1e1e1e);
+  background: var(--terminal-bg, transparent);
 }
 
 .ow-terminal-node__xterm .xterm-viewport,
 .ow-terminal-session-pane__xterm .xterm-viewport {
   border-radius: 4px;
+}
+
+/* Terminal node bottom shadow for depth on canvas */
+.ow-terminal-node {
+  box-shadow: 0 12px 32px rgba(var(--ow-shadow-rgb), 0.18), 0 2px 8px rgba(var(--ow-shadow-rgb), 0.1);
+}
+
+/* Role Editor Dialog — must stack above all other dialogs */
+.ow-role-editor-dialog {
+  z-index: 300;
 }
 
 /* Create Terminal Dialog */
@@ -4892,53 +4904,204 @@ select:focus-visible {
   border-top: 1px solid var(--border-color, #ddd);
 }
 
+/* Role search input */
+.ow-role-search {
+  width: 100%;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ow-color-text-strong);
+  background: rgba(var(--ow-surface-rgb), 0.9);
+  margin-bottom: 10px;
+}
+
+.ow-role-search:focus {
+  outline: none;
+  border-color: rgba(var(--ow-accent-rgb), 0.45);
+}
+
 /* Role grid */
 .ow-role-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  margin-bottom: 12px;
 }
 
 .ow-role-grid__item {
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 6px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
   padding: 12px 4px;
   text-align: center;
   cursor: pointer;
+  background: rgba(var(--ow-surface-rgb), 0.76);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ow-role-grid__item:hover {
+  border-color: var(--ow-color-border-strong);
+  background: rgba(var(--ow-surface-rgb), 0.92);
 }
 
 .ow-role-grid__item.is-active {
-  border-color: var(--primary, #0078d4);
-  background: var(--primary-light, #e6f2ff);
+  border-color: rgba(var(--ow-accent-rgb), 0.45);
+  background: rgba(var(--ow-accent-rgb), 0.12);
 }
 
 .ow-role-grid__new {
-  border: 2px dashed var(--border-color, #999);
+  border: 2px dashed var(--ow-color-border);
   background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ow-color-text-soft);
+}
+
+.ow-role-grid__new:hover {
+  border-color: var(--ow-color-border-strong);
+  color: var(--ow-color-text-default);
+}
+
+/* Role icon grid (in editor) */
+.ow-role-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ow-role-icon-grid__option {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.76);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 20px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ow-role-icon-grid__option:hover {
+  border-color: var(--ow-color-border-strong);
+  background: rgba(var(--ow-surface-rgb), 0.92);
+}
+
+.ow-role-icon-grid__option.is-selected {
+  border-color: rgba(var(--ow-accent-rgb), 0.45);
+  background: rgba(var(--ow-accent-rgb), 0.12);
+}
+
+/* Role editor textarea */
+.ow-workspace-dialog__field textarea {
+  width: 100%;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
+  color: var(--ow-color-text-strong);
+  background: rgba(var(--ow-surface-rgb), 0.9);
+  font-family: inherit;
+  resize: vertical;
+}
+
+.ow-workspace-dialog__field textarea:focus {
+  outline: none;
+  border-color: rgba(var(--ow-accent-rgb), 0.45);
 }
 
 /* Role settings panel */
 .ow-role-settings-panel__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
 .ow-role-settings-panel__card {
-  border: 1px solid var(--border-color, #ddd);
-  border-radius: 8px;
-  padding: 12px;
-  text-align: center;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(var(--ow-surface-rgb), 0.76);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ow-role-settings-panel__card:hover {
+  border-color: var(--ow-color-border-strong);
+  background: rgba(var(--ow-surface-rgb), 0.92);
+}
+
+.ow-role-settings-panel__card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .ow-role-settings-panel__card-icon {
-  font-size: 28px;
-  margin-bottom: 4px;
+  font-size: 26px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(var(--ow-surface-rgb), 0.9);
+  border: 1px solid var(--ow-color-border);
+  flex-shrink: 0;
+}
+
+.ow-role-settings-panel__card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ow-color-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ow-role-settings-panel__card-desc {
+  font-size: 11px;
+  color: var(--ow-color-text-soft);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 30px;
+}
+
+.ow-role-settings-panel__card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.ow-role-settings-panel__card-actions button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 8px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-default);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ow-role-settings-panel__card-actions button:hover {
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  border-color: rgba(var(--ow-accent-rgb), 0.35);
 }
 
 .ow-role-settings-panel__new {
-  border: 2px dashed var(--border-color, #999);
+  border: 2px dashed var(--ow-color-border);
+  border-radius: 14px;
   background: none;
   cursor: pointer;
   display: flex;
@@ -4946,6 +5109,19 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  gap: 4px;
+  color: var(--ow-color-text-soft);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.ow-role-settings-panel__new:hover {
+  border-color: var(--ow-color-border-strong);
+  color: var(--ow-color-text-default);
+}
+
+.ow-role-settings-panel__new span:first-child {
+  font-size: 20px;
+  font-weight: 300;
 }
 
 /* Terminal dialog tabs & quick start */
@@ -5031,6 +5207,75 @@ select:focus-visible {
   opacity: 0.75;
 }
 
+.ow-role-edit-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 7px;
+  background: rgba(var(--ow-surface-rgb), 0.84);
+  color: var(--ow-color-text-soft);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ow-role-edit-icon-btn:hover {
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  border-color: rgba(var(--ow-accent-rgb), 0.35);
+  color: var(--ow-color-accent);
+}
+
+/* Terminal context menu */
+.ow-terminal-context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background: var(--ow-color-bg-panel-strong);
+  box-shadow: var(--ow-shadow-floating);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ow-terminal-context-menu button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ow-color-text-default);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ow-terminal-context-menu button:hover {
+  background: rgba(var(--ow-accent-rgb), 0.1);
+  color: var(--ow-color-accent-strong);
+}
+
+.ow-terminal-context-menu button svg {
+  flex-shrink: 0;
+}
+
+/* Simulate dialog */
+.ow-simulate-dialog {
+  z-index: 120;
+}
+
+.ow-simulate-dialog__status {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--ow-color-text-soft);
+}
+
 /* Refactored terminal node — full xterm, minimal chrome */
 .ow-terminal-node {
   display: flex;
@@ -5068,7 +5313,7 @@ select:focus-visible {
   min-width: 0;
   overflow: hidden;
   border-radius: 12px;
-  background: var(--terminal-bg, #1e1e1e);
+  background: var(--terminal-bg, transparent);
   box-shadow: var(--ow-shadow-panel);
 }
 
@@ -5117,13 +5362,38 @@ select:focus-visible {
   border: 1px solid #1aab29;
 }
 
+.ow-terminal-host__title-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ow-terminal-host__title-icon {
+  flex-shrink: 0;
+}
+
 .ow-terminal-host__title {
-  text-align: center;
   font-size: 13px;
   font-weight: 500;
   color: #333;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ow-terminal-host__role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   white-space: nowrap;
 }
 
@@ -5153,4 +5423,8 @@ select:focus-visible {
 
 [data-theme='dark'] .ow-terminal-host__title {
   color: #d4d4d4;
+}
+
+[data-theme='dark'] .ow-terminal-host__role-tag {
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
 }

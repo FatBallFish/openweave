@@ -209,10 +209,45 @@ void app.whenReady().then(() => {
     installRoot: path.join(app.getPath('userData'), 'components'),
     appVersion: app.getVersion()
   });
+  const resolveOpenWeaveCliPath = (): string => {
+    const pathSep = process.platform === 'win32' ? ';' : ':';
+    const extraPaths: string[] = [];
+
+    if (app.isPackaged) {
+      const exeDir = path.dirname(app.getPath('exe'));
+      const candidates = [
+        path.join(exeDir, 'openweave'),
+        path.join(exeDir, 'openweave-cli'),
+        path.join(exeDir, '..', 'bin', 'openweave'),
+        path.join(exeDir, '..', 'Resources', 'bin', 'openweave'),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          extraPaths.push(path.dirname(candidate));
+          break;
+        }
+      }
+    } else {
+      const projectRoot = path.resolve(__dirname, '..', '..');
+      extraPaths.push(
+        path.join(projectRoot, 'node_modules', '.bin'),
+        path.join(projectRoot, 'dist', 'cli')
+      );
+    }
+
+    return `${extraPaths.join(pathSep)}${pathSep}${process.env.PATH ?? ''}`;
+  };
+
+  const enrichedEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: resolveOpenWeaveCliPath(),
+  };
+
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
     workspaceDbDir,
-    enableCrashRecoveryOnOpen
+    enableCrashRecoveryOnOpen,
+    launchEnv: enrichedEnv,
   });
   registerFilesIpcHandlers({
     dbFilePath: registryDbFilePath

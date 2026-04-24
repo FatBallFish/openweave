@@ -619,6 +619,7 @@ export interface RegisterRunsIpcHandlersOptions {
   enableCrashRecoveryOnOpen?: boolean;
   ipcMain?: RunsIpcMain;
   runtimeBridge?: RuntimeBridge;
+  launchEnv?: NodeJS.ProcessEnv;
 }
 
 const toWorkspaceDbFileName = (workspaceId: string): string => {
@@ -717,7 +718,7 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
         runtimeBridge: options.runtimeBridge ?? createRuntimeBridge(),
         now: () => Date.now(),
         randomId: () => crypto.randomUUID(),
-        launchEnv: process.env,
+        launchEnv: options.launchEnv ?? process.env,
         onRunUpdated: (run: RunRecord) => {
           withWorkspaceRepository(workspaceDbDir, run.workspaceId, (repository) => {
             repository.saveRun(run);

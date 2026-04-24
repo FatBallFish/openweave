@@ -130,8 +130,8 @@ export const roleSchema = z.object({
   updatedAtMs: z.number().int().nonnegative()
 });
 
-export const roleCreateSchema = roleSchema.omit({ id: true });
-export const roleUpdateSchema = roleSchema;
+export const roleCreateSchema = roleSchema.omit({ id: true, createdAtMs: true, updatedAtMs: true });
+export const roleUpdateSchema = roleSchema.omit({ createdAtMs: true, updatedAtMs: true });
 export const roleDeleteSchema = z.object({ id: z.string().trim().min(1) });
 
 export const runResizeSchema = z.object({

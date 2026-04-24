@@ -673,13 +673,20 @@ export const canvasStore = {
   },
   updateTerminalNode: async (
     nodeId: string,
-    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>
+    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>> & Record<string, unknown>
   ): Promise<void> => {
     if (!state.workspaceId) {
       return;
     }
 
     const workspaceId = state.workspaceId;
+    const configPatch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (!['x', 'y', 'command', 'runtime'].includes(key) && value !== undefined) {
+        configPatch[key] = value;
+      }
+    }
+
     const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (node) => {
       if (node.componentType !== 'builtin.terminal') {
         return node;
@@ -692,10 +699,12 @@ export const canvasStore = {
           x: patch.x ?? node.bounds.x,
           y: patch.y ?? node.bounds.y
         },
+        title: configPatch.title !== undefined ? String(configPatch.title) : node.title,
         config: {
           ...node.config,
           ...(patch.command !== undefined ? { command: patch.command } : {}),
-          ...(patch.runtime !== undefined ? { runtime: patch.runtime } : {})
+          ...(patch.runtime !== undefined ? { runtime: patch.runtime } : {}),
+          ...configPatch
         },
         updatedAtMs: Date.now()
       };
