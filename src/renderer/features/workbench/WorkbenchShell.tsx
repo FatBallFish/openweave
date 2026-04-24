@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { NoteToolbar } from '../canvas/NoteToolbar';
 import { WorkbenchContextPanel } from './WorkbenchContextPanel';
 import { WorkbenchInspector } from './WorkbenchInspector';
 import { WorkbenchStatusIsland } from './WorkbenchStatusIsland';
@@ -142,6 +143,7 @@ export const WorkbenchShell = ({
           activePlacementType={activePlacementType}
           onTogglePlacement={onTogglePlacement}
         />
+        <NoteToolbar />
         <WorkbenchContextPanel
           workspaceName={workspaceName}
           collapsed={contextPanelCollapsed}

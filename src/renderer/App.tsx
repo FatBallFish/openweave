@@ -485,6 +485,12 @@ function SimulateNodeMessageDialog({
                   rows={4}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                      e.preventDefault();
+                      e.currentTarget.select();
+                    }
+                  }}
                   placeholder={t('terminal.simulate.messagePlaceholder')}
                   autoFocus
                 />

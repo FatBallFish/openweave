@@ -3,6 +3,7 @@ import type { GraphSnapshotV2Input } from '../../shared/ipc/schemas';
 
 export interface NodeActionContext {
   workspaceId: string;
+  workspaceRootDir?: string;
   graph: GraphSnapshotV2Input;
   node: GraphSnapshotV2Input['nodes'][number];
   saveGraph: (nextGraph: GraphSnapshotV2Input) => void;

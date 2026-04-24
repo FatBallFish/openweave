@@ -6,7 +6,8 @@ type HistoryEntry =
   | { kind: 'addNode'; node: GraphNodeRecord }
   | { kind: 'removeNode'; node: GraphNodeRecord }
   | { kind: 'moveNode'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
-  | { kind: 'resizeNode'; nodeId: string; from: GraphNodeRecord['bounds']; to: GraphNodeRecord['bounds'] };
+  | { kind: 'resizeNode'; nodeId: string; from: GraphNodeRecord['bounds']; to: GraphNodeRecord['bounds'] }
+  | { kind: 'renameNode'; nodeId: string; oldTitle: string; newTitle: string };
 
 interface HistoryState {
   stack: HistoryEntry[];

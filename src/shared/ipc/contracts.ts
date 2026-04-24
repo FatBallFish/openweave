@@ -105,7 +105,12 @@ export const IPC_CHANNELS = {
   roleList: 'role:list',
   roleCreate: 'role:create',
   roleUpdate: 'role:update',
-  roleDelete: 'role:delete'
+  roleDelete: 'role:delete',
+  noteFileCreate: 'note:file-create',
+  noteFileRead: 'note:file-read',
+  noteFileWrite: 'note:file-write',
+  noteFileDelete: 'note:file-delete',
+  noteFileRename: 'note:file-rename'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -499,6 +504,20 @@ export interface AgentComponentBridgeApi {
   uninstallComponent: (input: ComponentUninstallInput) => Promise<ComponentUninstallResponse>;
 }
 
+export interface NoteFileCreateResponse { filePath: string; ok: true; }
+export interface NoteFileReadResponse { filePath: string; content: string; }
+export interface NoteFileWriteResponse { filePath: string; ok: true; }
+export interface NoteFileDeleteResponse { filePath: string; ok: true; }
+export interface NoteFileRenameResponse { oldPath: string; newPath: string; ok: true; }
+
+export interface NotesBridgeApi {
+  createFile: (input: import('./schemas').NoteFileCreateInput) => Promise<NoteFileCreateResponse>;
+  readFile: (input: import('./schemas').NoteFileReadInput) => Promise<NoteFileReadResponse>;
+  writeFile: (input: import('./schemas').NoteFileWriteInput) => Promise<NoteFileWriteResponse>;
+  deleteFile: (input: import('./schemas').NoteFileDeleteInput) => Promise<NoteFileDeleteResponse>;
+  renameFile: (input: import('./schemas').NoteFileRenameInput) => Promise<NoteFileRenameResponse>;
+}
+
 export interface AppBridgeApi {
   openSettings: () => Promise<void>;
 }
@@ -519,6 +538,7 @@ export interface OpenWeaveShellBridge {
   graph: GraphBridgeApiV2;
   runs: RunsBridgeApi;
   roles: RolesBridgeApi;
+  notes: NotesBridgeApi;
   files: FilesBridgeApi;
   portal: PortalBridgeApi;
   app: AppBridgeApi;

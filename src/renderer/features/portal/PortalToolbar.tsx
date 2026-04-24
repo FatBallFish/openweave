@@ -42,6 +42,12 @@ export const PortalToolbar = ({
           data-testid={`portal-url-input-${nodeId}`}
           disabled={disabled}
           onChange={(event) => onUrlChange(event.currentTarget.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+              e.preventDefault();
+              e.currentTarget.select();
+            }
+          }}
           type="text"
           value={url}
         />
@@ -79,6 +85,12 @@ export const PortalToolbar = ({
             data-testid={`portal-click-selector-${nodeId}`}
             disabled={disabled}
             onChange={(event) => onClickSelectorChange(event.currentTarget.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                e.currentTarget.select();
+              }
+            }}
             type="text"
             value={clickSelector}
           />
@@ -99,6 +111,12 @@ export const PortalToolbar = ({
             data-testid={`portal-input-selector-${nodeId}`}
             disabled={disabled}
             onChange={(event) => onInputSelectorChange(event.currentTarget.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                e.currentTarget.select();
+              }
+            }}
             type="text"
             value={inputSelector}
           />
@@ -110,6 +128,12 @@ export const PortalToolbar = ({
             data-testid={`portal-input-value-${nodeId}`}
             disabled={disabled}
             onChange={(event) => onInputValueChange(event.currentTarget.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                e.currentTarget.select();
+              }
+            }}
             type="text"
             value={inputValue}
           />

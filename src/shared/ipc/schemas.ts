@@ -134,6 +134,38 @@ export const roleCreateSchema = roleSchema.omit({ id: true, createdAtMs: true, u
 export const roleUpdateSchema = roleSchema.omit({ createdAtMs: true, updatedAtMs: true });
 export const roleDeleteSchema = z.object({ id: z.string().trim().min(1) });
 
+export const noteFileCreateSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  title: z.string().trim().min(1)
+});
+
+export const noteFileReadSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  title: z.string().trim().min(1)
+});
+
+export const noteFileWriteSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  content: z.string()
+});
+
+export const noteFileDeleteSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  title: z.string().trim().min(1)
+});
+
+export const noteFileRenameSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  oldTitle: z.string().trim().min(1),
+  newTitle: z.string().trim().min(1)
+});
+
 export const runResizeSchema = z.object({
   workspaceId: workspaceIdSchema,
   runId: z.string().trim().min(1),
@@ -499,5 +531,10 @@ export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 export type RoleUpdateInput = z.infer<typeof roleUpdateSchema>;
 export type RoleDeleteInput = z.infer<typeof roleDeleteSchema>;
 export type RunResizeInput = z.infer<typeof runResizeSchema>;
+export type NoteFileCreateInput = z.infer<typeof noteFileCreateSchema>;
+export type NoteFileReadInput = z.infer<typeof noteFileReadSchema>;
+export type NoteFileWriteInput = z.infer<typeof noteFileWriteSchema>;
+export type NoteFileDeleteInput = z.infer<typeof noteFileDeleteSchema>;
+export type NoteFileRenameInput = z.infer<typeof noteFileRenameSchema>;
 
 export { componentCapabilitySchema };

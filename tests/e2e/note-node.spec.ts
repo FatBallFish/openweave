@@ -90,10 +90,11 @@ test('persists note node content and graph position across restart', async () =>
     await expect(firstPage.getByTestId('workspace-canvas-page')).toBeVisible();
     await firstPage.getByTestId('workbench-topbar-action-add-note').click();
 
-    const noteEditor = firstPage.locator('[data-testid^="note-host-editor-"]').first();
+    const noteEditor = firstPage.locator('[data-testid^="note-sticky-editor-"]').first();
     await expect(noteEditor).toBeVisible();
     await noteEditor.fill('# Hello');
     await expect(noteEditor).toHaveValue('# Hello');
+    await noteEditor.blur();
 
     const graph = await loadGraphSnapshot(firstPage, workspaceId);
     const noteNode = graph.graphSnapshot.nodes.find((node) => node.componentType === 'builtin.note');
@@ -120,7 +121,7 @@ test('persists note node content and graph position across restart', async () =>
     await secondPage.getByRole('button', { name: `Open ${workspaceName}` }).click();
     await expect(secondPage.getByTestId('workspace-canvas-page')).toBeVisible();
 
-    const restoredContent = secondPage.locator('[data-testid^="note-host-editor-"]').first();
+    const restoredContent = secondPage.locator('[data-testid^="note-sticky-editor-"]').first();
     await expect(restoredContent).toHaveValue('# Hello');
 
     const graph = await loadGraphSnapshot(secondPage, workspaceId);

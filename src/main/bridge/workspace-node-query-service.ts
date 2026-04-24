@@ -225,9 +225,11 @@ export const createLocalWorkspaceNodeQueryService = (
     },
     readNode: (input): GraphNodeReadResponse => {
       const { repository, graph, node } = resolveNode(input.workspaceId, input.nodeId);
+      const workspace = getWorkspaceOrThrow(input.workspaceId);
       return componentActionDispatcher.read(
         {
           workspaceId: input.workspaceId,
+          workspaceRootDir: workspace.rootDir,
           graph,
           node,
           saveGraph: (nextGraph) => {
@@ -239,9 +241,11 @@ export const createLocalWorkspaceNodeQueryService = (
     },
     runNodeAction: (input): GraphNodeActionResponse => {
       const { repository, graph, node } = resolveNode(input.workspaceId, input.nodeId);
+      const workspace = getWorkspaceOrThrow(input.workspaceId);
       return componentActionDispatcher.action(
         {
           workspaceId: input.workspaceId,
+          workspaceRootDir: workspace.rootDir,
           graph,
           node,
           saveGraph: (nextGraph) => {

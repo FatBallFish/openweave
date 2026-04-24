@@ -144,6 +144,12 @@ export const SettingsDialog = ({ open, onClose }: SettingsDialogProps): JSX.Elem
                           settingsStore.setMaxUndoSteps(value);
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                          e.preventDefault();
+                          e.currentTarget.select();
+                        }
+                      }}
                       type="number"
                       value={maxUndoSteps}
                     />
