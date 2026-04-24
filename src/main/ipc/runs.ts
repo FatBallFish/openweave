@@ -248,6 +248,7 @@ class InMemoryRunsService {
     const parsed = runStartSchema.parse(input);
     this.assertWorkspaceExists(parsed.workspaceId);
     const workspaceRootDir = this.resolveWorkspaceRootDir?.(parsed.workspaceId);
+    const effectiveCwd = parsed.workingDir || workspaceRootDir;
 
     const run: RunRecord = {
       id: this.randomId(),
@@ -277,7 +278,7 @@ class InMemoryRunsService {
         runId: run.id,
         runtime: run.runtime,
         command: run.command,
-        cwd: workspaceRootDir,
+        cwd: effectiveCwd,
         env: this.launchEnv
       });
     } catch (error) {

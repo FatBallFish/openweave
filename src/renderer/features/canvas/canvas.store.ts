@@ -343,12 +343,14 @@ const applyGraphSnapshot = (
 const persistGraphSnapshot = async (
   workspaceId: string,
   graphSnapshot: GraphSnapshotV2Input,
-  selectedNodeId: string | null = state.selectedNodeId
+  selectedNodeId: string | null = state.selectedNodeId,
+  deletedNodeIds?: string[]
 ): Promise<void> => {
   const requestId = ++latestSaveRequestId;
   const result = await getBridge().saveGraphSnapshot({
     workspaceId,
-    graphSnapshot
+    graphSnapshot,
+    ...(deletedNodeIds ? { deletedNodeIds } : {})
   });
   if (requestId !== latestSaveRequestId || state.workspaceId !== workspaceId) {
     return;
@@ -925,7 +927,7 @@ export const canvasStore = {
     applyGraphSnapshot(nextGraphSnapshot);
     setState({ errorMessage: null, recentAction: `Deleted ${nodesToDelete.length} node(s)` });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, null, nodeIds);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;

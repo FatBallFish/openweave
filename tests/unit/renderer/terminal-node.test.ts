@@ -217,7 +217,8 @@ describe('TerminalNode', () => {
       workspaceId: 'ws-1',
       nodeId: 't1',
       runtime: 'claude',
-      command: ''
+      command: '',
+      workingDir: ''
     });
 
     await act(async () => {
@@ -640,7 +641,8 @@ describe('TerminalNode', () => {
       workspaceId: 'ws-1',
       nodeId: 't1',
       runtime: 'shell',
-      command: ''
+      command: '',
+      workingDir: ''
     });
 
     await act(async () => {

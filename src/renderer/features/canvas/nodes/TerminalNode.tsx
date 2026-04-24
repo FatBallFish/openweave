@@ -48,12 +48,14 @@ const getShellBridge = (): OpenWeaveShellBridge => {
 export const buildTerminalRunStartInput = (input: {
   workspaceId: string;
   node: Pick<TerminalNodeInput, 'id' | 'command'> & { runtime?: RunRuntimeInput };
+  workingDir?: string;
 }): import('../../../../shared/ipc/schemas').RunStartInput => {
   return {
     workspaceId: input.workspaceId,
     nodeId: input.node.id,
     runtime: input.node.runtime ?? 'shell',
-    command: input.node.command
+    command: input.node.command,
+    workingDir: input.workingDir
   };
 };
 
@@ -420,7 +422,8 @@ export const TerminalNode = ({
       .runs.startRun(
         buildTerminalRunStartInput({
           workspaceId,
-          node: { ...node, command: node.command, runtime: effectiveRuntime }
+          node: { ...node, command: node.command, runtime: effectiveRuntime },
+          workingDir: config.workingDir
         })
       )
       .then((response) => {

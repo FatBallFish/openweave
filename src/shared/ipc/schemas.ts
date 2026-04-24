@@ -301,7 +301,8 @@ export const graphLoadSchemaV2 = z.object({
 
 export const graphSaveSchemaV2 = z.object({
   workspaceId: workspaceIdSchema,
-  graphSnapshot: graphSnapshotSchemaV2
+  graphSnapshot: graphSnapshotSchemaV2,
+  deletedNodeIds: z.array(z.string()).optional()
 });
 
 export const workspaceInfoSchema = z.object({
@@ -360,7 +361,8 @@ export const runStartSchema = z.object({
   workspaceId: workspaceIdSchema,
   nodeId: z.string().trim().min(1),
   runtime: runRuntimeSchema,
-  command: z.string()
+  command: z.string(),
+  workingDir: z.string().optional()
 });
 
 export const runGetSchema = z.object({

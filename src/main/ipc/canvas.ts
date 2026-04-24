@@ -153,9 +153,11 @@ export const createCanvasIpcHandlers = (
 
       // Clean up role files for deleted terminal nodes
       const currentGraph = deps.getWorkspaceRepository(parsed.workspaceId).loadGraphSnapshot();
+      const deletedNodeIds = new Set(parsed.deletedNodeIds ?? []);
       const newNodeIds = new Set(parsed.graphSnapshot.nodes.map((n) => n.id));
       for (const oldNode of currentGraph.nodes) {
-        if (newNodeIds.has(oldNode.id)) continue;
+        const isDeleted = deletedNodeIds.has(oldNode.id) || !newNodeIds.has(oldNode.id);
+        if (!isDeleted) continue;
         if (oldNode.componentType === 'builtin.terminal' && oldNode.config.roleId) {
           const projectDir = String(oldNode.config.projectDir || workspaceRootDir || '');
           if (projectDir) {
