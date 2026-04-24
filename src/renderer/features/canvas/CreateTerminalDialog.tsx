@@ -29,11 +29,46 @@ const PRESET_COLORS: Record<string, string> = {
   opencode: WORKSPACE_COLOR_OPTIONS[3] ?? '#22C55E'
 };
 
-const QUICK_START_PRESETS: Record<string, { command: string; runtime: string; name: string }> = {
-  'claude-code': { command: 'claude', runtime: 'claude', name: 'Claude Code' },
-  codex: { command: 'codex', runtime: 'codex', name: 'Codex' },
-  opencode: { command: 'opencode', runtime: 'opencode', name: 'OpenCode' },
-  shell: { command: '', runtime: 'shell', name: 'Shell' }
+interface QuickStartPreset {
+  command: string;
+  runtime: string;
+  name: string;
+  icon: JSX.Element;
+}
+
+const QuickStartClaudeIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l2.4 4.9L20 9.5l-4 3.9.9 5.5L12 15.3l-4.9 2.4.9-5.5L4 9.5l5.6-.9Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const QuickStartCodexIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6" />
+    <polyline points="8 6 2 12 8 18" />
+  </svg>
+);
+
+const QuickStartOpenCodeIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+    <polyline points="21 3 21 9 15 9" />
+  </svg>
+);
+
+const QuickStartShellIcon = (): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </svg>
+);
+
+const QUICK_START_PRESETS: Record<string, QuickStartPreset> = {
+  'claude-code': { command: 'claude', runtime: 'claude', name: 'Claude Code', icon: <QuickStartClaudeIcon /> },
+  codex: { command: 'codex', runtime: 'codex', name: 'Codex', icon: <QuickStartCodexIcon /> },
+  opencode: { command: 'opencode', runtime: 'opencode', name: 'OpenCode', icon: <QuickStartOpenCodeIcon /> },
+  shell: { command: '', runtime: 'shell', name: 'Shell', icon: <QuickStartShellIcon /> }
 };
 
 export const CreateTerminalDialog = ({ open, mode = 'create', initialConfig, workspaceRootDir, onClose, onSave }: CreateTerminalDialogProps): JSX.Element | null => {
@@ -188,7 +223,8 @@ export const CreateTerminalDialog = ({ open, mode = 'create', initialConfig, wor
                       onClick={() => handleQuickStart(key)}
                       data-testid={`quick-start-${key}`}
                     >
-                      {preset.name}
+                      {preset.icon}
+                      <span>{preset.name}</span>
                     </button>
                   ))}
                 </div>

@@ -22,7 +22,7 @@ import {
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository, type WorkspaceRepository } from '../db/workspace';
 import { sanitizePathWithinRoot } from '../workspace/path-boundary';
-import { injectRole } from '../terminal/role-injector';
+import { injectRole, cleanupRoleInjection } from '../terminal/role-injector';
 
 export interface CanvasIpcHandlers {
   load: (_event: IpcMainInvokeEvent, input: CanvasLoadInput) => Promise<CanvasLoadResponse>;
@@ -71,6 +71,10 @@ const sanitizeGraphSnapshotForWorkspace = (
       if (node.componentType === 'builtin.terminal' && node.config.roleId && registry) {
         const role = registry.getRole(String(node.config.roleId));
         if (role) {
+          // Already processed: skip re-injection to avoid nested role dirs
+          if (node.config.projectDir) {
+            return node;
+          }
           const workingDir = String(node.config.workingDir || workspaceRootDir || '');
           if (workingDir) {
             const roleDir = injectRole({
@@ -82,7 +86,8 @@ const sanitizeGraphSnapshotForWorkspace = (
               ...node,
               config: {
                 ...node.config,
-                workingDir: roleDir
+                workingDir: roleDir,
+                projectDir: workingDir
               }
             };
           }
@@ -145,6 +150,20 @@ export const createCanvasIpcHandlers = (
       const parsed = graphSaveSchemaV2.parse(input);
       deps.assertWorkspaceExists(parsed.workspaceId);
       const workspaceRootDir = deps.resolveWorkspaceRootDir(parsed.workspaceId);
+
+      // Clean up role files for deleted terminal nodes
+      const currentGraph = deps.getWorkspaceRepository(parsed.workspaceId).loadGraphSnapshot();
+      const newNodeIds = new Set(parsed.graphSnapshot.nodes.map((n) => n.id));
+      for (const oldNode of currentGraph.nodes) {
+        if (newNodeIds.has(oldNode.id)) continue;
+        if (oldNode.componentType === 'builtin.terminal' && oldNode.config.roleId) {
+          const projectDir = String(oldNode.config.projectDir || workspaceRootDir || '');
+          if (projectDir) {
+            cleanupRoleInjection(projectDir, oldNode.id);
+          }
+        }
+      }
+
       const sanitizedGraph = sanitizeGraphSnapshotForWorkspace(
         parsed.graphSnapshot,
         workspaceRootDir,
