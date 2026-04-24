@@ -94,6 +94,29 @@ const sleep = (durationMs) => {
   Atomics.wait(view, 0, 0, durationMs);
 };
 
+const stopWindowsProcessesForPath = (targetPath) => {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  const normalizedTargetPath = path.resolve(targetPath).replace(/'/g, "''");
+  const stopScript = [
+    `$target = '${normalizedTargetPath}'`,
+    "Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($target, [System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force"
+  ].join('; ');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stopScript], {
+    stdio: 'inherit'
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to stop Windows processes for ${targetPath}`);
+  }
+};
+
 const removePathWithRetry = (targetPath, retries = 6, delayMs = 250) => {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
@@ -112,7 +135,9 @@ const resetOutputDirectory = (outputDir) => {
   fs.mkdirSync(outputDir, { recursive: true });
 
   for (const childName of fs.readdirSync(outputDir)) {
-    removePathWithRetry(path.join(outputDir, childName));
+    const childPath = path.join(outputDir, childName);
+    stopWindowsProcessesForPath(childPath);
+    removePathWithRetry(childPath);
   }
 };
 
