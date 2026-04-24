@@ -227,6 +227,84 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
+  it('waits for role working directory hydration before auto-starting a new terminal', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const shell = (globalThis as any).window.openweaveShell;
+    const projectDir = '/tmp/project-root';
+    const roleDir = '/tmp/project-root/.openweave/roles/t1';
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'claude' },
+          config: {
+            workingDir: projectDir,
+            projectDir: null,
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: 'role-1'
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
+
+    expect(shell.runs.startRun).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'claude' },
+          config: {
+            workingDir: roleDir,
+            projectDir,
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: 'role-1'
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
+
+    expect(shell.runs.startRun).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      nodeId: 't1',
+      runtime: 'claude',
+      command: '',
+      workingDir: roleDir
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it('appends the missing suffix from an active snapshot when offsets advance', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

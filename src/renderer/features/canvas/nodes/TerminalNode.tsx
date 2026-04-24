@@ -8,6 +8,7 @@ import { getXtermTheme } from './xterm-theme';
 
 export interface TerminalConfig {
   workingDir: string;
+  projectDir?: string | null;
   iconKey: string;
   iconColor: string;
   theme: 'auto' | 'light' | 'dark';
@@ -88,6 +89,11 @@ const getChunkOffsets = (
   };
 };
 
+const isHydratedRoleWorkingDir = (workingDir: string, terminalId: string): boolean => {
+  const normalizedWorkingDir = workingDir.replace(/\\/g, '/').replace(/\/+$/, '');
+  return normalizedWorkingDir.endsWith(`/.openweave/roles/${terminalId}`);
+};
+
 export const TerminalNode = ({
   workspaceId,
   node,
@@ -110,6 +116,11 @@ export const TerminalNode = ({
   const renderedOffsetRef = useRef(0);
   const awaitingSnapshotRef = useRef(false);
   const deferredFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoStartArmedRef = useRef(false);
+  const shouldDelayAutoStartForRole =
+    config.roleId !== null &&
+    !config.projectDir &&
+    !isHydratedRoleWorkingDir(config.workingDir, node.id);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -412,6 +423,10 @@ export const TerminalNode = ({
     isStartingRef.current = isStarting;
   }, [isStarting]);
 
+  useEffect(() => {
+    autoStartArmedRef.current = false;
+  }, [workspaceId, node.id]);
+
   const startRun = (): void => {
     if (isStartingRef.current) return;
 
@@ -439,17 +454,23 @@ export const TerminalNode = ({
         setIsStarting(false);
       });
   };
+  const startRunRef = useRef(startRun);
+  startRunRef.current = startRun;
 
   // Auto-start terminal on mount if no active run
   useEffect(() => {
+    if (shouldDelayAutoStartForRole || autoStartArmedRef.current) {
+      return;
+    }
+
+    autoStartArmedRef.current = true;
     const timer = setTimeout(() => {
       if (!activeRunRef.current && !isStartingRef.current) {
-        startRun();
+        startRunRef.current();
       }
     }, 600);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [shouldDelayAutoStartForRole, workspaceId, node.id]);
 
   return (
     <section className="ow-terminal-node" data-testid={`terminal-node-${node.id}`}>

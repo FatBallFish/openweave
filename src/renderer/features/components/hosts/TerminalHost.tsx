@@ -70,6 +70,7 @@ export const TerminalHost = ({
 
   const config: TerminalConfig = {
     workingDir: typeof node.config.workingDir === 'string' ? node.config.workingDir : workspaceRootDir,
+    projectDir: typeof node.config.projectDir === 'string' ? node.config.projectDir : null,
     iconKey: typeof node.config.iconKey === 'string' ? node.config.iconKey : '',
     iconColor: typeof node.config.iconColor === 'string' ? node.config.iconColor : '',
     theme: node.config.theme === 'light' || node.config.theme === 'dark' ? node.config.theme : 'auto',
