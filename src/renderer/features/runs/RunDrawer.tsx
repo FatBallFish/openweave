@@ -23,18 +23,12 @@ const isTerminalState = (status: RunRecord['status']): boolean => {
 export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.Element | null => {
   const [run, setRun] = useState<RunRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState('');
-  const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
-  const [isSubmittingInput, setIsSubmittingInput] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
 
   useEffect(() => {
     if (!runId) {
       setRun(null);
       setErrorMessage(null);
-      setInputValue('');
-      setInputErrorMessage(null);
-      setIsSubmittingInput(false);
       setIsStopping(false);
       return;
     }
@@ -53,6 +47,13 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
           return;
         }
         const message = error instanceof Error ? error.message : 'Failed to load run details';
+        if (message.startsWith('Run not found:')) {
+          setRun(null);
+          setErrorMessage(null);
+          setIsStopping(false);
+          onClose();
+          return;
+        }
         setErrorMessage(message);
       }
     };
@@ -66,16 +67,12 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
       cancelled = true;
       clearInterval(timer);
     };
-  }, [runId, workspaceId]);
+  }, [onClose, runId, workspaceId]);
 
   useEffect(() => {
     if (!runId) {
       return;
     }
-
-    setInputValue('');
-    setInputErrorMessage(null);
-    setIsSubmittingInput(false);
     setIsStopping(false);
   }, [runId]);
 
@@ -113,17 +110,12 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
           <p data-testid="run-drawer-status">Status: {run.status}</p>
           <p data-testid="run-drawer-summary">Summary: {run.summary ?? '(pending)'}</p>
           <TerminalSessionPane
-            inputErrorMessage={inputErrorMessage}
-            inputValue={inputValue}
             isStopping={isStopping}
-            isSubmittingInput={isSubmittingInput}
-            onInputChange={setInputValue}
             onStop={() => {
               if (!run || isTerminalState(run.status) || isStopping) {
                 return;
               }
 
-              setInputErrorMessage(null);
               setIsStopping(true);
               void getRunsBridge()
                 .stopRun({
@@ -135,34 +127,8 @@ export const RunDrawer = ({ workspaceId, runId, onClose }: RunDrawerProps): JSX.
                 })
                 .catch((error) => {
                   const message = error instanceof Error ? error.message : 'Failed to stop run';
-                  setInputErrorMessage(message);
+                  setErrorMessage(message);
                   setIsStopping(false);
-                });
-            }}
-            onSubmitInput={() => {
-              if (!run || isTerminalState(run.status) || inputValue.trim().length === 0) {
-                return;
-              }
-
-              const payload = inputValue.endsWith('\n') ? inputValue : `${inputValue}\n`;
-              setIsSubmittingInput(true);
-              setInputErrorMessage(null);
-              void getRunsBridge()
-                .inputRun({
-                  workspaceId,
-                  runId: run.id,
-                  input: payload
-                })
-                .then(() => {
-                  setInputValue('');
-                })
-                .catch((error) => {
-                  const message =
-                    error instanceof Error ? error.message : 'Failed to send terminal input';
-                  setInputErrorMessage(message);
-                })
-                .finally(() => {
-                  setIsSubmittingInput(false);
                 });
             }}
             run={run}

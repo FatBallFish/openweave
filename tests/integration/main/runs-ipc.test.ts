@@ -137,6 +137,7 @@ class HoldRuntimeBridge extends EventEmitter implements RuntimeBridge {
 
 class IpcMainStub {
   public readonly handlers = new Map<string, (...args: any[]) => unknown>();
+  public readonly listeners = new Map<string, Set<(...args: any[]) => void>>();
 
   public handle(channel: string, listener: (...args: any[]) => unknown): void {
     this.handlers.set(channel, listener);
@@ -144,6 +145,12 @@ class IpcMainStub {
 
   public removeHandler(channel: string): void {
     this.handlers.delete(channel);
+  }
+
+  public on(channel: string, listener: (...args: any[]) => void): void {
+    const set = this.listeners.get(channel) ?? new Set();
+    set.add(listener);
+    this.listeners.set(channel, set);
   }
 
   public async invoke(channel: string, payload: unknown): Promise<unknown> {

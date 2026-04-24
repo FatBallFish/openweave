@@ -59,14 +59,21 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
     node: {
       defaultTitle: 'Terminal',
       defaultSize: {
-        width: 420,
-        height: 260
+        width: 520,
+        height: 320
       }
     },
     schema: {
       config: {
         command: 'echo hello',
-        runtime: 'shell'
+        runtime: 'shell',
+        workingDir: '',
+        iconKey: '',
+        iconColor: '',
+        theme: 'auto',
+        fontFamily: '',
+        fontSize: 14,
+        roleId: null
       },
       state: {
         activeSessionId: null

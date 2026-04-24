@@ -25,7 +25,10 @@ import {
   registerRunsIpcHandlers
 } from './ipc/runs';
 import { disposeWorkspaceIpcHandlers, registerWorkspaceIpcHandlers } from './ipc/workspaces';
+import { disposeRolesIpcHandlers, registerRolesIpcHandlers } from './ipc/roles';
+import { createRegistryRepository } from './db/registry';
 import { IPC_CHANNELS } from '../shared/ipc/contracts';
+import { installBuiltinSkills, uninstallBuiltinSkills } from './skills/app-skill-manager';
 
 const configuredUserDataDir = process.env.OPENWEAVE_USER_DATA_DIR;
 if (configuredUserDataDir) {
@@ -206,10 +209,45 @@ void app.whenReady().then(() => {
     installRoot: path.join(app.getPath('userData'), 'components'),
     appVersion: app.getVersion()
   });
+  const resolveOpenWeaveCliPath = (): string => {
+    const pathSep = process.platform === 'win32' ? ';' : ':';
+    const extraPaths: string[] = [];
+
+    if (app.isPackaged) {
+      const exeDir = path.dirname(app.getPath('exe'));
+      const candidates = [
+        path.join(exeDir, 'openweave'),
+        path.join(exeDir, 'openweave-cli'),
+        path.join(exeDir, '..', 'bin', 'openweave'),
+        path.join(exeDir, '..', 'Resources', 'bin', 'openweave'),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          extraPaths.push(path.dirname(candidate));
+          break;
+        }
+      }
+    } else {
+      const projectRoot = path.resolve(__dirname, '..', '..');
+      extraPaths.push(
+        path.join(projectRoot, 'node_modules', '.bin'),
+        path.join(projectRoot, 'dist', 'cli')
+      );
+    }
+
+    return `${extraPaths.join(pathSep)}${pathSep}${process.env.PATH ?? ''}`;
+  };
+
+  const enrichedEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: resolveOpenWeaveCliPath(),
+  };
+
   registerRunsIpcHandlers({
     dbFilePath: registryDbFilePath,
     workspaceDbDir,
-    enableCrashRecoveryOnOpen
+    enableCrashRecoveryOnOpen,
+    launchEnv: enrichedEnv,
   });
   registerFilesIpcHandlers({
     dbFilePath: registryDbFilePath
@@ -218,6 +256,8 @@ void app.whenReady().then(() => {
     dbFilePath: registryDbFilePath,
     artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal')
   });
+  registerRolesIpcHandlers({ registry: createRegistryRepository({ dbFilePath: registryDbFilePath }) });
+  installBuiltinSkills();
   createMainWindow();
 
   app.on('activate', () => {
@@ -234,6 +274,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  uninstallBuiltinSkills();
   if (crashRecoveryMarkerPath) {
     try {
       fs.rmSync(crashRecoveryMarkerPath, { force: true });
@@ -248,4 +289,5 @@ app.on('will-quit', () => {
   disposeBranchWorkspaceIpcHandlers();
   disposeCanvasIpcHandlers();
   disposeWorkspaceIpcHandlers();
+  disposeRolesIpcHandlers();
 });

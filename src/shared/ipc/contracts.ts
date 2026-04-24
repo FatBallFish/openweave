@@ -20,9 +20,13 @@ import type {
   PortalInputInput,
   PortalLoadInput,
   PortalStructureInput,
+  RoleCreateInput,
+  RoleDeleteInput,
+  RoleUpdateInput,
   RunGetInput,
   RunInputInput,
   RunListInput,
+  RunResizeInput,
   RunRuntimeInput,
   RunStartInput,
   RunStopInput,
@@ -93,7 +97,15 @@ export const IPC_CHANNELS = {
   portalReadStructure: 'portal:read-structure',
   portalClick: 'portal:click',
   portalInput: 'portal:input',
-  appOpenSettings: 'app:open-settings'
+  appOpenSettings: 'app:open-settings',
+  runStream: 'run:stream',
+  runStreamSubscribe: 'run:stream:subscribe',
+  runStreamUnsubscribe: 'run:stream:unsubscribe',
+  runResize: 'run:resize',
+  roleList: 'role:list',
+  roleCreate: 'role:create',
+  roleUpdate: 'role:update',
+  roleDelete: 'role:delete'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -206,9 +218,40 @@ export interface RunRecord {
   status: RunStatusInput;
   summary: string | null;
   tailLog: string;
+  tailStartOffset: number;
+  tailEndOffset: number;
   createdAtMs: number;
   startedAtMs: number | null;
   completedAtMs: number | null;
+}
+
+export interface RunStreamEvent {
+  runId: string;
+  chunk: string;
+  chunkStartOffset: number;
+  chunkEndOffset: number;
+}
+
+export interface RoleRecord {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface RoleListResponse {
+  roles: RoleRecord[];
+}
+
+export interface RoleMutationResponse {
+  role: RoleRecord;
+}
+
+export interface RoleDeleteResponse {
+  deleted: boolean;
 }
 
 export interface RunMutationResponse {
@@ -420,6 +463,10 @@ export interface RunsBridgeApi {
   listRuns: (input: RunListInput) => Promise<RunListResponse>;
   inputRun: (input: RunInputInput) => Promise<RunInputResponse>;
   stopRun: (input: RunStopInput) => Promise<RunMutationResponse>;
+  subscribeStream: (runId: string) => void;
+  unsubscribeStream: (runId: string) => void;
+  onStream: (callback: (event: RunStreamEvent) => void) => () => void;
+  resizeRun: (input: RunResizeInput) => Promise<void>;
 }
 
 export interface FilesBridgeApi {
@@ -456,6 +503,13 @@ export interface AppBridgeApi {
   openSettings: () => Promise<void>;
 }
 
+export interface RolesBridgeApi {
+  listRoles: () => Promise<RoleListResponse>;
+  createRole: (input: RoleCreateInput) => Promise<RoleMutationResponse>;
+  updateRole: (input: RoleUpdateInput) => Promise<RoleMutationResponse>;
+  deleteRole: (input: RoleDeleteInput) => Promise<RoleDeleteResponse>;
+}
+
 export interface OpenWeaveShellBridge {
   platform: string;
   ipcChannels: typeof IPC_CHANNELS;
@@ -464,6 +518,7 @@ export interface OpenWeaveShellBridge {
   canvas: CanvasBridgeApi;
   graph: GraphBridgeApiV2;
   runs: RunsBridgeApi;
+  roles: RolesBridgeApi;
   files: FilesBridgeApi;
   portal: PortalBridgeApi;
   app: AppBridgeApi;

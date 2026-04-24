@@ -24,10 +24,18 @@ interface RuntimeStopWorkerMessage {
   runId: string;
 }
 
+interface RuntimeResizeWorkerMessage {
+  type: 'resize';
+  runId: string;
+  cols: number;
+  rows: number;
+}
+
 type RuntimeWorkerMessage =
   | RuntimeStartWorkerMessage
   | RuntimeInputWorkerMessage
-  | RuntimeStopWorkerMessage;
+  | RuntimeStopWorkerMessage
+  | RuntimeResizeWorkerMessage;
 
 interface RuntimeStartedWorkerEvent {
   type: 'started';
@@ -92,6 +100,7 @@ export interface RuntimeBridge {
   start: (request: RuntimeStartRequest) => void;
   input: (runId: string, input: string) => boolean;
   stop: (runId: string) => boolean;
+  resize: (runId: string, cols: number, rows: number) => void;
   dispose: () => void;
   on: {
     (event: 'started', listener: (event: RuntimeStartedEvent) => void): RuntimeBridge;
@@ -385,6 +394,17 @@ class RuntimeBridgeImpl extends EventEmitter implements RuntimeBridge {
     }
 
     return true;
+  }
+
+  public resize(runId: string, cols: number, rows: number): void {
+    const worker = this.workers.get(runId);
+    if (!worker) return;
+    worker.handle.postMessage({
+      type: 'resize',
+      runId,
+      cols,
+      rows
+    });
   }
 
   public dispose(): void {

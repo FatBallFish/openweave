@@ -408,10 +408,6 @@ export const createWorkspaceSkillInjectionManager = (
       assertStaleManagedTargetsNotUserModified(workspaceRoot, snapshot, existingManagedRecords);
       const writtenFiles = writeManagedFiles(workspaceRoot, snapshot);
 
-      for (const record of otherRuntimeRecords) {
-        cleanupRecord(record);
-      }
-
       if (currentRecord) {
         removeStaleManagedFiles(workspaceRoot, currentRecord, snapshot);
       }

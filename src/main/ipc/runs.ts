@@ -7,18 +7,23 @@ import {
   type RunInputResponse,
   type RunListResponse,
   type RunMutationResponse,
-  type RunRecord
+  type RunRecord,
+  type RunStreamEvent
 } from '../../shared/ipc/contracts';
 import {
   runGetSchema,
   runInputSchema,
   runListSchema,
+  runStreamChunkRangeSchema,
+  runTailRangeSchema,
+  runResizeSchema,
   runStartSchema,
   runStopSchema,
   workspaceIdSchema,
   type RunGetInput,
   type RunInputInput,
   type RunListInput,
+  type RunResizeInput,
   type RunStartInput,
   type RunRuntimeInput,
   type RunStopInput,
@@ -40,6 +45,8 @@ import {
 interface RunsIpcMain {
   handle: (channel: string, listener: (...args: any[]) => unknown) => void;
   removeHandler: (channel: string) => void;
+  on: (channel: string, listener: (...args: any[]) => void) => void;
+  removeListener: (channel: string, listener: (...args: any[]) => void) => void;
 }
 
 export interface RunsIpcHandlers {
@@ -48,6 +55,9 @@ export interface RunsIpcHandlers {
   listRuns: (_event: IpcMainInvokeEvent, input: RunListInput) => Promise<RunListResponse>;
   inputRun: (_event: IpcMainInvokeEvent, input: RunInputInput) => Promise<RunInputResponse>;
   stopRun: (_event: IpcMainInvokeEvent, input: RunStopInput) => Promise<RunMutationResponse>;
+  subscribeStream: (runId: string, webContentsId: number) => void;
+  unsubscribeStream: (runId: string, webContentsId: number) => void;
+  resizeRun: (_event: IpcMainInvokeEvent, input: RunResizeInput) => Promise<void>;
   disposeWorkspaceRuns: (workspaceId: string) => void;
 }
 
@@ -82,6 +92,8 @@ const MAX_TAIL_LOG_LENGTH = 4096;
 const MAX_STORED_RUNS = 200;
 const MAX_LISTED_RUNS = 100;
 const STOPPED_RUN_SUMMARY = 'Run stopped';
+const RECOVERED_RUN_SUMMARY = 'Recovered after unclean shutdown';
+const RECOVERY_EVENT_TYPE = 'run.recovered';
 
 const MANAGED_RUNTIMES = new Set<SkillPackRuntimeKind>(['codex', 'claude', 'opencode']);
 
@@ -99,6 +111,38 @@ const appendTailLog = (tail: string, chunk: string): string => {
     return nextTail;
   }
   return nextTail.slice(nextTail.length - MAX_TAIL_LOG_LENGTH);
+};
+
+const createTailRange = (tailLog: string, tailEndOffset: number): Pick<RunRecord, 'tailStartOffset' | 'tailEndOffset'> => {
+  return runTailRangeSchema.parse({
+    tailStartOffset: Math.max(0, tailEndOffset - tailLog.length),
+    tailEndOffset
+  });
+};
+
+const appendRunOutput = (
+  run: RunRecord,
+  chunk: string
+): {
+  updatedRun: RunRecord;
+  chunkStartOffset: number;
+  chunkEndOffset: number;
+} => {
+  const chunkStartOffset = run.tailEndOffset;
+  const chunkEndOffset = chunkStartOffset + chunk.length;
+  const tailLog = appendTailLog(run.tailLog, chunk);
+
+  return {
+    updatedRun: {
+      ...run,
+      tailLog,
+      ...createTailRange(tailLog, chunkEndOffset)
+    },
+    ...runStreamChunkRangeSchema.parse({
+      chunkStartOffset,
+      chunkEndOffset
+    })
+  };
 };
 
 const buildSummary = (tailLog: string): string => {
@@ -124,10 +168,6 @@ const toErrorMessage = (error: unknown): string => {
 const BRIDGE_USAGE_HINT = 'Use the OpenWeave bridge to inspect workspace graph nodes.';
 const CLI_USAGE_HINT = 'Use the openweave CLI from the workspace root.';
 
-const buildManagedRuntimeConflictMessage = (activeRun: RunRecord, nextRuntime: RunRuntimeInput): string => {
-  return `Managed runtime launch blocked: ${nextRuntime} cannot start while ${activeRun.runtime} run ${activeRun.id} is still ${activeRun.status}`;
-};
-
 const deriveExitStatus = (
   event: RuntimeExitEvent,
   stopRequested: boolean
@@ -144,6 +184,8 @@ class InMemoryRunsService {
 
   private readonly stopIntents = new Set<string>();
 
+  private readonly streamSubscribers = new Map<string, Set<number>>();
+
   private readonly assertWorkspaceExists: (workspaceId: string) => void;
 
   private readonly resolveWorkspaceRootDir?: (workspaceId: string) => string;
@@ -159,27 +201,6 @@ class InMemoryRunsService {
   private readonly launchEnv: NodeJS.ProcessEnv;
 
   private readonly onRunUpdated?: (run: RunRecord) => void;
-
-  private findManagedRuntimeConflict(run: RunRecord): RunRecord | null {
-    if (!isManagedRuntime(run.runtime)) {
-      return null;
-    }
-
-    for (const existingRun of this.runs.values()) {
-      if (existingRun.id === run.id || existingRun.workspaceId !== run.workspaceId) {
-        continue;
-      }
-      if (isTerminalRunStatus(existingRun.status) || !isManagedRuntime(existingRun.runtime)) {
-        continue;
-      }
-      if (existingRun.runtime === run.runtime) {
-        continue;
-      }
-      return existingRun;
-    }
-
-    return null;
-  }
 
   constructor(options: RunsServiceOptions) {
     this.assertWorkspaceExists = options.assertWorkspaceExists;
@@ -205,11 +226,17 @@ class InMemoryRunsService {
     });
 
     this.runtimeBridge.on('stdout', (event) => {
-      this.appendOutput(event);
+      const streamEvent = this.appendOutput(event);
+      if (streamEvent) {
+        this.broadcastStream(streamEvent);
+      }
     });
 
     this.runtimeBridge.on('stderr', (event) => {
-      this.appendOutput(event);
+      const streamEvent = this.appendOutput(event);
+      if (streamEvent) {
+        this.broadcastStream(streamEvent);
+      }
     });
 
     this.runtimeBridge.on('exit', (event) => {
@@ -221,6 +248,7 @@ class InMemoryRunsService {
     const parsed = runStartSchema.parse(input);
     this.assertWorkspaceExists(parsed.workspaceId);
     const workspaceRootDir = this.resolveWorkspaceRootDir?.(parsed.workspaceId);
+    const effectiveCwd = parsed.workingDir || workspaceRootDir;
 
     const run: RunRecord = {
       id: this.randomId(),
@@ -231,6 +259,8 @@ class InMemoryRunsService {
       status: 'queued',
       summary: null,
       tailLog: '',
+      tailStartOffset: 0,
+      tailEndOffset: 0,
       createdAtMs: this.now(),
       startedAtMs: null,
       completedAtMs: null
@@ -239,10 +269,6 @@ class InMemoryRunsService {
     this.storeRun(run);
 
     try {
-      const managedRuntimeConflict = this.findManagedRuntimeConflict(run);
-      if (managedRuntimeConflict) {
-        throw new Error(buildManagedRuntimeConflictMessage(managedRuntimeConflict, run.runtime));
-      }
       this.prepareRuntimeLaunch?.({
         workspaceId: run.workspaceId,
         workspaceRootDir,
@@ -252,16 +278,18 @@ class InMemoryRunsService {
         runId: run.id,
         runtime: run.runtime,
         command: run.command,
-        cwd: workspaceRootDir,
+        cwd: effectiveCwd,
         env: this.launchEnv
       });
     } catch (error) {
       const errorMessage = toErrorMessage(error);
+      const failedTailLog = appendTailLog('', `${errorMessage}\n`);
       const failedRun: RunRecord = {
         ...run,
         status: 'failed',
         summary: errorMessage,
-        tailLog: appendTailLog('', `${errorMessage}\n`),
+        tailLog: failedTailLog,
+        ...createTailRange(failedTailLog, `${errorMessage}\n`.length),
         completedAtMs: this.now()
       };
       this.storeRun(failedRun);
@@ -276,6 +304,10 @@ class InMemoryRunsService {
   public getRun(input: RunGetInput): RunRecord {
     const parsed = runGetSchema.parse(input);
     return this.requireRun(parsed.workspaceId, parsed.runId);
+  }
+
+  public hasRun(runId: string): boolean {
+    return this.runs.has(runId);
   }
 
   public listRuns(input: RunListInput): RunRecord[] {
@@ -343,21 +375,71 @@ class InMemoryRunsService {
     }
   }
 
+  public subscribeStream(runId: string, webContentsId: number): void {
+    const set = this.streamSubscribers.get(runId) ?? new Set();
+    set.add(webContentsId);
+    this.streamSubscribers.set(runId, set);
+  }
+
+  public unsubscribeStream(runId: string, webContentsId: number): void {
+    const set = this.streamSubscribers.get(runId);
+    if (set) {
+      set.delete(webContentsId);
+      if (set.size === 0) {
+        this.streamSubscribers.delete(runId);
+      }
+    }
+  }
+
+  public unsubscribeAllStreams(webContentsId: number): void {
+    for (const [runId, set] of this.streamSubscribers) {
+      set.delete(webContentsId);
+      if (set.size === 0) {
+        this.streamSubscribers.delete(runId);
+      }
+    }
+  }
+
+  private broadcastStream(event: RunStreamEvent): void {
+    const { webContents } = require('electron');
+    const subscribers = this.streamSubscribers.get(event.runId);
+    if (!subscribers) return;
+    for (const wcId of subscribers) {
+      const wc = webContents.fromId(wcId);
+      if (wc && !wc.isDestroyed()) {
+        wc.send(IPC_CHANNELS.runStream, event);
+      }
+    }
+  }
+
+  public resizeRun(runId: string, cols: number, rows: number): void {
+    const run = this.runs.get(runId);
+    if (!run || isTerminalRunStatus(run.status)) {
+      throw new Error(`Run not active: ${runId}`);
+    }
+    this.runtimeBridge.resize(runId, cols, rows);
+  }
+
   public dispose(): void {
     this.runtimeBridge.dispose();
     this.runs.clear();
+    this.streamSubscribers.clear();
   }
 
-  private appendOutput(event: RuntimeStreamEvent): void {
+  private appendOutput(event: RuntimeStreamEvent): RunStreamEvent | null {
     const run = this.runs.get(event.runId);
     if (!run || isTerminalRunStatus(run.status)) {
-      return;
+      return null;
     }
 
-    this.storeRun({
-      ...run,
-      tailLog: appendTailLog(run.tailLog, event.chunk)
-    });
+    const { updatedRun, chunkStartOffset, chunkEndOffset } = appendRunOutput(run, event.chunk);
+    this.storeRun(updatedRun);
+    return {
+      runId: event.runId,
+      chunk: event.chunk,
+      chunkStartOffset,
+      chunkEndOffset
+    };
   }
 
   private completeRun(event: RuntimeExitEvent): void {
@@ -369,11 +451,14 @@ class InMemoryRunsService {
     const stopRequested = this.stopIntents.delete(event.runId);
     const status = deriveExitStatus(event, stopRequested);
     const tailLog = event.tail.length > 0 ? appendTailLog('', event.tail) : run.tailLog;
+    const tailEndOffset =
+      event.tail.length > 0 ? Math.max(run.tailEndOffset, event.tail.length) : run.tailEndOffset;
     const summary = status === 'stopped' ? STOPPED_RUN_SUMMARY : buildSummary(tailLog);
     this.storeRun({
       ...run,
       status,
       tailLog,
+      ...createTailRange(tailLog, tailEndOffset),
       summary,
       completedAtMs: this.now()
     });
@@ -453,6 +538,15 @@ export const createRunsIpcHandlers = (deps: RunsIpcDependencies): RunsIpcHandler
         run: service.stopRun(input)
       };
     },
+    subscribeStream: (runId: string, webContentsId: number): void => {
+      service.subscribeStream(runId, webContentsId);
+    },
+    unsubscribeStream: (runId: string, webContentsId: number): void => {
+      service.unsubscribeStream(runId, webContentsId);
+    },
+    resizeRun: async (_event: IpcMainInvokeEvent, input: RunResizeInput): Promise<void> => {
+      service.resizeRun(input.runId, input.cols, input.rows);
+    },
     disposeWorkspaceRuns: (workspaceId: string): void => {
       service.disposeWorkspaceRuns(workspaceId);
     }
@@ -474,6 +568,50 @@ interface RegisteredRunsContext {
   service: InMemoryRunsService;
 }
 
+const reconcilePersistedOrphanRuns = (
+  context: RegisteredRunsContext,
+  workspaceId: string,
+  repository: ReturnType<typeof createWorkspaceRepository>
+): Map<string, RunRecord> => {
+  const existingRecoveryAuditRunIds = new Set(
+    repository
+      .listAuditLogs(1000)
+      .filter((audit) => audit.eventType === RECOVERY_EVENT_TYPE && typeof audit.runId === 'string')
+      .map((audit) => audit.runId as string)
+  );
+  const reconciledRuns = new Map<string, RunRecord>();
+
+  for (const run of repository.listRuns()) {
+    if (isTerminalRunStatus(run.status) || context.service.hasRun(run.id)) {
+      continue;
+    }
+
+    const reconciledRun: RunRecord = {
+      ...run,
+      status: 'failed',
+      summary: RECOVERED_RUN_SUMMARY,
+      completedAtMs: run.completedAtMs ?? Date.now()
+    };
+    repository.saveRun(reconciledRun);
+    reconciledRuns.set(reconciledRun.id, reconciledRun);
+
+    if (!existingRecoveryAuditRunIds.has(reconciledRun.id)) {
+      createAuditLog({
+        workspaceId,
+        repository
+      }).persist({
+        eventType: RECOVERY_EVENT_TYPE,
+        runId: reconciledRun.id,
+        status: 'success',
+        message: RECOVERED_RUN_SUMMARY
+      });
+      existingRecoveryAuditRunIds.add(reconciledRun.id);
+    }
+  }
+
+  return reconciledRuns;
+};
+
 let registeredRunsContext: RegisteredRunsContext | null = null;
 
 export interface RegisterRunsIpcHandlersOptions {
@@ -482,6 +620,7 @@ export interface RegisterRunsIpcHandlersOptions {
   enableCrashRecoveryOnOpen?: boolean;
   ipcMain?: RunsIpcMain;
   runtimeBridge?: RuntimeBridge;
+  launchEnv?: NodeJS.ProcessEnv;
 }
 
 const toWorkspaceDbFileName = (workspaceId: string): string => {
@@ -580,7 +719,7 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
         runtimeBridge: options.runtimeBridge ?? createRuntimeBridge(),
         now: () => Date.now(),
         randomId: () => crypto.randomUUID(),
-        launchEnv: process.env,
+        launchEnv: options.launchEnv ?? process.env,
         onRunUpdated: (run: RunRecord) => {
           withWorkspaceRepository(workspaceDbDir, run.workspaceId, (repository) => {
             repository.saveRun(run);
@@ -607,7 +746,10 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       const persistedRun = withWorkspaceRepository(
         context.workspaceDbDir,
         parsedWorkspaceId,
-        (repository) => repository.getRun(parsed.runId)
+        (repository) => {
+          const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+          return reconciledRuns.get(parsed.runId) ?? repository.getRun(parsed.runId);
+        }
       );
       if (persistedRun && persistedRun.workspaceId === parsedWorkspaceId) {
         return {
@@ -622,9 +764,13 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       const parsed = runListSchema.parse(input);
       const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
       return {
-        runs: withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) =>
-          repository.listRunsByNode(parsed.nodeId).slice(0, MAX_LISTED_RUNS)
-        )
+        runs: withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) => {
+          const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+          return repository
+            .listRunsByNode(parsed.nodeId)
+            .map((run) => reconciledRuns.get(run.id) ?? run)
+            .slice(0, MAX_LISTED_RUNS);
+        })
       };
     },
     inputRun: async (_event: IpcMainInvokeEvent, input: RunInputInput) => {
@@ -634,7 +780,18 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     },
     stopRun: async (_event: IpcMainInvokeEvent, input: RunStopInput) => {
       const parsed = runStopSchema.parse(input);
-      assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      const parsedWorkspaceId = assertRegisteredWorkspaceExists(context, parsed.workspaceId);
+      const persistedRun = withWorkspaceRepository(context.workspaceDbDir, parsedWorkspaceId, (repository) => {
+        const reconciledRuns = reconcilePersistedOrphanRuns(context, parsedWorkspaceId, repository);
+        return reconciledRuns.get(parsed.runId) ?? repository.getRun(parsed.runId);
+      });
+
+      if (persistedRun && isTerminalRunStatus(persistedRun.status) && !context.service.hasRun(parsed.runId)) {
+        return {
+          run: persistedRun
+        };
+      }
+
       return {
         run: context.service.stopRun(parsed)
       };
@@ -646,11 +803,30 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
   ipcMain.removeHandler(IPC_CHANNELS.runList);
   ipcMain.removeHandler(IPC_CHANNELS.runInput);
   ipcMain.removeHandler(IPC_CHANNELS.runStop);
+  ipcMain.removeHandler(IPC_CHANNELS.runStreamSubscribe);
+  ipcMain.removeHandler(IPC_CHANNELS.runStreamUnsubscribe);
+  ipcMain.removeHandler(IPC_CHANNELS.runResize);
+
   ipcMain.handle(IPC_CHANNELS.runStart, handlers.startRun);
   ipcMain.handle(IPC_CHANNELS.runGet, handlers.getRun);
   ipcMain.handle(IPC_CHANNELS.runList, handlers.listRuns);
   ipcMain.handle(IPC_CHANNELS.runInput, handlers.inputRun);
   ipcMain.handle(IPC_CHANNELS.runStop, handlers.stopRun);
+
+  ipcMain.on(IPC_CHANNELS.runStreamSubscribe, (_event, { runId }) => {
+    const wcId = (_event as any).sender.id as number;
+    context.service.subscribeStream(runId, wcId);
+  });
+
+  ipcMain.on(IPC_CHANNELS.runStreamUnsubscribe, (_event, { runId }) => {
+    const wcId = (_event as any).sender.id as number;
+    context.service.unsubscribeStream(runId, wcId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.runResize, async (_event, input) => {
+    const parsed = runResizeSchema.parse(input);
+    context.service.resizeRun(parsed.runId, parsed.cols, parsed.rows);
+  });
 };
 
 export const disposeRunsForWorkspace = (workspaceId: string): void => {

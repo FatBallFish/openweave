@@ -13,6 +13,7 @@ interface WorkspaceCanvasPageProps {
   onOpenCommandPalette: () => void;
   onOpenQuickAdd: () => void;
   onSelectNode: (nodeId: string | null) => void;
+  onAddTerminal: () => void;
   placementMode?: { type: string } | null;
   onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onPlacementCancel?: () => void;
@@ -26,18 +27,19 @@ export const WorkspaceCanvasPage = ({
   onOpenCommandPalette,
   onOpenQuickAdd,
   onSelectNode,
+  onAddTerminal,
   placementMode,
   onPlacementComplete,
   onPlacementCancel
 }: WorkspaceCanvasPageProps): JSX.Element => {
   const { t } = useI18n();
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<{ workspaceId: string; runId: string } | null>(null);
   const graphSnapshot = useCanvasStore((storeState) => storeState.graphSnapshot);
   const loading = useCanvasStore((storeState) => storeState.loading);
   const errorMessage = useCanvasStore((storeState) => storeState.errorMessage);
   const openRun = useCallback((runId: string) => {
-    setActiveRunId(runId);
-  }, []);
+    setActiveRun({ workspaceId, runId });
+  }, [workspaceId]);
   const openBranchDialog = useCallback(() => {
     workspacesStore.openBranchDialog(workspaceId);
   }, [workspaceId]);
@@ -47,7 +49,7 @@ export const WorkspaceCanvasPage = ({
 
   useEffect(() => {
     void canvasStore.loadCanvasState(workspaceId);
-    setActiveRunId(null);
+    setActiveRun(null);
   }, [workspaceId]);
 
   return (
@@ -71,9 +73,7 @@ export const WorkspaceCanvasPage = ({
           onSelectNode={onSelectNode}
           onOpenRun={openRun}
           onCreateBranchWorkspace={openBranchDialog}
-          onAddTerminal={() => {
-            void canvasStore.addTerminalNode();
-          }}
+          onAddTerminal={onAddTerminal}
           onAddNote={() => {
             void canvasStore.addNoteNode();
           }}
@@ -100,7 +100,11 @@ export const WorkspaceCanvasPage = ({
         {workspaceName}
       </span>
 
-      <RunDrawer workspaceId={workspaceId} runId={activeRunId} onClose={() => setActiveRunId(null)} />
+      <RunDrawer
+        workspaceId={workspaceId}
+        runId={activeRun?.workspaceId === workspaceId ? activeRun.runId : null}
+        onClose={() => setActiveRun(null)}
+      />
     </section>
   );
 };

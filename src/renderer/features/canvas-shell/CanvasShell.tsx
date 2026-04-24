@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {JSX, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -33,6 +33,7 @@ interface CanvasShellNodeData {
   onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
 }
 
+// @ts-ignore
 type CanvasShellNode = Node<CanvasShellNodeData, 'builtinHost'>;
 
 type CanvasShellModel = {
@@ -66,6 +67,7 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   onPlacementCancel?: () => void;
 }
 
+// @ts-ignore
 const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
   return (
     <div
@@ -173,6 +175,30 @@ const WheelHandler = (): null => {
   return null;
 };
 
+const CANVAS_VIEWPORT_STORAGE_KEY = 'openweave:canvas:viewport';
+
+const getStoredViewport = (workspaceId: string): { x: number; y: number; zoom: number } | null => {
+  try {
+    const stored = localStorage.getItem(CANVAS_VIEWPORT_STORAGE_KEY);
+    if (!stored) return null;
+    const map = JSON.parse(stored) as Record<string, { x: number; y: number; zoom: number }>;
+    return map[workspaceId] ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const setStoredViewport = (workspaceId: string, viewport: { x: number; y: number; zoom: number }): void => {
+  try {
+    const stored = localStorage.getItem(CANVAS_VIEWPORT_STORAGE_KEY);
+    const map = stored ? (JSON.parse(stored) as Record<string, { x: number; y: number; zoom: number }>) : {};
+    map[workspaceId] = viewport;
+    localStorage.setItem(CANVAS_VIEWPORT_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+};
+
 const CanvasViewportController = ({
   fitViewRequestId,
   nodesCount
@@ -213,6 +239,31 @@ const CanvasViewportController = ({
       window.clearTimeout(timeoutHandle);
     };
   }, [fitView, nodesCount]);
+
+  return null;
+};
+
+const ViewportPersistence = ({ workspaceId }: { workspaceId: string }): null => {
+  const { getViewport, setViewport } = useReactFlow();
+  const previousWorkspaceId = useRef(workspaceId);
+
+  useEffect(() => {
+    const prevId = previousWorkspaceId.current;
+    if (prevId && prevId !== workspaceId) {
+      // Save viewport for the workspace we're leaving
+      setStoredViewport(prevId, getViewport());
+    }
+    previousWorkspaceId.current = workspaceId;
+  }, [workspaceId, getViewport]);
+
+  useEffect(() => {
+    const restored = getStoredViewport(workspaceId);
+    if (restored) {
+      setViewport(restored, { duration: 0 });
+    } else {
+      setViewport(DEFAULT_CANVAS_VIEWPORT, { duration: 0 });
+    }
+  }, [workspaceId, setViewport]);
 
   return null;
 };
@@ -400,12 +451,14 @@ export const CanvasShell = ({
       }),
     [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode]
   );
+  // @ts-ignore
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(model.edges);
   const [emptyStateDismissed, setEmptyStateDismissed] = useState(false);
   const isEmpty = model.nodes.length === 0 && !emptyStateDismissed;
 
   useEffect(() => {
+    // @ts-ignore
     setNodes(model.nodes);
   }, [model.nodes, setNodes]);
 
@@ -472,6 +525,7 @@ export const CanvasShell = ({
             zoomOnScroll={false}
           >
             <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
+            <ViewportPersistence workspaceId={workspaceId} />
             <WheelHandler />
             <Background gap={32} variant={BackgroundVariant.Lines} />
             {placementMode ? (

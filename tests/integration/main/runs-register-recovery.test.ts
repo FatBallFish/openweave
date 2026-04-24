@@ -18,6 +18,7 @@ import type { RuntimeBridge, RuntimeStartRequest } from '../../../src/main/runti
 class IpcMainStub {
   public readonly handlers = new Map<string, (...args: any[]) => unknown>();
   public readonly removed: string[] = [];
+  public readonly listeners = new Map<string, Set<(...args: any[]) => void>>();
 
   public handle(channel: string, listener: (...args: any[]) => unknown): void {
     this.handlers.set(channel, listener);
@@ -26,6 +27,12 @@ class IpcMainStub {
   public removeHandler(channel: string): void {
     this.removed.push(channel);
     this.handlers.delete(channel);
+  }
+
+  public on(channel: string, listener: (...args: any[]) => void): void {
+    const set = this.listeners.get(channel) ?? new Set();
+    set.add(listener);
+    this.listeners.set(channel, set);
   }
 
   public async invoke(channel: string, payload: unknown): Promise<any> {
@@ -117,7 +124,10 @@ describe('registered runs IPC handlers', () => {
       IPC_CHANNELS.runGet,
       IPC_CHANNELS.runList,
       IPC_CHANNELS.runInput,
-      IPC_CHANNELS.runStop
+      IPC_CHANNELS.runStop,
+      IPC_CHANNELS.runStreamSubscribe,
+      IPC_CHANNELS.runStreamUnsubscribe,
+      IPC_CHANNELS.runResize
     ]);
 
     const started = await ipcMain.invoke(IPC_CHANNELS.runStart, {
@@ -251,6 +261,63 @@ describe('registered runs IPC handlers', () => {
       dbFilePath: path.join(enabledSetup.workspaceDbDir, `${enabledSetup.workspace.id}.db`)
     });
     expect(repository.getRun('run-enabled')?.status).toBe('failed');
+    expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toHaveLength(1);
+    repository.close();
+  });
+
+  it('reconciles orphaned active runs from persistence before listing or stopping them', async () => {
+    const bridge = new HoldRuntimeBridge();
+    const { workspace, workspaceDbDir, ipcMain } = setupRegisteredRuns(bridge, {
+      enableCrashRecoveryOnOpen: false
+    });
+
+    let repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    repository.saveRun({
+      id: 'run-orphaned',
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'echo orphaned',
+      status: 'running',
+      summary: null,
+      tailLog: 'orphaned\n',
+      tailStartOffset: 24,
+      tailEndOffset: 33,
+      createdAtMs: 1,
+      startedAtMs: 2,
+      completedAtMs: null
+    });
+    repository.close();
+
+    const listed = await ipcMain.invoke(IPC_CHANNELS.runList, {
+      workspaceId: workspace.id,
+      nodeId: 'terminal-1'
+    });
+    expect(listed.runs).toHaveLength(1);
+    expect(listed.runs[0]?.status).toBe('failed');
+    expect(listed.runs[0]?.summary).toBe('Recovered after unclean shutdown');
+    expect(listed.runs[0]).toMatchObject({
+      tailStartOffset: 24,
+      tailEndOffset: 33
+    });
+
+    const stopped = await ipcMain.invoke(IPC_CHANNELS.runStop, {
+      workspaceId: workspace.id,
+      runId: 'run-orphaned'
+    });
+    expect(stopped.run.status).toBe('failed');
+    expect(bridge.stopCalls).toEqual([]);
+
+    repository = createWorkspaceRepository({
+      dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+    });
+    expect(repository.getRun('run-orphaned')).toMatchObject({
+      status: 'failed',
+      tailStartOffset: 24,
+      tailEndOffset: 33
+    });
     expect(repository.listAuditLogs().filter((audit) => audit.eventType === 'run.recovered')).toHaveLength(1);
     repository.close();
   });

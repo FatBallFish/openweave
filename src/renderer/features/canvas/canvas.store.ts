@@ -66,6 +66,10 @@ const getBridge = (): OpenWeaveShellBridge['graph'] => {
   return shell.graph;
 };
 
+const getShellBridge = (): OpenWeaveShellBridge | null => {
+  return (window as Window & { openweaveShell?: OpenWeaveShellBridge }).openweaveShell ?? null;
+};
+
 const createNodeId = (prefix: string): string => {
   const fallbackId = `${prefix}-${Date.now()}`;
   const generatedId =
@@ -212,7 +216,10 @@ const createNoteGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord 
   };
 };
 
-const createTerminalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRecord => {
+const createTerminalGraphNode = (
+  existingNodes: GraphNodeRecord[],
+  config?: Record<string, unknown>
+): GraphNodeRecord => {
   const manifest = getRequiredBuiltinManifest('builtin.terminal');
   const now = Date.now();
   const bounds = getStarterBounds(
@@ -224,10 +231,11 @@ const createTerminalGraphNode = (existingNodes: GraphNodeRecord[]): GraphNodeRec
     id: createNodeId('terminal'),
     componentType: 'builtin.terminal',
     componentVersion: manifest.version,
-    title: manifest.node.defaultTitle,
+    title: typeof config?.title === 'string' ? config.title : manifest.node.defaultTitle,
     bounds,
     config: {
-      ...(manifest.schema.config ?? {})
+      ...(manifest.schema.config ?? {}),
+      ...(config ?? {})
     },
     state: {
       ...(manifest.schema.state ?? {})
@@ -335,12 +343,14 @@ const applyGraphSnapshot = (
 const persistGraphSnapshot = async (
   workspaceId: string,
   graphSnapshot: GraphSnapshotV2Input,
-  selectedNodeId: string | null = state.selectedNodeId
+  selectedNodeId: string | null = state.selectedNodeId,
+  deletedNodeIds?: string[]
 ): Promise<void> => {
   const requestId = ++latestSaveRequestId;
   const result = await getBridge().saveGraphSnapshot({
     workspaceId,
-    graphSnapshot
+    graphSnapshot,
+    ...(deletedNodeIds ? { deletedNodeIds } : {})
   });
   if (requestId !== latestSaveRequestId || state.workspaceId !== workspaceId) {
     return;
@@ -358,6 +368,39 @@ const updateGraphNode = (
     ...graphSnapshot,
     nodes: graphSnapshot.nodes.map((node) => (node.id === nodeId ? updater(node) : node))
   };
+};
+
+const isActiveRunStatus = (status: string): boolean => {
+  return status !== 'completed' && status !== 'failed' && status !== 'stopped';
+};
+
+const stopActiveRunsForTerminalNodes = async (
+  workspaceId: string,
+  nodes: GraphNodeRecord[]
+): Promise<void> => {
+  const shell = getShellBridge();
+  if (!shell?.runs) {
+    return;
+  }
+
+  const terminalNodes = nodes.filter((node) => node.componentType === 'builtin.terminal');
+  if (terminalNodes.length === 0) {
+    return;
+  }
+
+  for (const node of terminalNodes) {
+    const response = await shell.runs.listRuns({
+      workspaceId,
+      nodeId: node.id
+    });
+    const activeRuns = response.runs.filter((run) => isActiveRunStatus(run.status));
+    for (const run of activeRuns) {
+      await shell.runs.stopRun({
+        workspaceId,
+        runId: run.id
+      });
+    }
+  }
 };
 
 export const canvasStore = {
@@ -435,13 +478,13 @@ export const canvasStore = {
       setState({ errorMessage });
     }
   },
-  addTerminalNode: async (): Promise<void> => {
+  addTerminalNode: async (config?: Record<string, unknown>): Promise<void> => {
     if (!state.workspaceId || state.loading) {
       return;
     }
 
     const workspaceId = state.workspaceId;
-    const newNode = createTerminalGraphNode(state.graphSnapshot.nodes);
+    const newNode = createTerminalGraphNode(state.graphSnapshot.nodes, config);
     historyStore.push({ kind: 'addNode', node: newNode });
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
@@ -539,7 +582,8 @@ export const canvasStore = {
       width: number;
       height: number;
     },
-    rootDir?: string
+    rootDir?: string,
+    config?: Record<string, unknown>
   ): Promise<void> => {
     if (!state.workspaceId || state.loading) {
       return;
@@ -554,7 +598,7 @@ export const canvasStore = {
         newNode = createNoteGraphNode(existingNodes);
         break;
       case 'builtin.terminal':
-        newNode = createTerminalGraphNode(existingNodes);
+        newNode = createTerminalGraphNode(existingNodes, config);
         break;
       case 'builtin.file-tree':
         newNode = createFileTreeGraphNode(existingNodes, rootDir ?? '');
@@ -631,13 +675,20 @@ export const canvasStore = {
   },
   updateTerminalNode: async (
     nodeId: string,
-    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>
+    patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>> & Record<string, unknown>
   ): Promise<void> => {
     if (!state.workspaceId) {
       return;
     }
 
     const workspaceId = state.workspaceId;
+    const configPatch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (!['x', 'y', 'command', 'runtime'].includes(key) && value !== undefined) {
+        configPatch[key] = value;
+      }
+    }
+
     const nextGraphSnapshot = updateGraphNode(state.graphSnapshot, nodeId, (node) => {
       if (node.componentType !== 'builtin.terminal') {
         return node;
@@ -650,10 +701,12 @@ export const canvasStore = {
           x: patch.x ?? node.bounds.x,
           y: patch.y ?? node.bounds.y
         },
+        title: configPatch.title !== undefined ? String(configPatch.title) : node.title,
         config: {
           ...node.config,
           ...(patch.command !== undefined ? { command: patch.command } : {}),
-          ...(patch.runtime !== undefined ? { runtime: patch.runtime } : {})
+          ...(patch.runtime !== undefined ? { runtime: patch.runtime } : {}),
+          ...configPatch
         },
         updatedAtMs: Date.now()
       };
@@ -849,6 +902,14 @@ export const canvasStore = {
       return;
     }
 
+    try {
+      await stopActiveRunsForTerminalNodes(workspaceId, nodesToDelete);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to stop terminal run(s)';
+      setState({ errorMessage });
+      return;
+    }
+
     const deletedNodeIds = new Set(nodeIds);
     const nextGraphSnapshot: GraphSnapshotV2Input = {
       ...state.graphSnapshot,
@@ -866,7 +927,7 @@ export const canvasStore = {
     applyGraphSnapshot(nextGraphSnapshot);
     setState({ errorMessage: null, recentAction: `Deleted ${nodesToDelete.length} node(s)` });
     try {
-      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, null, nodeIds);
     } catch (error) {
       if (state.workspaceId !== workspaceId) {
         return;

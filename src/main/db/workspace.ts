@@ -6,6 +6,7 @@ import {
   canvasStateSchema,
   componentCapabilitySchema,
   graphSnapshotSchemaV2,
+  runOutputOffsetSchema,
   runRuntimeSchema,
   runStatusSchema,
   workspaceIdSchema,
@@ -71,6 +72,8 @@ interface RunRow {
   status: string;
   summary: string | null;
   tail_log: string;
+  tail_start_offset: number;
+  tail_end_offset: number;
   created_at_ms: number;
   started_at_ms: number | null;
   completed_at_ms: number | null;
@@ -179,6 +182,8 @@ CREATE TABLE IF NOT EXISTS runs (
   status TEXT NOT NULL,
   summary TEXT,
   tail_log TEXT NOT NULL,
+  tail_start_offset INTEGER NOT NULL DEFAULT 0,
+  tail_end_offset INTEGER NOT NULL DEFAULT 0,
   created_at_ms INTEGER NOT NULL,
   started_at_ms INTEGER,
   completed_at_ms INTEGER,
@@ -348,6 +353,8 @@ SELECT
   status,
   summary,
   tail_log,
+  tail_start_offset,
+  tail_end_offset,
   created_at_ms,
   started_at_ms,
   completed_at_ms,
@@ -366,6 +373,8 @@ SELECT
   status,
   summary,
   tail_log,
+  tail_start_offset,
+  tail_end_offset,
   created_at_ms,
   started_at_ms,
   completed_at_ms,
@@ -385,6 +394,8 @@ SELECT
   status,
   summary,
   tail_log,
+  tail_start_offset,
+  tail_end_offset,
   created_at_ms,
   started_at_ms,
   completed_at_ms,
@@ -403,6 +414,8 @@ SELECT
   status,
   summary,
   tail_log,
+  tail_start_offset,
+  tail_end_offset,
   created_at_ms,
   started_at_ms,
   completed_at_ms,
@@ -422,6 +435,8 @@ INSERT INTO runs (
   status,
   summary,
   tail_log,
+  tail_start_offset,
+  tail_end_offset,
   created_at_ms,
   started_at_ms,
   completed_at_ms,
@@ -436,6 +451,8 @@ VALUES (
   @status,
   @summary,
   @tail_log,
+  @tail_start_offset,
+  @tail_end_offset,
   @created_at_ms,
   @started_at_ms,
   @completed_at_ms,
@@ -449,6 +466,8 @@ ON CONFLICT(id) DO UPDATE SET
   status = excluded.status,
   summary = excluded.summary,
   tail_log = excluded.tail_log,
+  tail_start_offset = excluded.tail_start_offset,
+  tail_end_offset = excluded.tail_end_offset,
   created_at_ms = excluded.created_at_ms,
   started_at_ms = excluded.started_at_ms,
   completed_at_ms = excluded.completed_at_ms,
@@ -566,6 +585,35 @@ const readMigrationSql = (): string => {
   }
 
   return fallbackMigrationSql;
+};
+
+const ensureRunOffsetColumns = (db: NodeDatabaseSync): void => {
+  const columns = db.prepare('PRAGMA table_info(runs)').all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (!columnNames.has('tail_start_offset')) {
+    db.exec('ALTER TABLE runs ADD COLUMN tail_start_offset INTEGER NOT NULL DEFAULT 0');
+  }
+
+  if (!columnNames.has('tail_end_offset')) {
+    db.exec('ALTER TABLE runs ADD COLUMN tail_end_offset INTEGER NOT NULL DEFAULT 0');
+  }
+
+  db.exec(`
+    UPDATE runs
+    SET tail_end_offset = CASE
+      WHEN tail_end_offset IS NULL OR tail_end_offset < LENGTH(tail_log) THEN LENGTH(tail_log)
+      ELSE tail_end_offset
+    END
+  `);
+  db.exec(`
+    UPDATE runs
+    SET tail_start_offset = max(0, tail_end_offset - LENGTH(tail_log))
+    WHERE tail_start_offset IS NULL
+      OR tail_start_offset < 0
+      OR tail_start_offset > tail_end_offset
+      OR (tail_end_offset - tail_start_offset) != LENGTH(tail_log)
+  `);
 };
 
 const parseNotePayload = (payloadJson: string): { contentMd: string } => {
@@ -920,6 +968,10 @@ const parseRunRuntime = (runtime: string): RunRuntimeInput => {
   return runRuntimeSchema.parse(runtime);
 };
 
+const parseRunOutputOffset = (offset: number): number => {
+  return runOutputOffsetSchema.parse(offset);
+};
+
 const mapRunRow = (row: RunRow): RunRecord => {
   return {
     id: row.id,
@@ -930,6 +982,8 @@ const mapRunRow = (row: RunRow): RunRecord => {
     status: parseRunStatus(row.status),
     summary: row.summary,
     tailLog: row.tail_log,
+    tailStartOffset: parseRunOutputOffset(row.tail_start_offset),
+    tailEndOffset: parseRunOutputOffset(row.tail_end_offset),
     createdAtMs: row.created_at_ms,
     startedAtMs: row.started_at_ms,
     completedAtMs: row.completed_at_ms
@@ -1034,6 +1088,7 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
   const db: NodeDatabaseSync = new DatabaseSync(options.dbFilePath);
   db.exec(readMigrationSql());
   db.exec(fallbackRunAndAuditSql);
+  ensureRunOffsetColumns(db);
 
   const getRunById = (runId: string): RunRecord | null => {
     const row = db.prepare(selectRunByIdSql).get({ id: runId }) as RunRow | undefined;
@@ -1150,6 +1205,15 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
       const parsedWorkspaceId = workspaceIdSchema.parse(run.workspaceId);
       const parsedStatus = runStatusSchema.parse(run.status);
       const parsedRuntime = runRuntimeSchema.parse(run.runtime);
+      const tailLog = typeof run.tailLog === 'string' ? run.tailLog : '';
+      const tailEndOffset = parseRunOutputOffset(
+        typeof run.tailEndOffset === 'number' ? run.tailEndOffset : tailLog.length
+      );
+      const tailStartOffset = parseRunOutputOffset(
+        typeof run.tailStartOffset === 'number'
+          ? run.tailStartOffset
+          : Math.max(0, tailEndOffset - tailLog.length)
+      );
       const timestamp = now();
 
       db.prepare(upsertRunSql).run({
@@ -1160,7 +1224,9 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
         command: run.command,
         status: parsedStatus,
         summary: run.summary,
-        tail_log: run.tailLog,
+        tail_log: tailLog,
+        tail_start_offset: tailStartOffset,
+        tail_end_offset: tailEndOffset,
         created_at_ms: run.createdAtMs,
         started_at_ms: run.startedAtMs,
         completed_at_ms: run.completedAtMs,

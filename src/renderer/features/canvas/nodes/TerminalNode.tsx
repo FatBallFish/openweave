@@ -1,10 +1,26 @@
-import { useEffect, useState } from 'react';
-import type { OpenWeaveShellBridge, RunRecord } from '../../../../shared/ipc/contracts';
-import type { RunRuntimeInput, RunStartInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import {JSX, useEffect, useRef, useState} from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../../shared/ipc/contracts';
+import type { RunRuntimeInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
+import { isAnsiSafeBoundary } from '../../terminal/ansi-boundary';
+import { getXtermTheme } from './xterm-theme';
+
+export interface TerminalConfig {
+  workingDir: string;
+  projectDir?: string | null;
+  iconKey: string;
+  iconColor: string;
+  theme: 'auto' | 'light' | 'dark';
+  fontFamily: string;
+  fontSize: number;
+  roleId: string | null;
+}
 
 interface TerminalNodeProps {
   workspaceId: string;
   node: TerminalNodeInput;
+  config: TerminalConfig;
   onChange: (patch: Partial<Pick<TerminalNodeInput, 'x' | 'y' | 'command' | 'runtime'>>) => void;
   onOpenRun: (runId: string) => void;
 }
@@ -33,75 +49,276 @@ const getShellBridge = (): OpenWeaveShellBridge => {
 export const buildTerminalRunStartInput = (input: {
   workspaceId: string;
   node: Pick<TerminalNodeInput, 'id' | 'command'> & { runtime?: RunRuntimeInput };
-}): RunStartInput => {
+  workingDir?: string;
+}): import('../../../../shared/ipc/schemas').RunStartInput => {
   return {
     workspaceId: input.workspaceId,
     nodeId: input.node.id,
     runtime: input.node.runtime ?? 'shell',
-    command: input.node.command
+    command: input.node.command,
+    workingDir: input.workingDir
   };
+};
+
+const isTerminalState = (status: RunRecord['status']): boolean => {
+  return status === 'completed' || status === 'failed' || status === 'stopped';
+};
+
+const getTailEndOffset = (run: RunRecord): number => {
+  return typeof run.tailEndOffset === 'number' ? run.tailEndOffset : run.tailLog.length;
+};
+
+const getTailStartOffset = (run: RunRecord): number => {
+  if (typeof run.tailStartOffset === 'number') {
+    return run.tailStartOffset;
+  }
+  return Math.max(0, getTailEndOffset(run) - run.tailLog.length);
+};
+
+const getChunkOffsets = (
+  event: RunStreamEvent,
+  renderedOffset: number
+): { chunkStartOffset: number; chunkEndOffset: number } => {
+  const chunkStartOffset =
+    typeof event.chunkStartOffset === 'number' ? event.chunkStartOffset : renderedOffset;
+  const chunkEndOffset =
+    typeof event.chunkEndOffset === 'number' ? event.chunkEndOffset : chunkStartOffset + event.chunk.length;
+  return {
+    chunkStartOffset,
+    chunkEndOffset
+  };
+};
+
+const isHydratedRoleWorkingDir = (workingDir: string, terminalId: string): boolean => {
+  const normalizedWorkingDir = workingDir.replace(/\\/g, '/').replace(/\/+$/, '');
+  return normalizedWorkingDir.endsWith(`/.openweave/roles/${terminalId}`);
 };
 
 export const TerminalNode = ({
   workspaceId,
   node,
+  config,
   onChange,
   onOpenRun
 }: TerminalNodeProps): JSX.Element => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [draftCommand, setDraftCommand] = useState(node.command);
-  const [draftRuntime, setDraftRuntime] = useState<RunRuntimeInput>(node.runtime);
   const latestRun = runs[0] ?? null;
-  const sessionLabel = latestRun ? `Session ${latestRun.id}` : 'Session ready';
-  const output = latestRun?.tailLog.length ? latestRun.tailLog : '(no output yet)';
-  const startRun = (): void => {
-    if (isStarting || draftCommand.trim().length === 0) {
+  const activeRun = runs.find((candidate) => !isTerminalState(candidate.status)) ?? null;
+  const displayRun = activeRun ?? latestRun;
+  const activeRunRef = useRef<RunRecord | null>(null);
+  const isStartingRef = useRef(false);
+  const renderedRunIdRef = useRef<string | null>(null);
+  const renderedOffsetRef = useRef(0);
+  const awaitingSnapshotRef = useRef(false);
+  const deferredFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoStartArmedRef = useRef(false);
+  const shouldDelayAutoStartForRole =
+    config.roleId !== null &&
+    !config.projectDir &&
+    !isHydratedRoleWorkingDir(config.workingDir, node.id);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
       return;
     }
 
-    if (draftCommand !== node.command || draftRuntime !== node.runtime) {
-      onChange({
-        command: draftCommand,
-        runtime: draftRuntime
-      });
+    const handleWheel = (event: WheelEvent): void => {
+      if (container.contains(document.activeElement)) {
+        event.stopPropagation();
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel);
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
     }
 
-    setIsStarting(true);
-    void getShellBridge()
-      .runs.startRun(
-        buildTerminalRunStartInput({
-          workspaceId,
-          node: {
-            ...node,
-            command: draftCommand,
-            runtime: draftRuntime
-          }
-        })
-      )
-      .then((response) => {
-        setRuns((currentRuns) => [response.run, ...currentRuns]);
-        onOpenRun(response.run.id);
-        setErrorMessage(null);
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : 'Failed to start run';
-        setErrorMessage(message);
-      })
-      .finally(() => {
-        setIsStarting(false);
-      });
-  };
+    const handlePointerDown = (): void => {
+      xtermRef.current?.focus();
+      if (deferredFocusTimerRef.current !== null) {
+        clearTimeout(deferredFocusTimerRef.current);
+      }
+      deferredFocusTimerRef.current = setTimeout(() => {
+        xtermRef.current?.focus();
+        deferredFocusTimerRef.current = null;
+      }, 0);
+    };
 
+    container.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    return () => {
+      container.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      if (deferredFocusTimerRef.current !== null) {
+        clearTimeout(deferredFocusTimerRef.current);
+        deferredFocusTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Initialize xterm.js
   useEffect(() => {
-    setDraftCommand(node.command);
-  }, [node.command]);
+    if (!containerRef.current) return;
 
+    const xtermTheme = getXtermTheme(config.theme);
+    const term = new Terminal({
+      theme: xtermTheme,
+      fontFamily: config.fontFamily || 'monospace',
+      fontSize: config.fontSize || 14,
+      cursorBlink: true,
+      convertEol: false,
+      scrollback: 1000
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(containerRef.current);
+    fitAddon.fit();
+    term.focus();
+    // Sync container background to xterm theme
+    containerRef.current.style.background = xtermTheme.background ?? '';
+
+    xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    // Capture keyboard input
+    term.onData((data) => {
+      const run = activeRunRef.current;
+      if (run && !isTerminalState(run.status)) {
+        try {
+          getShellBridge().runs.inputRun({
+            workspaceId,
+            runId: run.id,
+            input: data
+          });
+        } catch {
+          // Best-effort input
+        }
+      }
+    });
+
+    return () => {
+      term.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, []);
+
+  // Update theme/font when config changes
   useEffect(() => {
-    setDraftRuntime(node.runtime);
-  }, [node.runtime]);
+    const term = xtermRef.current;
+    if (!term) return;
+    const xtermTheme = getXtermTheme(config.theme);
+    term.options.theme = xtermTheme;
+    term.options.fontFamily = config.fontFamily || 'monospace';
+    term.options.fontSize = config.fontSize || 14;
+    // Sync container background to xterm theme so rounded corners match
+    const container = containerRef.current;
+    if (container) {
+      container.style.background = xtermTheme.background ?? '';
+    }
+  }, [config.theme, config.fontFamily, config.fontSize]);
 
+  // Listen for app theme changes when terminal theme is "auto"
+  useEffect(() => {
+    if (config.theme !== 'auto') return;
+
+    const observer = new MutationObserver(() => {
+      const term = xtermRef.current;
+      if (!term) return;
+      const xtermTheme = getXtermTheme('auto');
+      term.options.theme = xtermTheme;
+      const container = containerRef.current;
+      if (container) {
+        container.style.background = xtermTheme.background ?? '';
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, [config.theme]);
+
+  // Subscribe to real-time stream for active run
+  useEffect(() => {
+    if (!activeRun) return;
+
+    const bridge = getShellBridge();
+    bridge.runs.subscribeStream(activeRun.id);
+
+    const unsubscribe = bridge.runs.onStream((event) => {
+      if (event.runId === activeRun.id && xtermRef.current) {
+        const { chunkStartOffset, chunkEndOffset } = getChunkOffsets(event, renderedOffsetRef.current);
+        if (chunkEndOffset <= renderedOffsetRef.current) {
+          return;
+        }
+        if (chunkStartOffset > renderedOffsetRef.current || awaitingSnapshotRef.current) {
+          awaitingSnapshotRef.current = true;
+          return;
+        }
+
+        const suffixStart = Math.max(0, renderedOffsetRef.current - chunkStartOffset);
+        const suffix = event.chunk.slice(suffixStart);
+        if (suffix.length === 0) {
+          renderedOffsetRef.current = chunkEndOffset;
+          return;
+        }
+
+        xtermRef.current.write(suffix);
+        renderedOffsetRef.current = chunkEndOffset;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      bridge.runs.unsubscribeStream(activeRun.id);
+    };
+  }, [activeRun?.id]);
+
+  // ResizeObserver → fitAddon.fit() → resizeRun
+  useEffect(() => {
+    const container = containerRef.current;
+    const term = xtermRef.current;
+    if (!container || !term) return;
+
+    const observer = new ResizeObserver(() => {
+      fitAddonRef.current?.fit();
+      const cols = term.cols;
+      const rows = term.rows;
+      const run = activeRunRef.current;
+      if (run && !isTerminalState(run.status)) {
+        try {
+          getShellBridge().runs.resizeRun({
+            workspaceId,
+            runId: run.id,
+            cols,
+            rows
+          });
+        } catch {
+          // Best-effort resize
+        }
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Poll runs list (for history/fallback)
   useEffect(() => {
     let cancelled = false;
 
@@ -111,15 +328,11 @@ export const TerminalNode = ({
           workspaceId,
           nodeId: node.id
         });
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setRuns(response.runs);
         setErrorMessage(null);
       } catch (error) {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         const message = error instanceof Error ? error.message : 'Failed to load runs';
         setErrorMessage(message);
       }
@@ -136,132 +349,154 @@ export const TerminalNode = ({
     };
   }, [workspaceId, node.id]);
 
+  useEffect(() => {
+    activeRunRef.current = activeRun;
+  }, [activeRun]);
+
+  useEffect(() => {
+    const term = xtermRef.current;
+    if (!term) {
+      return;
+    }
+
+    if (!displayRun) {
+      renderedRunIdRef.current = null;
+      renderedOffsetRef.current = 0;
+      awaitingSnapshotRef.current = false;
+      return;
+    }
+
+    const redrawSnapshot = (): void => {
+      term.clear();
+      renderedRunIdRef.current = displayRun.id;
+      renderedOffsetRef.current = getTailEndOffset(displayRun);
+      awaitingSnapshotRef.current = false;
+      if (displayRun.tailLog.length > 0) {
+        term.write(displayRun.tailLog);
+      }
+    };
+
+    if (renderedRunIdRef.current !== displayRun.id) {
+      redrawSnapshot();
+      return;
+    }
+
+    const tailStartOffset = getTailStartOffset(displayRun);
+    const tailEndOffset = getTailEndOffset(displayRun);
+
+    if (activeRun?.id === displayRun.id && !isTerminalState(displayRun.status)) {
+      if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+        return;
+      }
+
+      if (tailStartOffset > renderedOffsetRef.current) {
+        redrawSnapshot();
+        return;
+      }
+
+      const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+      if (!isAnsiSafeBoundary(displayRun.tailLog, suffixStart)) {
+        redrawSnapshot();
+        return;
+      }
+      const suffix = displayRun.tailLog.slice(suffixStart);
+      if (suffix.length === 0) {
+        renderedOffsetRef.current = tailEndOffset;
+        awaitingSnapshotRef.current = false;
+        return;
+      }
+
+      term.write(suffix);
+      renderedOffsetRef.current = tailEndOffset;
+      awaitingSnapshotRef.current = false;
+      return;
+    }
+
+    if (tailEndOffset === renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+      return;
+    }
+
+    redrawSnapshot();
+  }, [activeRun?.id, displayRun?.id, displayRun?.tailLog, displayRun?.tailStartOffset, displayRun?.tailEndOffset, displayRun?.status]);
+
+  useEffect(() => {
+    isStartingRef.current = isStarting;
+  }, [isStarting]);
+
+  useEffect(() => {
+    autoStartArmedRef.current = false;
+  }, [workspaceId, node.id]);
+
+  const startRun = (): void => {
+    if (isStartingRef.current) return;
+
+    const effectiveRuntime = node.runtime ?? 'shell';
+
+    setIsStarting(true);
+    void getShellBridge()
+      .runs.startRun(
+        buildTerminalRunStartInput({
+          workspaceId,
+          node: { ...node, command: node.command, runtime: effectiveRuntime },
+          workingDir: config.workingDir
+        })
+      )
+      .then((response) => {
+        setRuns((currentRuns) => [response.run, ...currentRuns]);
+        onOpenRun(response.run.id);
+        setErrorMessage(null);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : 'Failed to start run';
+        setErrorMessage(message);
+      })
+      .finally(() => {
+        setIsStarting(false);
+      });
+  };
+  const startRunRef = useRef(startRun);
+  startRunRef.current = startRun;
+
+  // Auto-start terminal on mount if no active run
+  useEffect(() => {
+    if (shouldDelayAutoStartForRole || autoStartArmedRef.current) {
+      return;
+    }
+
+    autoStartArmedRef.current = true;
+    const timer = setTimeout(() => {
+      if (!activeRunRef.current && !isStartingRef.current) {
+        startRunRef.current();
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [shouldDelayAutoStartForRole, workspaceId, node.id]);
+
   return (
     <section className="ow-terminal-node" data-testid={`terminal-node-${node.id}`}>
-      <div className="ow-terminal-node__toolbar" data-testid="terminal-node-toolbar">
-        <label className="ow-terminal-node__runtime">
-          Runtime
-          <select
-            className="nodrag nopan"
-            data-testid={`terminal-node-runtime-${node.id}`}
-            onChange={(event) => {
-              const nextRuntime = event.currentTarget.value as RunRuntimeInput;
-              setDraftRuntime(nextRuntime);
-              onChange({ runtime: nextRuntime });
-            }}
-            value={draftRuntime}
-          >
-            {TERMINAL_NODE_RUNTIME_OPTIONS.map((runtime) => (
-              <option key={runtime} value={runtime}>
-                {runtimeLabelByValue[runtime]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="ow-terminal-node__session" data-testid={`terminal-node-session-${node.id}`}>
-          {sessionLabel}
-        </div>
-
-        <button
-          className="ow-terminal-node__secondary-action nodrag nopan"
-          data-testid={`terminal-node-open-run-${node.id}`}
-          disabled={!latestRun}
-          onClick={() => {
-            if (!latestRun) {
-              return;
-            }
-            onOpenRun(latestRun.id);
-          }}
-          type="button"
-        >
-          Open run
-        </button>
-      </div>
-
-      <label className="ow-terminal-node__command">
-        Command
-        <input
-          className="nodrag nopan"
-          data-testid={`terminal-node-command-${node.id}`}
-          onBlur={() => {
-            if (draftCommand !== node.command) {
-              onChange({ command: draftCommand });
-            }
-          }}
-          onChange={(event) => setDraftCommand(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              startRun();
-            }
-          }}
-          type="text"
-          value={draftCommand}
-        />
-      </label>
-
-      <div className="ow-terminal-node__actions">
-        <button
-          className="nodrag nopan"
-          data-testid={`terminal-node-run-${node.id}`}
-          disabled={isStarting || draftCommand.trim().length === 0}
-          onClick={startRun}
-          type="button"
-        >
-          {isStarting ? 'Starting...' : 'Run'}
-        </button>
-        <button
-          className="ow-terminal-node__secondary-action nodrag nopan"
-          data-testid={`terminal-node-copy-command-${node.id}`}
-          onClick={() => {
-            if (typeof navigator !== 'undefined' && navigator.clipboard) {
-              void navigator.clipboard.writeText(draftCommand);
-            }
-          }}
-          type="button"
-        >
-          Copy command
-        </button>
-        <span data-testid={`terminal-node-last-status-${node.id}`}>
-          Last status: {latestRun?.status ?? 'none'}
-        </span>
-      </div>
-
       {errorMessage ? (
         <p className="ow-terminal-node__error" data-testid={`terminal-node-error-${node.id}`}>
           {errorMessage}
         </p>
       ) : null}
 
-      <div className="ow-terminal-node__output">
-        <div className="ow-terminal-node__output-header">
-          <strong>Session output</strong>
-          <span>{getTerminalRuntimeLabel(draftRuntime)}</span>
-        </div>
-        <pre className="ow-terminal-node__output-surface" data-testid={`terminal-node-output-${node.id}`}>
-          {output}
-        </pre>
-      </div>
-
-      <div className="ow-terminal-node__runs" data-testid={`terminal-node-runs-${node.id}`}>
-        {runs.length === 0 ? (
-          <p className="ow-terminal-node__empty">No runs yet.</p>
-        ) : (
-          runs.map((run) => (
-            <button
-              className="ow-terminal-node__run-item nodrag nopan"
-              data-testid={`terminal-run-${run.id}`}
-              key={run.id}
-              onClick={() => onOpenRun(run.id)}
-              type="button"
-            >
-              <strong>{run.status}</strong>
-              <div>{run.summary ?? run.command}</div>
-            </button>
-          ))
-        )}
-      </div>
+      <div
+        ref={containerRef}
+        className="ow-terminal-node__xterm nodrag nopan"
+        data-testid={`terminal-node-xterm-${node.id}`}
+        style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+        onFocus={() => {
+          xtermRef.current?.focus();
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          xtermRef.current?.focus();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          xtermRef.current?.focus();
+        }}
+      />
     </section>
   );
 };

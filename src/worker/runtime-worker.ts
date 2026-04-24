@@ -30,7 +30,14 @@ interface StopRunMessage {
   runId: string;
 }
 
-type IncomingMessage = StartRunMessage | InputRunMessage | StopRunMessage;
+interface ResizeRunMessage {
+  type: 'resize';
+  runId: string;
+  cols: number;
+  rows: number;
+}
+
+type IncomingMessage = StartRunMessage | InputRunMessage | StopRunMessage | ResizeRunMessage;
 
 interface StartedEvent {
   type: 'started';
@@ -320,6 +327,23 @@ const handleMessage = (message: unknown): void => {
   if (typedMessage.type === 'stop') {
     if (typeof typedMessage.runId === 'string') {
       handleStopMessage(typedMessage as StopRunMessage);
+    }
+    return;
+  }
+
+  if (typedMessage.type === 'resize') {
+    if (
+      typeof typedMessage.runId === 'string' &&
+      typeof typedMessage.cols === 'number' &&
+      typeof typedMessage.rows === 'number' &&
+      activeRun &&
+      activeRun.runId === typedMessage.runId
+    ) {
+      try {
+        activeRun.runtimeProcess.resize(typedMessage.cols, typedMessage.rows);
+      } catch {
+        // Best-effort resize
+      }
     }
     return;
   }

@@ -6,6 +6,7 @@ import { CommandPalette, type CommandPaletteItem } from './features/workbench/Co
 import { WorkbenchShell } from './features/workbench/WorkbenchShell';
 import { SettingsDialog } from './features/workbench/SettingsDialog';
 import { WorkspaceListPage } from './features/workspaces/WorkspaceListPage';
+import { CreateTerminalDialog } from './features/canvas/CreateTerminalDialog';
 import { useWorkspacesStore } from './features/workspaces/workspaces.store';
 import { useI18n } from './i18n/provider';
 import { useTheme } from './hooks/useTheme';
@@ -31,7 +32,15 @@ export const App = (): JSX.Element => {
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [fitViewRequestId, setFitViewRequestId] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createTerminalDialogOpen, setCreateTerminalDialogOpen] = useState(false);
+  const [pendingTerminalBounds, setPendingTerminalBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [placementMode, setPlacementMode] = useState<{ type: string } | null>(null);
+  const [editTerminalOpen, setEditTerminalOpen] = useState(false);
+  const [editTerminalNodeId, setEditTerminalNodeId] = useState<string | null>(null);
+  const [editTerminalConfig, setEditTerminalConfig] = useState<Record<string, unknown> | null>(null);
+  const [simulateOpen, setSimulateOpen] = useState(false);
+  const [simulateNodeId, setSimulateNodeId] = useState<string | null>(null);
+  const [simulateWorkspaceId, setSimulateWorkspaceId] = useState<string | null>(null);
   const disabled = activeWorkspace === null || canvasLoading;
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
@@ -42,6 +51,28 @@ export const App = (): JSX.Element => {
     const handle = () => setSettingsOpen(true);
     window.addEventListener('openweave:open-settings', handle);
     return () => window.removeEventListener('openweave:open-settings', handle);
+  }, []);
+
+  useEffect(() => {
+    const handleEdit = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { nodeId: string; config: Record<string, unknown> };
+      setEditTerminalNodeId(detail.nodeId);
+      setEditTerminalConfig(detail.config);
+      setEditTerminalOpen(true);
+    };
+    window.addEventListener('openweave:edit-terminal', handleEdit);
+    return () => window.removeEventListener('openweave:edit-terminal', handleEdit);
+  }, []);
+
+  useEffect(() => {
+    const handleSim = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { nodeId: string; workspaceId: string };
+      setSimulateNodeId(detail.nodeId);
+      setSimulateWorkspaceId(detail.workspaceId);
+      setSimulateOpen(true);
+    };
+    window.addEventListener('openweave:simulate-node-message', handleSim);
+    return () => window.removeEventListener('openweave:simulate-node-message', handleSim);
   }, []);
 
   const selectedNode = useMemo(() => {
@@ -89,7 +120,7 @@ export const App = (): JSX.Element => {
   }, []);
 
   const addTerminal = useCallback(() => {
-    void canvasStore.addTerminalNode();
+    setPlacementMode({ type: 'terminal' });
   }, []);
 
   const addNote = useCallback(() => {
@@ -116,9 +147,48 @@ export const App = (): JSX.Element => {
     setPlacementMode(null);
   }, []);
 
+  const handleCreateTerminalSave = useCallback(
+    (config: Record<string, unknown>) => {
+      setCreateTerminalDialogOpen(false);
+      if (pendingTerminalBounds) {
+        void canvasStore.addNodeAtBounds('builtin.terminal', pendingTerminalBounds, activeWorkspace?.rootDir ?? '', config);
+        setPendingTerminalBounds(null);
+      } else {
+        void canvasStore.addTerminalNode(config);
+      }
+    },
+    [pendingTerminalBounds, activeWorkspace?.rootDir]
+  );
+
+  const handleEditTerminalSave = useCallback(
+    (config: Record<string, unknown>) => {
+      setEditTerminalOpen(false);
+      if (editTerminalNodeId) {
+        void canvasStore.updateTerminalNode(editTerminalNodeId, {
+          command: typeof config.command === 'string' ? config.command : '',
+          runtime: config.runtime === 'codex' || config.runtime === 'claude' || config.runtime === 'opencode' ? config.runtime : 'shell',
+          title: config.title ?? undefined,
+          iconKey: config.iconKey ?? undefined,
+          iconColor: config.iconColor ?? undefined,
+          theme: config.theme ?? undefined,
+          fontFamily: config.fontFamily ?? undefined,
+          fontSize: config.fontSize ?? undefined,
+          roleId: config.roleId ?? undefined
+        } as Record<string, unknown>);
+      }
+    },
+    [editTerminalNodeId]
+  );
+
   const handlePlacementComplete = useCallback(
     (type: string, bounds: { x: number; y: number; width: number; height: number }) => {
       const componentType = `builtin.${type}`;
+      if (componentType === 'builtin.terminal') {
+        setPendingTerminalBounds(bounds);
+        setCreateTerminalDialogOpen(true);
+        setPlacementMode(null);
+        return;
+      }
       void canvasStore.addNodeAtBounds(componentType, bounds, activeWorkspace?.rootDir ?? '');
       setPlacementMode(null);
     },
@@ -250,6 +320,7 @@ export const App = (): JSX.Element => {
       onOpenCommandPalette={openCommandPalette}
       onOpenQuickAdd={openQuickAdd}
       onSelectNode={selectNode}
+      onAddTerminal={addTerminal}
       placementMode={placementMode}
       onPlacementComplete={handlePlacementComplete}
       onPlacementCancel={cancelPlacement}
@@ -311,6 +382,128 @@ export const App = (): JSX.Element => {
       onTogglePlacement={togglePlacement}
     />
     <SettingsDialog open={settingsOpen} onClose={closeSettings} />
+    <CreateTerminalDialog
+      open={createTerminalDialogOpen}
+      workspaceRootDir={activeWorkspace?.rootDir ?? ''}
+      onClose={() => {
+        setCreateTerminalDialogOpen(false);
+        setPendingTerminalBounds(null);
+      }}
+      onSave={handleCreateTerminalSave}
+    />
+    <CreateTerminalDialog
+      open={editTerminalOpen}
+      mode="edit"
+      initialConfig={editTerminalConfig}
+      workspaceRootDir={activeWorkspace?.rootDir ?? ''}
+      onClose={() => {
+        setEditTerminalOpen(false);
+        setEditTerminalNodeId(null);
+        setEditTerminalConfig(null);
+      }}
+      onSave={handleEditTerminalSave}
+    />
+    {simulateOpen && simulateNodeId && simulateWorkspaceId && (
+      <SimulateNodeMessageDialog
+        open={simulateOpen}
+        nodeId={simulateNodeId}
+        workspaceId={simulateWorkspaceId}
+        onClose={() => {
+          setSimulateOpen(false);
+          setSimulateNodeId(null);
+          setSimulateWorkspaceId(null);
+        }}
+      />
+    )}
     </>
   );
 };
+
+function SimulateNodeMessageDialog({
+  open,
+  nodeId,
+  workspaceId,
+  onClose
+}: {
+  open: boolean;
+  nodeId: string;
+  workspaceId: string;
+  onClose: () => void;
+}): JSX.Element | null {
+  const { t } = useI18n();
+  const [message, setMessage] = useState('');
+  const [runs, setRuns] = useState<import('../../../shared/ipc/contracts').RunRecord[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    const load = async () => {
+      try {
+        const bridge = (window as any).openweaveShell;
+        const res = await bridge.runs.listRuns({ workspaceId, nodeId });
+        setRuns(res.runs);
+      } catch {
+        // ignore
+      }
+    };
+    void load();
+    const timer = setInterval(load, 500);
+    return () => clearInterval(timer);
+  }, [open, workspaceId, nodeId]);
+
+  const activeRun = runs.find((r) => r.status !== 'completed' && r.status !== 'failed' && r.status !== 'stopped');
+
+  const handleSend = async () => {
+    if (!activeRun || !message.trim()) return;
+    try {
+      const bridge = (window as any).openweaveShell;
+      await bridge.runs.inputRun({ workspaceId, runId: activeRun.id, input: message.trim() });
+      setMessage('');
+    } catch {
+      // ignore
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="ow-workspace-dialog ow-simulate-dialog" role="dialog" aria-modal="true">
+      <div className="ow-workspace-dialog__backdrop" onClick={onClose} />
+      <section className="ow-workspace-dialog__surface ow-workspace-dialog__surface--confirm">
+        <header className="ow-workspace-dialog__header">
+          <h2>{t('terminal.simulate.title')}</h2>
+        </header>
+        <div className="ow-workspace-dialog__form">
+          {!activeRun && (
+            <p className="ow-simulate-dialog__status">{t('terminal.simulate.noRun')}</p>
+          )}
+          {activeRun && (
+            <>
+              <p className="ow-simulate-dialog__status">{t('terminal.simulate.activeRun')}: {activeRun.id.slice(0, 8)}...</p>
+              <div className="ow-workspace-dialog__field">
+                <span>{t('terminal.simulate.messageLabel')}</span>
+                <textarea
+                  rows={4}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={t('terminal.simulate.messagePlaceholder')}
+                  autoFocus
+                />
+              </div>
+            </>
+          )}
+          <div className="ow-workspace-dialog__actions">
+            <button className="ow-toolbar-button" type="button" onClick={onClose}>{t('terminal.simulate.close')}</button>
+            <button
+              className="ow-toolbar-button ow-toolbar-button--primary"
+              type="button"
+              onClick={handleSend}
+              disabled={!activeRun || !message.trim()}
+            >
+              {t('terminal.simulate.send')}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
