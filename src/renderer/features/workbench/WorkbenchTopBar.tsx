@@ -18,6 +18,8 @@ interface WorkbenchTopBarProps {
   onToggleInspector: () => void;
   activePlacementType?: string | null;
   onTogglePlacement?: (type: string) => void;
+  connectModeActive?: boolean;
+  onToggleConnectMode?: () => void;
 }
 
 export const WorkbenchTopBar = ({
@@ -36,7 +38,9 @@ export const WorkbenchTopBar = ({
   onFitCanvas,
   onToggleInspector,
   activePlacementType,
-  onTogglePlacement
+  onTogglePlacement,
+  connectModeActive,
+  onToggleConnectMode,
 }: WorkbenchTopBarProps): JSX.Element => {
   const { t } = useI18n();
   const icon = (path: string, viewBox = '0 0 24 24'): JSX.Element => (
@@ -96,6 +100,26 @@ export const WorkbenchTopBar = ({
           primary={true}
           active={activePlacementType === 'text'}
           testId="workbench-topbar-action-add-text"
+        />
+
+        <div
+          style={{ width: 1, height: 28, background: "var(--ow-color-border)", margin: "0 6px", flexShrink: 0 }}
+        />
+
+        <IconButton
+          disabled={disabled}
+          icon={
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+              <circle cx="6" cy="6" r="1.6" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="18" r="1.6" fill="currentColor" stroke="none" />
+              <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="1.8" strokeDasharray="3 3" />
+            </svg>
+          }
+          label={t("topbar.addConnect")}
+          onClick={onToggleConnectMode}
+          primary={true}
+          active={connectModeActive ?? false}
+          testId="workbench-topbar-action-connect"
         />
       </div>
 
