@@ -217,6 +217,22 @@ export const chineseLanguagePack: LanguagePack = {
     'terminal.simulate.messageLabel': '消息',
     'terminal.simulate.messagePlaceholder': '输入要发送给终端的消息...',
     'terminal.simulate.close': '关闭',
-    'terminal.simulate.send': '发送'
+    'terminal.simulate.send': '发送',
+    'topbar.addConnect': '连线',
+    'shortcuts.commandPalette': '命令面板',
+    'shortcuts.quickAdd': '快速添加',
+    'shortcuts.toggleInspector': '切换检查器',
+    'shortcuts.addTerminal': '添加终端',
+    'shortcuts.addNote': '添加笔记',
+    'shortcuts.addPortal': '添加门户',
+    'shortcuts.addFileTree': '添加文件树',
+    'shortcuts.addText': '添加文本',
+    'shortcuts.escape': '取消 / 退出',
+    'shortcuts.deleteSelected': '删除选中',
+    'shortcuts.undo': '撤销',
+    'shortcuts.redo': '还原',
+    'shortcuts.toggleConnectMode': '连线模式',
+    'shortcuts.reset': '恢复默认',
+    'shortcuts.pressKey': '按下新快捷键...'
   }
 };

@@ -217,6 +217,22 @@ export const englishLanguagePack: LanguagePack = {
     'terminal.simulate.messageLabel': 'Message',
     'terminal.simulate.messagePlaceholder': 'Enter message to send to terminal...',
     'terminal.simulate.close': 'Close',
-    'terminal.simulate.send': 'Send'
+    'terminal.simulate.send': 'Send',
+    'topbar.addConnect': 'Connect components',
+    'shortcuts.commandPalette': 'Command palette',
+    'shortcuts.quickAdd': 'Quick add',
+    'shortcuts.toggleInspector': 'Toggle inspector',
+    'shortcuts.addTerminal': 'Add terminal',
+    'shortcuts.addNote': 'Add note',
+    'shortcuts.addPortal': 'Add portal',
+    'shortcuts.addFileTree': 'Add file tree',
+    'shortcuts.addText': 'Add text',
+    'shortcuts.escape': 'Escape / Cancel',
+    'shortcuts.deleteSelected': 'Delete selected',
+    'shortcuts.undo': 'Undo',
+    'shortcuts.redo': 'Redo',
+    'shortcuts.toggleConnectMode': 'Toggle connect mode',
+    'shortcuts.reset': 'Reset to defaults',
+    'shortcuts.pressKey': 'Press key...'
   }
 };
