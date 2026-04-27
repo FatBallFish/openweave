@@ -192,30 +192,37 @@ export const createLocalWorkspaceNodeQueryService = (
       const downstream: GraphNodeNeighborsResponse['downstream'] = [];
 
       for (const edge of graph.edges) {
-        if (edge.target === input.nodeId) {
-          const sourceNode = nodeMap.get(edge.source);
-          if (!sourceNode) {
-            continue;
-          }
-          upstream.push({
-            edgeId: edge.id,
-            nodeId: sourceNode.id,
-            componentType: sourceNode.componentType,
-            title: sourceNode.title
-          });
-        }
+        let neighborNodeId: string | null = null;
+        let neighborTitle = '';
+        let neighborComponentType = '';
+
         if (edge.source === input.nodeId) {
           const targetNode = nodeMap.get(edge.target);
-          if (!targetNode) {
-            continue;
+          if (targetNode) {
+            neighborNodeId = targetNode.id;
+            neighborTitle = targetNode.title;
+            neighborComponentType = targetNode.componentType;
           }
-          downstream.push({
-            edgeId: edge.id,
-            nodeId: targetNode.id,
-            componentType: targetNode.componentType,
-            title: targetNode.title
-          });
+        } else if (edge.target === input.nodeId) {
+          const sourceNode = nodeMap.get(edge.source);
+          if (sourceNode) {
+            neighborNodeId = sourceNode.id;
+            neighborTitle = sourceNode.title;
+            neighborComponentType = sourceNode.componentType;
+          }
         }
+
+        if (!neighborNodeId) continue;
+
+        const neighborEntry = {
+          edgeId: edge.id,
+          nodeId: neighborNodeId,
+          componentType: neighborComponentType,
+          title: neighborTitle
+        };
+
+        upstream.push(neighborEntry);
+        downstream.push(neighborEntry);
       }
 
       return {
