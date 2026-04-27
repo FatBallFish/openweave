@@ -43,6 +43,8 @@ interface WorkbenchShellProps {
   inspectorDisabled: boolean;
   activePlacementType?: string | null;
   onTogglePlacement?: (type: string) => void;
+  connectModeActive?: boolean;
+  onToggleConnectMode?: () => void;
 }
 
 export const WorkbenchShell = ({
@@ -74,7 +76,9 @@ export const WorkbenchShell = ({
   fitViewDisabled,
   inspectorDisabled,
   activePlacementType,
-  onTogglePlacement
+  onTogglePlacement,
+  connectModeActive,
+  onToggleConnectMode
 }: WorkbenchShellProps): JSX.Element => {
   const { t } = useI18n();
   const hasActiveWorkspace = workspaceName !== null;
@@ -142,6 +146,8 @@ export const WorkbenchShell = ({
           inspectorDisabled={inspectorDisabled}
           activePlacementType={activePlacementType}
           onTogglePlacement={onTogglePlacement}
+          connectModeActive={connectModeActive}
+          onToggleConnectMode={onToggleConnectMode}
         />
         <NoteToolbar />
         <WorkbenchContextPanel

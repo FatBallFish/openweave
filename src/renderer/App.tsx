@@ -26,6 +26,10 @@ export const App = (): JSX.Element => {
   const graphSnapshot = useCanvasStore((storeState) => storeState.graphSnapshot) ?? createEmptyGraphSnapshot();
   const selectedNodeId = useCanvasStore((storeState) => storeState.selectedNodeId) ?? null;
   const recentAction = useCanvasStore((storeState) => storeState.recentAction) ?? null;
+  const connectModeActive = useCanvasStore((s) => s.connectModeActive);
+  const connectSourceNodeId = useCanvasStore((s) => s.connectSourceNodeId);
+  const activeEdgeIds = useCanvasStore((s) => s.activeEdgeIds);
+  const selectedEdgeId = useCanvasStore((s) => s.selectedEdgeId);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<'command' | 'quick-add'>('command');
   const [contextPanelCollapsed, setContextPanelCollapsed] = useState(false);
@@ -199,6 +203,10 @@ export const App = (): JSX.Element => {
     canvasStore.selectNode(nodeId);
   }, []);
 
+  const toggleConnectMode = useCallback(() => {
+    canvasStore.toggleConnectMode();
+  }, []);
+
   const commandItems = useMemo<CommandPaletteItem[]>(
     () => [
       {
@@ -301,14 +309,19 @@ export const App = (): JSX.Element => {
     onAddText: addText,
     onEscape: closeCommandPalette,
     onDeleteSelected: () => {
-      void canvasStore.deleteSelectedNode();
+      if (canvasStore.getState().selectedEdgeId) {
+        void canvasStore.deleteSelectedEdge();
+      } else {
+        void canvasStore.deleteSelectedNode();
+      }
     },
     onUndo: () => {
       void canvasStore.undo();
     },
     onRedo: () => {
       void canvasStore.redo();
-    }
+    },
+    onToggleConnectMode: toggleConnectMode
   });
 
   const stage = activeWorkspace ? (
@@ -324,6 +337,15 @@ export const App = (): JSX.Element => {
       placementMode={placementMode}
       onPlacementComplete={handlePlacementComplete}
       onPlacementCancel={cancelPlacement}
+      connectModeActive={connectModeActive}
+      connectSourceNodeId={connectSourceNodeId}
+      activeEdgeIds={activeEdgeIds}
+      selectedEdgeId={selectedEdgeId}
+      onToggleConnectMode={toggleConnectMode}
+      onSelectConnectSource={(nodeId) => canvasStore.setConnectSourceNode(nodeId)}
+      onCompleteConnection={(sourceId, targetId) => { void canvasStore.addEdge(sourceId, targetId); }}
+      onSelectEdge={(edgeId) => canvasStore.selectEdge(edgeId)}
+      onDeleteSelectedEdge={() => { void canvasStore.deleteSelectedEdge(); }}
     />
   ) : (
       <div className="ow-workbench-stage__empty" data-testid="workbench-stage-empty">
@@ -337,6 +359,8 @@ export const App = (): JSX.Element => {
   return (
     <>
       <WorkbenchShell
+      connectModeActive={connectModeActive}
+      onToggleConnectMode={toggleConnectMode}
       contextPanel={
         <WorkspaceListPage
           variant="panel"
