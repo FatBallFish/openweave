@@ -5888,3 +5888,90 @@ select:focus-visible {
 .ow-note-toolbar__dropdown-item:hover {
   background: rgba(var(--ow-accent-rgb), 0.12);
 }
+
+/* ---- Connect Mode ---- */
+
+.ow-connect-overlay {
+  pointer-events: none;
+}
+
+.ow-canvas-shell__flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--ow-color-accent) !important;
+  stroke-width: 2.5 !important;
+}
+
+/* ---- Connect Edge Animation ---- */
+
+@keyframes edgeFlow {
+  from { stroke-dashoffset: 28; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* ---- Shortcuts Tab ---- */
+
+.ow-shortcuts-tab__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ow-color-border);
+}
+
+.ow-shortcuts-tab__label {
+  font-size: 13px;
+  color: var(--ow-color-text-default);
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.ow-shortcuts-tab__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ow-shortcuts-tab__modifier {
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--ow-color-border);
+  background: var(--ow-color-bg-panel);
+  color: var(--ow-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--ow-transition-fast);
+  font-family: inherit;
+}
+
+.ow-shortcuts-tab__modifier.is-active {
+  background: var(--ow-color-accent-soft);
+  border-color: var(--ow-color-accent);
+  color: var(--ow-color-accent);
+}
+
+.ow-shortcuts-tab__key-input {
+  width: 80px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ow-color-border);
+  background: var(--ow-color-bg-panel-sunken);
+  color: var(--ow-color-text-default);
+  font-family: var(--ow-font-mono);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.ow-shortcuts-tab__key-input:focus {
+  outline: none;
+  border-color: var(--ow-color-accent);
+  box-shadow: 0 0 0 3px rgba(var(--ow-accent-rgb), 0.12);
+}
+
+.ow-settings-dialog__hint {
+  font-size: 12px;
+  color: var(--ow-color-text-muted);
+  margin: 0 0 8px;
+}
