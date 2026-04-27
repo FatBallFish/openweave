@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../../shared/ipc/contracts';
 import type { RunRuntimeInput, TerminalNodeInput } from '../../../../shared/ipc/schemas';
-import { isAnsiSafeBoundary } from '../../terminal/ansi-boundary';
+import { TerminalOutputSanitizer } from '../../terminal/ansi-output';
 import { getXtermTheme } from './xterm-theme';
 
 export interface TerminalConfig {
@@ -115,6 +115,7 @@ export const TerminalNode = ({
   const renderedRunIdRef = useRef<string | null>(null);
   const renderedOffsetRef = useRef(0);
   const awaitingSnapshotRef = useRef(false);
+  const outputSanitizerRef = useRef(new TerminalOutputSanitizer());
   const deferredFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoStartArmedRef = useRef(false);
   const shouldDelayAutoStartForRole =
@@ -129,9 +130,8 @@ export const TerminalNode = ({
     }
 
     const handleWheel = (event: WheelEvent): void => {
-      if (container.contains(document.activeElement)) {
-        event.stopPropagation();
-      }
+      // Keep terminal scrolling self-contained so wheel events never leak to the canvas.
+      event.stopPropagation();
     };
 
     container.addEventListener('wheel', handleWheel);
@@ -278,7 +278,10 @@ export const TerminalNode = ({
           return;
         }
 
-        xtermRef.current.write(suffix);
+        const sanitizedSuffix = outputSanitizerRef.current.sanitize(suffix);
+        if (sanitizedSuffix.length > 0) {
+          xtermRef.current.write(sanitizedSuffix);
+        }
         renderedOffsetRef.current = chunkEndOffset;
       }
     });
@@ -361,18 +364,25 @@ export const TerminalNode = ({
 
     if (!displayRun) {
       renderedRunIdRef.current = null;
+      outputSanitizerRef.current.reset();
       renderedOffsetRef.current = 0;
       awaitingSnapshotRef.current = false;
       return;
     }
 
     const redrawSnapshot = (): void => {
-      term.clear();
+      outputSanitizerRef.current.reset();
+      if (renderedRunIdRef.current !== null && renderedRunIdRef.current !== displayRun.id) {
+        term.clear();
+      }
       renderedRunIdRef.current = displayRun.id;
       renderedOffsetRef.current = getTailEndOffset(displayRun);
       awaitingSnapshotRef.current = false;
       if (displayRun.tailLog.length > 0) {
-        term.write(displayRun.tailLog);
+        const sanitizedTail = outputSanitizerRef.current.sanitize(displayRun.tailLog);
+        if (sanitizedTail.length > 0) {
+          term.write(sanitizedTail);
+        }
       }
     };
 
@@ -384,39 +394,33 @@ export const TerminalNode = ({
     const tailStartOffset = getTailStartOffset(displayRun);
     const tailEndOffset = getTailEndOffset(displayRun);
 
-    if (activeRun?.id === displayRun.id && !isTerminalState(displayRun.status)) {
-      if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
-        return;
-      }
+    if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+      return;
+    }
 
-      if (tailStartOffset > renderedOffsetRef.current) {
-        redrawSnapshot();
-        return;
-      }
-
-      const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
-      if (!isAnsiSafeBoundary(displayRun.tailLog, suffixStart)) {
-        redrawSnapshot();
-        return;
-      }
-      const suffix = displayRun.tailLog.slice(suffixStart);
-      if (suffix.length === 0) {
-        renderedOffsetRef.current = tailEndOffset;
-        awaitingSnapshotRef.current = false;
-        return;
-      }
-
-      term.write(suffix);
+    if (tailStartOffset > renderedOffsetRef.current) {
+      // The polled tail no longer covers the missing bytes. Never clear a live xterm here:
+      // xterm.clear() erases scrollback and makes TUI history disappear.
+      outputSanitizerRef.current.reset();
       renderedOffsetRef.current = tailEndOffset;
       awaitingSnapshotRef.current = false;
       return;
     }
 
-    if (tailEndOffset === renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+    const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+    const suffix = displayRun.tailLog.slice(suffixStart);
+    if (suffix.length === 0) {
+      renderedOffsetRef.current = tailEndOffset;
+      awaitingSnapshotRef.current = false;
       return;
     }
 
-    redrawSnapshot();
+    const sanitizedSuffix = outputSanitizerRef.current.sanitize(suffix);
+    if (sanitizedSuffix.length > 0) {
+      term.write(sanitizedSuffix);
+    }
+    renderedOffsetRef.current = tailEndOffset;
+    awaitingSnapshotRef.current = false;
   }, [activeRun?.id, displayRun?.id, displayRun?.tailLog, displayRun?.tailStartOffset, displayRun?.tailEndOffset, displayRun?.status]);
 
   useEffect(() => {
@@ -482,7 +486,7 @@ export const TerminalNode = ({
 
       <div
         ref={containerRef}
-        className="ow-terminal-node__xterm nodrag nopan"
+        className="ow-terminal-node__xterm nodrag nopan nowheel"
         data-testid={`terminal-node-xterm-${node.id}`}
         style={{ width: '100%', height: '100%', overflow: 'hidden' }}
         onFocus={() => {

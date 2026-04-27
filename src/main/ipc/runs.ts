@@ -29,6 +29,7 @@ import {
   type RunStopInput,
   type RunStatusInput
 } from '../../shared/ipc/schemas';
+import { buildOpenWeaveTerminalIdentityEnv } from '../../shared/openweave-env';
 import { createAuditLog } from '../audit/audit-log';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository } from '../db/workspace';
@@ -94,6 +95,7 @@ const MAX_LISTED_RUNS = 100;
 const STOPPED_RUN_SUMMARY = 'Run stopped';
 const RECOVERED_RUN_SUMMARY = 'Recovered after unclean shutdown';
 const RECOVERY_EVENT_TYPE = 'run.recovered';
+const TERMINAL_DISPATCH_POLL_INTERVAL_MS = 100;
 
 const MANAGED_RUNTIMES = new Set<SkillPackRuntimeKind>(['codex', 'claude', 'opencode']);
 
@@ -274,12 +276,21 @@ class InMemoryRunsService {
         workspaceRootDir,
         runtime: run.runtime
       });
+      const launchEnv = {
+        ...this.launchEnv,
+        ...buildOpenWeaveTerminalIdentityEnv({
+          workspaceId: run.workspaceId,
+          nodeId: run.nodeId,
+          workspaceRootDir,
+          workingDir: effectiveCwd
+        })
+      };
       this.runtimeBridge.start({
         runId: run.id,
         runtime: run.runtime,
         command: run.command,
         cwd: effectiveCwd,
-        env: this.launchEnv
+        env: launchEnv
       });
     } catch (error) {
       const errorMessage = toErrorMessage(error);
@@ -418,6 +429,53 @@ class InMemoryRunsService {
       throw new Error(`Run not active: ${runId}`);
     }
     this.runtimeBridge.resize(runId, cols, rows);
+  }
+
+  public deliverInputToNode(
+    workspaceId: string,
+    nodeId: string,
+    input: string
+  ): { runId: string } | null {
+    const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+    const parsedNodeId = nodeId.trim();
+    this.assertWorkspaceExists(parsedWorkspaceId);
+
+    const run = [...this.runs.values()]
+      .filter(
+        (candidate) =>
+          candidate.workspaceId === parsedWorkspaceId &&
+          candidate.nodeId === parsedNodeId &&
+          !isTerminalRunStatus(candidate.status) &&
+          !this.stopIntents.has(candidate.id)
+      )
+      .sort((left, right) => right.createdAtMs - left.createdAtMs)[0];
+
+    if (!run || !this.runtimeBridge.input(run.id, input)) {
+      return null;
+    }
+
+    return {
+      runId: run.id
+    };
+  }
+
+  public listDispatchTargets(): Array<{ workspaceId: string; nodeId: string }> {
+    const targets = new Map<string, { workspaceId: string; nodeId: string }>();
+
+    for (const run of this.runs.values()) {
+      if (isTerminalRunStatus(run.status) || this.stopIntents.has(run.id)) {
+        continue;
+      }
+      const key = `${run.workspaceId}:${run.nodeId}`;
+      if (!targets.has(key)) {
+        targets.set(key, {
+          workspaceId: run.workspaceId,
+          nodeId: run.nodeId
+        });
+      }
+    }
+
+    return [...targets.values()];
   }
 
   public dispose(): void {
@@ -566,6 +624,7 @@ interface RegisteredRunsContext {
   workspaceRootDirs: Map<string, string>;
   registry: RegistryRepository;
   service: InMemoryRunsService;
+  dispatchPollTimer: NodeJS.Timeout | null;
 }
 
 const reconcilePersistedOrphanRuns = (
@@ -673,6 +732,24 @@ const prepareRegisteredRuntimeLaunch = (
   });
 };
 
+const flushPendingTerminalDispatches = (context: RegisteredRunsContext): void => {
+  for (const target of context.service.listDispatchTargets()) {
+    withWorkspaceRepository(context.workspaceDbDir, target.workspaceId, (repository) => {
+      for (const dispatch of repository.listPendingTerminalDispatches(target.nodeId)) {
+        const delivered = context.service.deliverInputToNode(
+          target.workspaceId,
+          target.nodeId,
+          dispatch.inputText
+        );
+        if (!delivered) {
+          break;
+        }
+        repository.markTerminalDispatchDelivered(dispatch.id, delivered.runId);
+      }
+    });
+  }
+};
+
 export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const workspaceDbDir = options.workspaceDbDir ?? path.join(path.dirname(options.dbFilePath), 'workspaces');
@@ -685,6 +762,9 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
     registeredRunsContext.enableCrashRecoveryOnOpen !== enableCrashRecoveryOnOpen
   ) {
     if (registeredRunsContext) {
+      if (registeredRunsContext.dispatchPollTimer) {
+        clearInterval(registeredRunsContext.dispatchPollTimer);
+      }
       registeredRunsContext.service.dispose();
       registeredRunsContext.registry.close();
     }
@@ -700,6 +780,7 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
       recoveredWorkspaceIds: new Set<string>(),
       workspaceRootDirs,
       registry,
+      dispatchPollTimer: null,
       service: new InMemoryRunsService({
         assertWorkspaceExists: (workspaceId: string) => {
           const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
@@ -727,6 +808,12 @@ export const registerRunsIpcHandlers = (options: RegisterRunsIpcHandlersOptions)
         }
       })
     };
+
+    registeredRunsContext.dispatchPollTimer = setInterval(() => {
+      if (registeredRunsContext) {
+        flushPendingTerminalDispatches(registeredRunsContext);
+      }
+    }, TERMINAL_DISPATCH_POLL_INTERVAL_MS);
   }
 
   const context = registeredRunsContext;
@@ -854,6 +941,7 @@ export const disposeRunsForWorkspace = (workspaceId: string): void => {
       }
     }
     repository.deleteWorkspaceRuns(parsedWorkspaceId);
+    repository.deleteWorkspaceTerminalDispatches(parsedWorkspaceId);
     repository.deleteWorkspaceAuditLogs(parsedWorkspaceId);
   });
   registeredRunsContext.workspaceRootDirs.delete(parsedWorkspaceId);
@@ -889,6 +977,9 @@ export const recoverRunsForWorkspace = (workspaceId: string): void => {
 export const disposeRunsIpcHandlers = (): void => {
   if (!registeredRunsContext) {
     return;
+  }
+  if (registeredRunsContext.dispatchPollTimer) {
+    clearInterval(registeredRunsContext.dispatchPollTimer);
   }
   registeredRunsContext.service.dispose();
   registeredRunsContext.registry.close();

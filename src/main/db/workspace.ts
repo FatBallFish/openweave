@@ -80,6 +80,17 @@ interface RunRow {
   updated_at_ms: number;
 }
 
+interface TerminalDispatchRow {
+  id: string;
+  workspace_id: string;
+  target_node_id: string;
+  action: string;
+  input_text: string;
+  created_at_ms: number;
+  delivered_at_ms: number | null;
+  delivered_run_id: string | null;
+}
+
 interface AuditLogRow {
   id: string;
   workspace_id: string;
@@ -198,6 +209,20 @@ CREATE INDEX IF NOT EXISTS idx_runs_node_id_created_at_ms
 
 CREATE INDEX IF NOT EXISTS idx_runs_status_updated_at_ms
   ON runs (status, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS terminal_dispatches (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  target_node_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  input_text TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  delivered_at_ms INTEGER,
+  delivered_run_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_terminal_dispatches_target_pending
+  ON terminal_dispatches (target_node_id, delivered_at_ms, created_at_ms ASC);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
@@ -479,6 +504,58 @@ DELETE FROM runs
 WHERE workspace_id = @workspace_id
 `;
 
+const insertTerminalDispatchSql = `
+INSERT INTO terminal_dispatches (
+  id,
+  workspace_id,
+  target_node_id,
+  action,
+  input_text,
+  created_at_ms,
+  delivered_at_ms,
+  delivered_run_id
+)
+VALUES (
+  @id,
+  @workspace_id,
+  @target_node_id,
+  @action,
+  @input_text,
+  @created_at_ms,
+  @delivered_at_ms,
+  @delivered_run_id
+)
+`;
+
+const selectPendingTerminalDispatchesByNodeSql = `
+SELECT
+  id,
+  workspace_id,
+  target_node_id,
+  action,
+  input_text,
+  created_at_ms,
+  delivered_at_ms,
+  delivered_run_id
+FROM terminal_dispatches
+WHERE target_node_id = @target_node_id
+  AND delivered_at_ms IS NULL
+ORDER BY created_at_ms ASC
+LIMIT @limit
+`;
+
+const markTerminalDispatchDeliveredSql = `
+UPDATE terminal_dispatches
+SET delivered_at_ms = @delivered_at_ms,
+    delivered_run_id = @delivered_run_id
+WHERE id = @id
+`;
+
+const deleteTerminalDispatchesByWorkspaceSql = `
+DELETE FROM terminal_dispatches
+WHERE workspace_id = @workspace_id
+`;
+
 const deleteAuditLogsByWorkspaceSql = `
 DELETE FROM audit_logs
 WHERE workspace_id = @workspace_id
@@ -587,6 +664,41 @@ const readMigrationSql = (): string => {
   return fallbackMigrationSql;
 };
 
+const DATABASE_BUSY_TIMEOUT_MS = 5000;
+
+const hasRowsRequiringTailEndOffsetBackfill = (db: NodeDatabaseSync): boolean => {
+  const row = db
+    .prepare(
+      `
+        SELECT 1
+        FROM runs
+        WHERE tail_end_offset IS NULL OR tail_end_offset < LENGTH(tail_log)
+        LIMIT 1
+      `
+    )
+    .get() as { 1: number } | undefined;
+
+  return Boolean(row);
+};
+
+const hasRowsRequiringTailStartOffsetBackfill = (db: NodeDatabaseSync): boolean => {
+  const row = db
+    .prepare(
+      `
+        SELECT 1
+        FROM runs
+        WHERE tail_start_offset IS NULL
+          OR tail_start_offset < 0
+          OR tail_start_offset > tail_end_offset
+          OR (tail_end_offset - tail_start_offset) != LENGTH(tail_log)
+        LIMIT 1
+      `
+    )
+    .get() as { 1: number } | undefined;
+
+  return Boolean(row);
+};
+
 const ensureRunOffsetColumns = (db: NodeDatabaseSync): void => {
   const columns = db.prepare('PRAGMA table_info(runs)').all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map((column) => column.name));
@@ -599,21 +711,26 @@ const ensureRunOffsetColumns = (db: NodeDatabaseSync): void => {
     db.exec('ALTER TABLE runs ADD COLUMN tail_end_offset INTEGER NOT NULL DEFAULT 0');
   }
 
-  db.exec(`
-    UPDATE runs
-    SET tail_end_offset = CASE
-      WHEN tail_end_offset IS NULL OR tail_end_offset < LENGTH(tail_log) THEN LENGTH(tail_log)
-      ELSE tail_end_offset
-    END
-  `);
-  db.exec(`
-    UPDATE runs
-    SET tail_start_offset = max(0, tail_end_offset - LENGTH(tail_log))
-    WHERE tail_start_offset IS NULL
-      OR tail_start_offset < 0
-      OR tail_start_offset > tail_end_offset
-      OR (tail_end_offset - tail_start_offset) != LENGTH(tail_log)
-  `);
+  if (hasRowsRequiringTailEndOffsetBackfill(db)) {
+    db.exec(`
+      UPDATE runs
+      SET tail_end_offset = CASE
+        WHEN tail_end_offset IS NULL OR tail_end_offset < LENGTH(tail_log) THEN LENGTH(tail_log)
+        ELSE tail_end_offset
+      END
+    `);
+  }
+
+  if (hasRowsRequiringTailStartOffsetBackfill(db)) {
+    db.exec(`
+      UPDATE runs
+      SET tail_start_offset = max(0, tail_end_offset - LENGTH(tail_log))
+      WHERE tail_start_offset IS NULL
+        OR tail_start_offset < 0
+        OR tail_start_offset > tail_end_offset
+        OR (tail_end_offset - tail_start_offset) != LENGTH(tail_log)
+    `);
+  }
 };
 
 const parseNotePayload = (payloadJson: string): { contentMd: string } => {
@@ -939,6 +1056,26 @@ export interface CreateAuditLogInput {
   createdAtMs?: number;
 }
 
+export interface TerminalDispatchRecord {
+  id: string;
+  workspaceId: string;
+  targetNodeId: string;
+  action: string;
+  inputText: string;
+  createdAtMs: number;
+  deliveredAtMs: number | null;
+  deliveredRunId: string | null;
+}
+
+export interface CreateTerminalDispatchInput {
+  id: string;
+  workspaceId: string;
+  targetNodeId: string;
+  action: string;
+  inputText: string;
+  createdAtMs?: number;
+}
+
 export interface WorkspaceRepository {
   loadCanvasState: () => CanvasStateInput;
   saveCanvasState: (state: CanvasStateInput) => CanvasStateInput;
@@ -950,6 +1087,10 @@ export interface WorkspaceRepository {
   listRunsByNode: (nodeId: string) => RunRecord[];
   listRunsByStatus: (status: RunStatusInput) => RunRecord[];
   deleteWorkspaceRuns: (workspaceId: string) => void;
+  enqueueTerminalDispatch: (input: CreateTerminalDispatchInput) => TerminalDispatchRecord;
+  listPendingTerminalDispatches: (targetNodeId: string, limit?: number) => TerminalDispatchRecord[];
+  markTerminalDispatchDelivered: (dispatchId: string, deliveredRunId: string) => void;
+  deleteWorkspaceTerminalDispatches: (workspaceId: string) => void;
   deleteWorkspaceAuditLogs: (workspaceId: string) => void;
   appendAuditLog: (input: CreateAuditLogInput) => AuditLogRecord;
   listAuditLogs: (limit?: number) => AuditLogRecord[];
@@ -1009,9 +1150,36 @@ const mapAuditLogRow = (row: AuditLogRow): AuditLogRecord => {
   };
 };
 
+const mapTerminalDispatchRow = (row: TerminalDispatchRow): TerminalDispatchRecord => {
+  return {
+    id: row.id,
+    workspaceId: workspaceIdSchema.parse(row.workspace_id),
+    targetNodeId: row.target_node_id,
+    action: row.action,
+    inputText: row.input_text,
+    createdAtMs: row.created_at_ms,
+    deliveredAtMs: row.delivered_at_ms,
+    deliveredRunId: row.delivered_run_id
+  };
+};
+
 const toAuditLogLimit = (value: number | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 200;
+  }
+  const rounded = Math.floor(value);
+  if (rounded < 1) {
+    return 1;
+  }
+  if (rounded > 1000) {
+    return 1000;
+  }
+  return rounded;
+};
+
+const toTerminalDispatchLimit = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 100;
   }
   const rounded = Math.floor(value);
   if (rounded < 1) {
@@ -1086,6 +1254,7 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
 
   fs.mkdirSync(path.dirname(options.dbFilePath), { recursive: true });
   const db: NodeDatabaseSync = new DatabaseSync(options.dbFilePath);
+  db.exec(`PRAGMA busy_timeout = ${DATABASE_BUSY_TIMEOUT_MS}`);
   db.exec(readMigrationSql());
   db.exec(fallbackRunAndAuditSql);
   ensureRunOffsetColumns(db);
@@ -1258,6 +1427,52 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
     deleteWorkspaceRuns: (workspaceId: string): void => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
       db.prepare(deleteRunsByWorkspaceSql).run({
+        workspace_id: parsedWorkspaceId
+      });
+    },
+    enqueueTerminalDispatch: (input: CreateTerminalDispatchInput): TerminalDispatchRecord => {
+      const createdAtMs = input.createdAtMs ?? now();
+      const parsedWorkspaceId = workspaceIdSchema.parse(input.workspaceId);
+
+      db.prepare(insertTerminalDispatchSql).run({
+        id: input.id,
+        workspace_id: parsedWorkspaceId,
+        target_node_id: input.targetNodeId,
+        action: input.action,
+        input_text: input.inputText,
+        created_at_ms: createdAtMs,
+        delivered_at_ms: null,
+        delivered_run_id: null
+      });
+
+      return {
+        id: input.id,
+        workspaceId: parsedWorkspaceId,
+        targetNodeId: input.targetNodeId,
+        action: input.action,
+        inputText: input.inputText,
+        createdAtMs,
+        deliveredAtMs: null,
+        deliveredRunId: null
+      };
+    },
+    listPendingTerminalDispatches: (targetNodeId: string, limit?: number): TerminalDispatchRecord[] => {
+      const rows = db.prepare(selectPendingTerminalDispatchesByNodeSql).all({
+        target_node_id: targetNodeId,
+        limit: toTerminalDispatchLimit(limit)
+      }) as unknown as TerminalDispatchRow[];
+      return rows.map(mapTerminalDispatchRow);
+    },
+    markTerminalDispatchDelivered: (dispatchId: string, deliveredRunId: string): void => {
+      db.prepare(markTerminalDispatchDeliveredSql).run({
+        id: dispatchId,
+        delivered_at_ms: now(),
+        delivered_run_id: deliveredRunId
+      });
+    },
+    deleteWorkspaceTerminalDispatches: (workspaceId: string): void => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      db.prepare(deleteTerminalDispatchesByWorkspaceSql).run({
         workspace_id: parsedWorkspaceId
       });
     },

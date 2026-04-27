@@ -6,6 +6,7 @@ import { createWorkspaceRepository, type WorkspaceRepository } from '../../../sr
 import type { GraphSnapshotV2Input } from '../../../src/shared/ipc/schemas';
 
 let tempDir = '';
+let dbFilePath = '';
 let repository: WorkspaceRepository | null = null;
 
 const createSnapshot = (): GraphSnapshotV2Input => ({
@@ -73,14 +74,16 @@ const createSnapshot = (): GraphSnapshotV2Input => ({
 
 const createRepository = (): WorkspaceRepository => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-graph-v2-'));
+  dbFilePath = path.join(tempDir, 'workspace.db');
   return createWorkspaceRepository({
-    dbFilePath: path.join(tempDir, 'workspace.db')
+    dbFilePath
   });
 };
 
 afterEach(() => {
   repository?.close();
   repository = null;
+  dbFilePath = '';
   if (tempDir) {
     fs.rmSync(tempDir, { recursive: true, force: true });
     tempDir = '';
@@ -185,5 +188,28 @@ describe('workspace repository graph v2 persistence', () => {
       ],
       edges: []
     });
+  });
+
+  it('reopens an initialized workspace repository without write-locking the runs table migration path', () => {
+    repository = createRepository();
+    repository.saveGraphSnapshot(createSnapshot());
+
+    const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+    const lockDb = new DatabaseSync(dbFilePath);
+    let reopened: WorkspaceRepository | null = null;
+
+    try {
+      lockDb.exec('BEGIN IMMEDIATE');
+
+      expect(() => {
+        reopened = createWorkspaceRepository({
+          dbFilePath
+        });
+      }).not.toThrow();
+    } finally {
+      reopened?.close();
+      lockDb.exec('ROLLBACK');
+      lockDb.close();
+    }
   });
 });

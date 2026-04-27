@@ -206,7 +206,7 @@ describe('TerminalSessionPane', () => {
     container.remove();
   });
 
-  it('redraws active output when a newer snapshot no longer covers the rendered range', async () => {
+  it('preserves scrollback when a newer snapshot no longer covers the rendered range', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -243,8 +243,8 @@ describe('TerminalSessionPane', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('next tail');
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
+    expect(terminalInstances[0]?.write).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -252,7 +252,7 @@ describe('TerminalSessionPane', () => {
     container.remove();
   });
 
-  it('redraws instead of appending when active snapshot catch-up starts inside an ANSI sequence', async () => {
+  it('appends active snapshot catch-up even when the rendered prefix ends inside an ANSI sequence', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -284,7 +284,7 @@ describe('TerminalSessionPane', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith(partialOutput);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> ');
 
     terminalInstances[0]?.write.mockClear();
 
@@ -304,8 +304,8 @@ describe('TerminalSessionPane', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
-    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual([fullScreenClear]);
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual(['\u001b[2J\u001b[Hpanel']);
 
     await act(async () => {
       root.unmount();

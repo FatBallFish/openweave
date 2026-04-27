@@ -2,8 +2,8 @@ import {JSX, useEffect, useRef} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { OpenWeaveShellBridge, RunRecord, RunStreamEvent } from '../../../shared/ipc/contracts';
-import { isAnsiSafeBoundary } from '../terminal/ansi-boundary';
 import { getXtermTheme } from '../canvas/nodes/xterm-theme';
+import { TerminalOutputSanitizer } from '../terminal/ansi-output';
 
 interface TerminalSessionPaneProps {
   run: RunRecord;
@@ -67,6 +67,7 @@ export const TerminalSessionPane = ({
   const renderedRunIdRef = useRef<string | null>(null);
   const renderedOffsetRef = useRef(0);
   const awaitingSnapshotRef = useRef(false);
+  const outputSanitizerRef = useRef(new TerminalOutputSanitizer());
   const terminal = isTerminalState(run.status);
   const disableStop = terminal || isStopping;
 
@@ -140,7 +141,10 @@ export const TerminalSessionPane = ({
           return;
         }
 
-        xtermRef.current.write(suffix);
+        const sanitizedSuffix = outputSanitizerRef.current.sanitize(suffix);
+        if (sanitizedSuffix.length > 0) {
+          xtermRef.current.write(sanitizedSuffix);
+        }
         renderedOffsetRef.current = chunkEndOffset;
       }
     });
@@ -159,12 +163,18 @@ export const TerminalSessionPane = ({
     }
 
     const redrawSnapshot = (): void => {
-      term.clear();
+      outputSanitizerRef.current.reset();
+      if (renderedRunIdRef.current !== null && renderedRunIdRef.current !== run.id) {
+        term.clear();
+      }
       renderedRunIdRef.current = run.id;
       renderedOffsetRef.current = getTailEndOffset(run);
       awaitingSnapshotRef.current = false;
       if (run.tailLog.length > 0) {
-        term.write(run.tailLog);
+        const sanitizedTail = outputSanitizerRef.current.sanitize(run.tailLog);
+        if (sanitizedTail.length > 0) {
+          term.write(sanitizedTail);
+        }
       }
     };
 
@@ -176,39 +186,32 @@ export const TerminalSessionPane = ({
     const tailStartOffset = getTailStartOffset(run);
     const tailEndOffset = getTailEndOffset(run);
 
-    if (!terminal) {
-      if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
-        return;
-      }
+    if (tailEndOffset <= renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+      return;
+    }
 
-      if (tailStartOffset > renderedOffsetRef.current) {
-        redrawSnapshot();
-        return;
-      }
-
-      const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
-      if (!isAnsiSafeBoundary(run.tailLog, suffixStart)) {
-        redrawSnapshot();
-        return;
-      }
-      const suffix = run.tailLog.slice(suffixStart);
-      if (suffix.length === 0) {
-        renderedOffsetRef.current = tailEndOffset;
-        awaitingSnapshotRef.current = false;
-        return;
-      }
-
-      term.write(suffix);
+    if (tailStartOffset > renderedOffsetRef.current) {
+      // Do not recover by clearing xterm: that destroys scrollback for long-running TUIs.
+      outputSanitizerRef.current.reset();
       renderedOffsetRef.current = tailEndOffset;
       awaitingSnapshotRef.current = false;
       return;
     }
 
-    if (tailEndOffset === renderedOffsetRef.current && !awaitingSnapshotRef.current) {
+    const suffixStart = Math.max(0, renderedOffsetRef.current - tailStartOffset);
+    const suffix = run.tailLog.slice(suffixStart);
+    if (suffix.length === 0) {
+      renderedOffsetRef.current = tailEndOffset;
+      awaitingSnapshotRef.current = false;
       return;
     }
 
-    redrawSnapshot();
+    const sanitizedSuffix = outputSanitizerRef.current.sanitize(suffix);
+    if (sanitizedSuffix.length > 0) {
+      term.write(sanitizedSuffix);
+    }
+    renderedOffsetRef.current = tailEndOffset;
+    awaitingSnapshotRef.current = false;
   }, [run.id, run.tailLog, run.tailStartOffset, run.tailEndOffset, terminal]);
 
   useEffect(() => {

@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { IPC_CHANNELS } from '../../../src/shared/ipc/contracts';
 import { runStatusSchema } from '../../../src/shared/ipc/schemas';
 import { createRegistryRepository } from '../../../src/main/db/registry';
+import { createWorkspaceRepository } from '../../../src/main/db/workspace';
+import { createLocalWorkspaceNodeQueryService } from '../../../src/main/bridge/workspace-node-query-service';
 import {
   createRunsIpcHandlers,
   disposeRunsIpcHandlers,
@@ -446,7 +448,10 @@ describe('runs IPC flow', () => {
         dbFilePath,
         workspaceDbDir,
         ipcMain,
-        runtimeBridge
+        runtimeBridge,
+        launchEnv: {
+          OPENWEAVE_CLI: '/tmp/openweave/bin/openweave'
+        }
       });
 
       await ipcMain.invoke(IPC_CHANNELS.runStart, {
@@ -458,6 +463,229 @@ describe('runs IPC flow', () => {
 
       expect(runtimeBridge.startRequests).toHaveLength(1);
       expect(runtimeBridge.startRequests[0].cwd).toBe(fs.realpathSync(workspaceRoot));
+      expect(runtimeBridge.startRequests[0].env).toMatchObject({
+        OPENWEAVE_WORKSPACE_ID: workspace.id,
+        OPENWEAVE_NODE_ID: 'term-1',
+        OPENWEAVE_TERMINAL_NODE_ID: 'term-1',
+        OPENWEAVE_WORKSPACE_ROOT: fs.realpathSync(workspaceRoot),
+        OPENWEAVE_TERMINAL_WORKING_DIR: fs.realpathSync(workspaceRoot),
+        OPENWEAVE_CLI: '/tmp/openweave/bin/openweave'
+      });
+    } finally {
+      disposeRunsIpcHandlers();
+      fs.rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  it('delivers queued terminal dispatches into the active terminal run', async () => {
+    const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-runs-dispatch-'));
+    const dbFilePath = path.join(testDir, 'registry.sqlite');
+    const workspaceDbDir = path.join(testDir, 'workspaces');
+    const workspaceRoot = fs.mkdtempSync(path.join(testDir, 'workspace-root-'));
+    const runtimeBridge = new HoldRuntimeBridge();
+    const ipcMain = new IpcMainStub();
+
+    try {
+      const registry = createRegistryRepository({ dbFilePath });
+      const workspace = registry.createWorkspace({
+        name: 'Run Dispatch Workspace',
+        rootDir: workspaceRoot
+      });
+      registry.close();
+
+      const workspaceRepository = createWorkspaceRepository({
+        dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+      });
+      workspaceRepository.saveGraphSnapshot({
+        schemaVersion: 2,
+        nodes: [
+          {
+            id: 'term-1',
+            componentType: 'builtin.terminal',
+            componentVersion: '1.0.0',
+            title: 'Terminal',
+            bounds: {
+              x: 0,
+              y: 0,
+              width: 320,
+              height: 240
+            },
+            config: {
+              runtime: 'shell'
+            },
+            state: {
+              activeSessionId: null
+            },
+            capabilities: ['read', 'write', 'execute', 'stream'],
+            createdAtMs: 1,
+            updatedAtMs: 2
+          }
+        ],
+        edges: []
+      });
+      workspaceRepository.close();
+
+      registerRunsIpcHandlers({
+        dbFilePath,
+        workspaceDbDir,
+        ipcMain,
+        runtimeBridge,
+        launchEnv: {
+          OPENWEAVE_CLI: '/tmp/openweave/bin/openweave'
+        }
+      });
+
+      const started = (await ipcMain.invoke(IPC_CHANNELS.runStart, {
+        workspaceId: workspace.id,
+        nodeId: 'term-1',
+        runtime: 'shell',
+        command: 'cat'
+      })) as {
+        run: { id: string };
+      };
+
+      runtimeBridge.emit('started', {
+        runId: started.run.id,
+        pid: 4242
+      });
+
+      const workspaceNodeService = createLocalWorkspaceNodeQueryService({
+        registryDbFilePath: dbFilePath,
+        workspaceDbDir
+      });
+      try {
+        expect(
+          workspaceNodeService.runNodeAction({
+            workspaceId: workspace.id,
+            nodeId: 'term-1',
+            action: 'send',
+            payload: {
+              input: 'status\\n'
+            }
+          })
+        ).toEqual({
+          nodeId: 'term-1',
+          action: 'send',
+          ok: true,
+          result: expect.objectContaining({
+            queued: true
+          })
+        });
+      } finally {
+        workspaceNodeService.close();
+      }
+
+      await waitFor(async () => runtimeBridge.inputCalls.length === 1, 3000, 50);
+      expect(runtimeBridge.inputCalls).toEqual([{ runId: started.run.id, input: 'status\\n' }]);
+    } finally {
+      disposeRunsIpcHandlers();
+      fs.rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  it('delivers terminal submit requests as PTY enter keypresses', async () => {
+    const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openweave-runs-submit-'));
+    const dbFilePath = path.join(testDir, 'registry.sqlite');
+    const workspaceDbDir = path.join(testDir, 'workspaces');
+    const workspaceRoot = fs.mkdtempSync(path.join(testDir, 'workspace-root-'));
+    const runtimeBridge = new HoldRuntimeBridge();
+    const ipcMain = new IpcMainStub();
+
+    try {
+      const registry = createRegistryRepository({ dbFilePath });
+      const workspace = registry.createWorkspace({
+        name: 'Run Submit Workspace',
+        rootDir: workspaceRoot
+      });
+      registry.close();
+
+      const workspaceRepository = createWorkspaceRepository({
+        dbFilePath: path.join(workspaceDbDir, `${workspace.id}.db`)
+      });
+      workspaceRepository.saveGraphSnapshot({
+        schemaVersion: 2,
+        nodes: [
+          {
+            id: 'term-1',
+            componentType: 'builtin.terminal',
+            componentVersion: '1.0.0',
+            title: 'Terminal',
+            bounds: {
+              x: 0,
+              y: 0,
+              width: 320,
+              height: 240
+            },
+            config: {
+              runtime: 'shell'
+            },
+            state: {
+              activeSessionId: null
+            },
+            capabilities: ['read', 'write', 'execute', 'stream'],
+            createdAtMs: 1,
+            updatedAtMs: 2
+          }
+        ],
+        edges: []
+      });
+      workspaceRepository.close();
+
+      registerRunsIpcHandlers({
+        dbFilePath,
+        workspaceDbDir,
+        ipcMain,
+        runtimeBridge,
+        launchEnv: {
+          OPENWEAVE_CLI: '/tmp/openweave/bin/openweave'
+        }
+      });
+
+      const started = (await ipcMain.invoke(IPC_CHANNELS.runStart, {
+        workspaceId: workspace.id,
+        nodeId: 'term-1',
+        runtime: 'shell',
+        command: 'cat'
+      })) as {
+        run: { id: string };
+      };
+
+      runtimeBridge.emit('started', {
+        runId: started.run.id,
+        pid: 4242
+      });
+
+      const workspaceNodeService = createLocalWorkspaceNodeQueryService({
+        registryDbFilePath: dbFilePath,
+        workspaceDbDir
+      });
+      try {
+        expect(
+          workspaceNodeService.runNodeAction({
+            workspaceId: workspace.id,
+            nodeId: 'term-1',
+            action: 'send',
+            payload: {
+              input: 'status\n',
+              submit: true
+            }
+          })
+        ).toEqual({
+          nodeId: 'term-1',
+          action: 'send',
+          ok: true,
+          result: {
+            queued: true,
+            input: 'status\r',
+            submitted: true
+          }
+        });
+      } finally {
+        workspaceNodeService.close();
+      }
+
+      await waitFor(async () => runtimeBridge.inputCalls.length === 1, 3000, 50);
+      expect(runtimeBridge.inputCalls).toEqual([{ runId: started.run.id, input: 'status\r' }]);
     } finally {
       disposeRunsIpcHandlers();
       fs.rmSync(testDir, { recursive: true, force: true });

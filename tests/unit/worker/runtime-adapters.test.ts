@@ -205,13 +205,32 @@ describe('runtime adapters', () => {
 
   it('boots codex, claude, and opencode inside a persistent interactive shell', async () => {
     vi.useFakeTimers();
-    const launchShellRuntime = vi.fn(() => ({
-      pid: 2,
-      write: vi.fn(),
-      stdout: new EventEmitter(),
-      stderr: new EventEmitter(),
-      on: vi.fn()
-    }));
+    const claudeWrite = vi.fn();
+    const codexWrite = vi.fn();
+    const opencodeWrite = vi.fn();
+    const launchShellRuntime = vi
+      .fn()
+      .mockReturnValueOnce({
+        pid: 2,
+        write: claudeWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      })
+      .mockReturnValueOnce({
+        pid: 3,
+        write: codexWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      })
+      .mockReturnValueOnce({
+        pid: 4,
+        write: opencodeWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      });
     vi.doMock('../../../src/worker/adapters/shell-runtime', () => ({
       launchShellRuntime
     }));
@@ -239,21 +258,40 @@ describe('runtime adapters', () => {
 
     vi.runAllTimers();
 
-    expect(claude.write).toHaveBeenCalledWith('run --help\r');
-    expect(codex.write).toHaveBeenCalledWith('exec\r');
-    expect(opencode.write).toHaveBeenCalledWith('run --help\r');
+    expect(claudeWrite).toHaveBeenCalledWith('run --help\r');
+    expect(codexWrite.mock.calls).toEqual([['exec'], ['\r']]);
+    expect(opencodeWrite).toHaveBeenCalledWith('run --help\r');
     vi.useRealTimers();
   });
 
   it('uses runtime defaults as startup commands for empty managed-runtime input', async () => {
     vi.useFakeTimers();
-    const launchShellRuntime = vi.fn(() => ({
-      pid: 2,
-      write: vi.fn(),
-      stdout: new EventEmitter(),
-      stderr: new EventEmitter(),
-      on: vi.fn()
-    }));
+    const claudeWrite = vi.fn();
+    const codexWrite = vi.fn();
+    const opencodeWrite = vi.fn();
+    const launchShellRuntime = vi
+      .fn()
+      .mockReturnValueOnce({
+        pid: 2,
+        write: claudeWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      })
+      .mockReturnValueOnce({
+        pid: 3,
+        write: codexWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      })
+      .mockReturnValueOnce({
+        pid: 4,
+        write: opencodeWrite,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        on: vi.fn()
+      });
     vi.doMock('../../../src/worker/adapters/shell-runtime', () => ({
       launchShellRuntime
     }));
@@ -281,9 +319,49 @@ describe('runtime adapters', () => {
 
     vi.runAllTimers();
 
-    expect(claude.write).toHaveBeenCalledWith('claude\r');
-    expect(codex.write).toHaveBeenCalledWith('codex\r');
-    expect(opencode.write).toHaveBeenCalledWith('opencode\r');
+    expect(claudeWrite).toHaveBeenCalledWith('claude\r');
+    expect(codexWrite.mock.calls).toEqual([['codex'], ['\r']]);
+    expect(opencodeWrite).toHaveBeenCalledWith('opencode\r');
+    vi.useRealTimers();
+  });
+
+  it('splits codex text submissions into ordered writes so submit is not coalesced with prompt text', async () => {
+    vi.useFakeTimers();
+    const codexWrite = vi.fn();
+    const launchShellRuntime = vi.fn(() => ({
+      pid: 2,
+      write: codexWrite,
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      on: vi.fn()
+    }));
+    vi.doMock('../../../src/worker/adapters/shell-runtime', () => ({
+      launchShellRuntime
+    }));
+
+    const { launchCodexRuntime } = await import('../../../src/worker/adapters/codex-runtime');
+
+    const codex = launchCodexRuntime({ command: '', env: {} });
+
+    vi.runAllTimers();
+    expect(codexWrite.mock.calls).toEqual([['codex'], ['\r']]);
+
+    codexWrite.mockClear();
+
+    codex.write('hello\r');
+    codex.write('status\r');
+
+    expect(codexWrite.mock.calls).toEqual([['hello']]);
+
+    vi.runOnlyPendingTimers();
+    expect(codexWrite.mock.calls).toEqual([['hello'], ['\r'], ['status']]);
+
+    vi.runOnlyPendingTimers();
+    expect(codexWrite.mock.calls).toEqual([['hello'], ['\r'], ['status'], ['\r']]);
+
+    codexWrite.mockClear();
+    codex.write('\r');
+    expect(codexWrite.mock.calls).toEqual([['\r']]);
     vi.useRealTimers();
   });
 

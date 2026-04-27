@@ -31,6 +31,33 @@ const createStdStreams = () => {
   };
 };
 
+const withOpenWeaveEnv = async (
+  overrides: Record<string, string | undefined>,
+  action: () => Promise<void>
+): Promise<void> => {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, process.env[key]);
+    if (typeof value === 'string') {
+      process.env[key] = value;
+    } else {
+      delete process.env[key];
+    }
+  }
+
+  try {
+    await action();
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (typeof value === 'string') {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
+    }
+  }
+};
+
 const toWorkspaceDbPath = (id: string): string => {
   return path.join(workspaceDbDir, `${id.replace(/[^a-zA-Z0-9_-]/g, '_')}.db`);
 };
@@ -243,6 +270,53 @@ describe('CLI -> local bridge roundtrip', () => {
     });
   });
 
+  it('falls back to the current terminal identity env for workspace info and node reads', async () => {
+    const outsideCwd = path.join(tempDir, 'outside');
+    fs.mkdirSync(outsideCwd, { recursive: true });
+
+    await withOpenWeaveEnv(
+      {
+        OPENWEAVE_WORKSPACE_ID: workspaceId,
+        OPENWEAVE_NODE_ID: 'node-note-1'
+      },
+      async () => {
+        const infoStreams = createStdStreams();
+        const infoExitCode = await runCli(['workspace', 'info', '--json'], {
+          workspaceNodeService: workspaceNodeService ?? undefined,
+          cwd: outsideCwd,
+          stdout: { write: infoStreams.writeStdout },
+          stderr: { write: infoStreams.writeStderr }
+        });
+
+        const readStreams = createStdStreams();
+        const readExitCode = await runCli(['node', 'read', '--mode', 'content', '--json'], {
+          workspaceNodeService: workspaceNodeService ?? undefined,
+          cwd: outsideCwd,
+          stdout: { write: readStreams.writeStdout },
+          stderr: { write: readStreams.writeStderr }
+        });
+
+        expect(infoExitCode).toBe(0);
+        expect(readExitCode).toBe(0);
+        expect(JSON.parse(infoStreams.stdout.join(''))).toEqual({
+          workspaceId,
+          name: 'CLI Demo',
+          rootDir: workspaceRootDir,
+          graphSchemaVersion: 2,
+          nodeCount: 2,
+          edgeCount: 1
+        });
+        expect(JSON.parse(readStreams.stdout.join(''))).toEqual({
+          nodeId: 'node-note-1',
+          action: 'read',
+          result: {
+            content: '# hello'
+          }
+        });
+      }
+    );
+  });
+
   it('writes note content via node action then reads updated content', async () => {
     const nestedCwd = path.join(workspaceRootDir, 'packages', 'ui');
     fs.mkdirSync(nestedCwd, { recursive: true });
@@ -333,6 +407,117 @@ describe('CLI -> local bridge roundtrip', () => {
         content: 'from file'
       }
     });
+  });
+
+  it('queues terminal send actions through the CLI bridge', async () => {
+    const nestedCwd = path.join(workspaceRootDir, 'packages', 'ui');
+    fs.mkdirSync(nestedCwd, { recursive: true });
+
+    const actionStreams = createStdStreams();
+    const actionExitCode = await runCli(
+      ['node', 'action', 'node-terminal-1', 'send', '--workspace', workspaceId, '--json-input', '{"input":"echo ping\\n"}', '--json'],
+      {
+        workspaceNodeService: workspaceNodeService ?? undefined,
+        cwd: nestedCwd,
+        stdout: { write: actionStreams.writeStdout },
+        stderr: { write: actionStreams.writeStderr }
+      }
+    );
+
+    expect(actionExitCode).toBe(0);
+    expect(JSON.parse(actionStreams.stdout.join(''))).toEqual({
+      nodeId: 'node-terminal-1',
+      action: 'send',
+      ok: true,
+      result: {
+        queued: true,
+        input: 'echo ping\n'
+      }
+    });
+
+    const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(toWorkspaceDbPath(workspaceId));
+    try {
+      const rows = db
+        .prepare(
+          `SELECT target_node_id, action, input_text, delivered_at_ms
+           FROM terminal_dispatches
+           ORDER BY created_at_ms ASC`
+        )
+        .all() as Array<{
+        target_node_id: string;
+        action: string;
+        input_text: string;
+        delivered_at_ms: number | null;
+      }>;
+
+      expect(rows).toEqual([
+        {
+          target_node_id: 'node-terminal-1',
+          action: 'send',
+          input_text: 'echo ping\n',
+          delivered_at_ms: null
+        }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('supports terminal send with submit semantics through the CLI bridge', async () => {
+    const nestedCwd = path.join(workspaceRootDir, 'packages', 'ui');
+    fs.mkdirSync(nestedCwd, { recursive: true });
+
+    const actionStreams = createStdStreams();
+    const actionExitCode = await runCli(
+      ['node', 'action', 'node-terminal-1', 'send', '--workspace', workspaceId, '--json-input', '{"input":"echo ping\\n","submit":true}', '--json'],
+      {
+        workspaceNodeService: workspaceNodeService ?? undefined,
+        cwd: nestedCwd,
+        stdout: { write: actionStreams.writeStdout },
+        stderr: { write: actionStreams.writeStderr }
+      }
+    );
+
+    expect(actionExitCode).toBe(0);
+    expect(JSON.parse(actionStreams.stdout.join(''))).toEqual({
+      nodeId: 'node-terminal-1',
+      action: 'send',
+      ok: true,
+      result: {
+        queued: true,
+        input: 'echo ping\r',
+        submitted: true
+      }
+    });
+
+    const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(toWorkspaceDbPath(workspaceId));
+    try {
+      const rows = db
+        .prepare(
+          `SELECT target_node_id, action, input_text, delivered_at_ms
+           FROM terminal_dispatches
+           ORDER BY created_at_ms ASC`
+        )
+        .all() as Array<{
+        target_node_id: string;
+        action: string;
+        input_text: string;
+        delivered_at_ms: number | null;
+      }>;
+
+      expect(rows).toEqual([
+        {
+          target_node_id: 'node-terminal-1',
+          action: 'send',
+          input_text: 'echo ping\r',
+          delivered_at_ms: null
+        }
+      ]);
+    } finally {
+      db.close();
+    }
   });
 
   it('returns the existing validation error for invalid note write payloads', async () => {

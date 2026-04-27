@@ -485,7 +485,7 @@ describe('TerminalNode', () => {
 
     expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(2);
     expect(terminalInstances[0]?.write).toHaveBeenLastCalledWith('hello\r\n');
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -561,7 +561,7 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
     expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> final\r\n');
 
     await act(async () => {
@@ -897,6 +897,51 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
+  it('keeps unfocused terminal wheel events from bubbling to the canvas', async () => {
+    const container = document.createElement('div');
+    const canvasWheel = vi.fn();
+    const outsideFocusTarget = document.createElement('button');
+    container.addEventListener('wheel', canvasWheel);
+    document.body.appendChild(container);
+    document.body.appendChild(outsideFocusTarget);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(TerminalNode, {
+          workspaceId: 'ws-1',
+          node: { id: 't1', type: 'terminal', x: 0, y: 0, command: '', runtime: 'shell' },
+          config: {
+            workingDir: '',
+            iconKey: '',
+            iconColor: '',
+            theme: 'auto',
+            fontFamily: '',
+            fontSize: 14,
+            roleId: null
+          },
+          onChange: () => {},
+          onOpenRun: () => {}
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const terminal = container.querySelector('[data-testid="terminal-node-xterm-t1"]') as HTMLDivElement;
+    terminalInstances[0]?.focus.mockClear();
+    outsideFocusTarget.focus();
+    terminal.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 8 }));
+
+    expect(terminalInstances[0]?.focus).not.toHaveBeenCalled();
+    expect(canvasWheel).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    outsideFocusTarget.remove();
+  });
+
   it('catches up missed active output from later snapshots without replaying gap chunks', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -961,7 +1006,7 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
-  it('redraws active output when the polled snapshot skips past the rendered range', async () => {
+  it('preserves scrollback when the polled snapshot skips past the rendered range', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -1017,8 +1062,8 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('next tail');
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
+    expect(terminalInstances[0]?.write).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -1026,7 +1071,7 @@ describe('TerminalNode', () => {
     container.remove();
   });
 
-  it('redraws instead of appending when active snapshot catch-up starts inside an ANSI sequence', async () => {
+  it('appends active snapshot catch-up even when the rendered prefix ends inside an ANSI sequence', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -1084,7 +1129,7 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith(partialOutput);
+    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('prompt> ');
 
     terminalInstances[0]?.write.mockClear();
 
@@ -1093,8 +1138,8 @@ describe('TerminalNode', () => {
       await Promise.resolve();
     });
 
-    expect(terminalInstances[0]?.clear).toHaveBeenCalledTimes(1);
-    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual([fullScreenClear]);
+    expect(terminalInstances[0]?.clear).not.toHaveBeenCalled();
+    expect(terminalInstances[0]?.write.mock.calls.map((call) => call[0])).toEqual(['\u001b[2J\u001b[Hpanel']);
 
     await act(async () => {
       root.unmount();
