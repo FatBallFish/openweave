@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useI18n } from '../../i18n/provider';
 import { settingsStore, useSettingsStore } from './settings.store';
 import { RoleSettingsPanel } from './RoleSettingsPanel';
+import { ShortcutsTab } from './ShortcutsTab';
 
 type SettingsTab = 'general' | 'terminal' | 'role' | 'page' | 'shortcuts' | 'data' | 'about';
 
@@ -157,7 +158,7 @@ export const SettingsDialog = ({ open, onClose }: SettingsDialogProps): JSX.Elem
                 </section>
               </div>
             )}
-            {activeTab === 'shortcuts' && <div className="ow-settings-dialog__placeholder" />}
+            {activeTab === 'shortcuts' && <ShortcutsTab />}
             {activeTab === 'data' && <div className="ow-settings-dialog__placeholder" />}
             {activeTab === 'about' && <div className="ow-settings-dialog__placeholder" />}
           </div>
