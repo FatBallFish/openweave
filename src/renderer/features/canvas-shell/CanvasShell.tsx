@@ -18,6 +18,10 @@ import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { CanvasViewportControls } from './CanvasViewportControls';
 import { computeSmartFitViewport } from './canvas-fit-view';
+import { ConnectModeOverlay } from './ConnectModeOverlay';
+import { ConnectEdge } from './edge-types/ConnectEdge';
+import './edge-types/connect-edge.css';
+import { getBuiltinComponentManifest } from '../../../shared/components/builtin-manifests';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -49,6 +53,8 @@ export interface ProjectGraphToCanvasShellInput {
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
   onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  activeEdgeIds?: string[];
+  selectedEdgeId?: string | null;
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
@@ -66,6 +72,14 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   placementMode?: { type: string } | null;
   onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onPlacementCancel?: () => void;
+  connectModeActive?: boolean;
+  connectSourceNodeId?: string | null;
+  activeEdgeIds?: string[];
+  selectedEdgeId?: string | null;
+  onSelectConnectSource?: (nodeId: string) => void;
+  onCompleteConnection?: (sourceId: string, targetId: string) => void;
+  onSelectEdge?: (edgeId: string | null) => void;
+  onDeleteSelectedEdge?: () => void;
 }
 
 // @ts-ignore
@@ -108,6 +122,10 @@ const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JS
 
 const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
+};
+
+const edgeTypes = {
+  connectEdge: ConnectEdge
 };
 
 const classifyWheelEvent = (event: WheelEvent): 'pan' | 'zoom' => {
@@ -433,8 +451,14 @@ export const projectGraphToCanvasShell = (
       sourceHandle: edge.sourceHandle ?? undefined,
       targetHandle: edge.targetHandle ?? undefined,
       label: edge.label ?? undefined,
-      data: edge.meta,
-      type: 'smoothstep'
+      type: 'connectEdge',
+      data: {
+        ...(edge.meta ?? {}),
+        isActive: input.activeEdgeIds?.includes(edge.id) ?? false
+      },
+      selected: input.selectedEdgeId === edge.id,
+      selectable: true,
+      deletable: true
     }))
   };
 };
@@ -458,7 +482,15 @@ export const CanvasShell = ({
   onAddText,
   placementMode,
   onPlacementComplete,
-  onPlacementCancel
+  onPlacementCancel,
+  connectModeActive,
+  connectSourceNodeId,
+  activeEdgeIds,
+  selectedEdgeId,
+  onSelectConnectSource,
+  onCompleteConnection,
+  onSelectEdge,
+  onDeleteSelectedEdge
 }: CanvasShellProps): JSX.Element => {
   const model = useMemo(
     () =>
@@ -468,9 +500,11 @@ export const CanvasShell = ({
         graphSnapshot,
         onOpenRun,
         onCreateBranchWorkspace,
-        onResizeNode
+        onResizeNode,
+        activeEdgeIds,
+        selectedEdgeId
       }),
-    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode]
+    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode, activeEdgeIds, selectedEdgeId]
   );
   // @ts-ignore
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
@@ -520,12 +554,37 @@ export const CanvasShell = ({
           <ReactFlow
             defaultViewport={DEFAULT_CANVAS_VIEWPORT}
             edges={edges}
+            edgeTypes={edgeTypes}
             elementsSelectable={true}
             minZoom={0.4}
             nodeTypes={nodeTypes}
             nodes={nodes}
             onEdgesChange={onEdgesChange}
+            onEdgeClick={(_event, edge) => {
+              onSelectEdge?.(edge.id);
+              onSelectNode(null);
+            }}
+            onEdgesDelete={(edges) => {
+              if (edges.length > 0) {
+                onSelectEdge?.(edges[0].id);
+                onDeleteSelectedEdge?.();
+              }
+            }}
             onNodeClick={(_event, node) => {
+              if (connectModeActive) {
+                const targetNode = graphSnapshot.nodes.find((n) => n.id === node.id);
+                if (targetNode) {
+                  const manifest = getBuiltinComponentManifest(targetNode.componentType);
+                  const connectable = manifest?.node.connectable !== false;
+                  if (!connectable) return;
+                  if (!connectSourceNodeId) {
+                    onSelectConnectSource?.(node.id);
+                  } else if (node.id !== connectSourceNodeId) {
+                    onCompleteConnection?.(connectSourceNodeId, node.id);
+                  }
+                }
+                return;
+              }
               onSelectNode(node.id);
             }}
             onNodeDragStop={(_event, node) => {
@@ -540,7 +599,7 @@ export const CanvasShell = ({
             }}
             panOnDrag={true}
             proOptions={{ hideAttribution: true }}
-            selectionOnDrag={false}
+            selectionOnDrag={true}
             zoomOnDoubleClick={false}
             zoomOnPinch={false}
             zoomOnScroll={false}
@@ -554,6 +613,15 @@ export const CanvasShell = ({
                 placementMode={placementMode}
                 onPlacementComplete={onPlacementComplete}
                 onPlacementCancel={onPlacementCancel}
+              />
+            ) : null}
+            {connectModeActive ? (
+              <ConnectModeOverlay
+                sourceNodeId={connectSourceNodeId ?? null}
+                workspaceId={workspaceId}
+                graphNodes={graphSnapshot.nodes}
+                onSelectSource={onSelectConnectSource ?? (() => {})}
+                onCompleteConnection={onCompleteConnection ?? (() => {})}
               />
             ) : null}
           </ReactFlow>
