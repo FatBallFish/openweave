@@ -32,7 +32,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 320,
         height: 240
-      }
+      },
+      connectable: true
     },
     schema: {
       config: {
@@ -65,7 +66,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 520,
         height: 320
-      }
+      },
+      connectable: true
     },
     schema: {
       config: {
@@ -130,7 +132,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 420,
         height: 320
-      }
+      },
+      connectable: true
     },
     schema: {
       config: {
@@ -187,7 +190,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 360,
         height: 240
-      }
+      },
+      connectable: true
     },
     schema: {
       config: {},
