@@ -92,10 +92,10 @@ export const getCanvasShortcutAction = (
     return 'undo';
   }
 
-  for (const [actionId, binding] of Object.entries(bindings) as [ShortcutActionId, typeof bindings[string]][]) {
+  for (const [actionId, binding] of Object.entries(bindings)) {
     if (actionId === 'delete-selected' || actionId === 'undo') continue; // already handled
-    if (matchesBinding(event, binding)) {
-      return actionId;
+    if (matchesBinding(event, binding as typeof bindings[ShortcutActionId])) {
+      return actionId as ShortcutActionId;
     }
   }
 
