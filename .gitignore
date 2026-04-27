@@ -8,6 +8,8 @@ worktrees/
 !/docs/decisions/**
 !/docs/release/
 !/docs/release/**
+!/docs/superpowers/
+!/docs/superpowers/**
 dist/
 node_modules/
 test-results/
