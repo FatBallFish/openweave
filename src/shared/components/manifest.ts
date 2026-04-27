@@ -85,7 +85,8 @@ export const componentManifestSchemaV1 = z
     node: z.object({
       defaultTitle: z.string().trim().min(1),
       defaultSize: componentSizeSchema,
-      minSize: componentSizeSchema.optional()
+      minSize: componentSizeSchema.optional(),
+      connectable: z.boolean().optional().default(true)
     }),
     schema: z
       .object({

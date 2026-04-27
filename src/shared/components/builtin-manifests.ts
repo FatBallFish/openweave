@@ -102,7 +102,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 360,
         height: 280
-      }
+      },
+      connectable: false
     },
     schema: {
       config: {
@@ -156,7 +157,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       defaultSize: {
         width: 320,
         height: 220
-      }
+      },
+      connectable: false
     },
     schema: {
       config: {
