@@ -4,6 +4,7 @@ import { getBuiltinComponentManifest } from '../../../shared/components/builtin-
 import type {
   CanvasNodeInput,
   FileTreeNodeInput,
+  GraphEdgeV2Input,
   GraphSnapshotV2Input,
   NoteNodeInput,
   PortalNodeInput,
@@ -17,6 +18,10 @@ interface CanvasState {
   graphSnapshot: GraphSnapshotV2Input;
   nodes: CanvasNodeInput[];
   selectedNodeId: string | null;
+  connectModeActive: boolean;
+  connectSourceNodeId: string | null;
+  activeEdgeIds: string[];
+  selectedEdgeId: string | null;
   recentAction: string | null;
   loading: boolean;
   errorMessage: string | null;
@@ -33,6 +38,10 @@ const initialState: CanvasState = {
   graphSnapshot: emptyGraphSnapshot(),
   nodes: [],
   selectedNodeId: null,
+  connectModeActive: false,
+  connectSourceNodeId: null,
+  activeEdgeIds: [],
+  selectedEdgeId: null,
   recentAction: null,
   loading: false,
   errorMessage: null
@@ -40,6 +49,7 @@ const initialState: CanvasState = {
 
 type StateListener = () => void;
 type GraphNodeRecord = GraphSnapshotV2Input['nodes'][number];
+type GraphEdgeRecord = GraphEdgeV2Input;
 const supportedRuntimes: RunRuntimeInput[] = ['shell', 'codex', 'claude', 'opencode'];
 const starterSlotColumns = 4;
 const starterSlotRows = 4;
@@ -410,6 +420,23 @@ export const canvasStore = {
     return () => {
       listeners.delete(listener);
     };
+  },
+  toggleConnectMode: (): void => {
+    setState({
+      connectModeActive: !state.connectModeActive,
+      connectSourceNodeId: null,
+      selectedEdgeId: null,
+      selectedNodeId: null
+    });
+  },
+  exitConnectMode: (): void => {
+    setState({
+      connectModeActive: false,
+      connectSourceNodeId: null
+    });
+  },
+  setConnectSourceNode: (nodeId: string | null): void => {
+    setState({ connectSourceNodeId: nodeId });
   },
   loadCanvasState: async (workspaceId: string): Promise<void> => {
     historyStore.clear();
@@ -982,6 +1009,14 @@ export const canvasStore = {
       )
     };
 
+    // Collect and push edge removals for edges connected to deleted nodes
+    const connectedEdges = state.graphSnapshot.edges.filter(
+      (edge) => deletedNodeIds.has(edge.source) || deletedNodeIds.has(edge.target)
+    );
+    for (const edge of connectedEdges) {
+      historyStore.push({ kind: 'removeEdge', edge });
+    }
+
     // Push history entries for each deleted node (in reverse order so undo restores them in correct order)
     for (let i = nodesToDelete.length - 1; i >= 0; i -= 1) {
       historyStore.push({ kind: 'removeNode', node: nodesToDelete[i] });
@@ -1013,10 +1048,89 @@ export const canvasStore = {
     }
   },
   deleteSelectedNode: async (): Promise<void> => {
+    if (state.selectedEdgeId) {
+      await canvasStore.deleteSelectedEdge();
+      return;
+    }
     if (!state.selectedNodeId) {
       return;
     }
     await canvasStore.deleteNodes([state.selectedNodeId]);
+  },
+  addEdge: async (source: string, target: string): Promise<void> => {
+    if (!state.workspaceId || state.loading) return;
+    if (source === target) return;
+
+    const workspaceId = state.workspaceId;
+    // Check for duplicate (bidirectional: source->target or target->source)
+    const alreadyExists = state.graphSnapshot.edges.some(
+      (e) => (e.source === source && e.target === target) || (e.source === target && e.target === source)
+    );
+    if (alreadyExists) return;
+
+    const now = Date.now();
+    const edgeId = `edge-${crypto.randomUUID()}`;
+    const newEdge: GraphEdgeRecord = {
+      id: edgeId,
+      source,
+      target,
+      sourceHandle: null,
+      targetHandle: null,
+      label: null,
+      meta: {},
+      createdAtMs: now,
+      updatedAtMs: now
+    };
+
+    const nextGraphSnapshot = {
+      ...state.graphSnapshot,
+      edges: [...state.graphSnapshot.edges, newEdge]
+    };
+
+    historyStore.push({ kind: 'addEdge', edge: newEdge });
+    applyGraphSnapshot(nextGraphSnapshot);
+    setState({ recentAction: 'Connected components', connectModeActive: false, connectSourceNodeId: null });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) return;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save edge';
+      setState({ errorMessage });
+    }
+  },
+  deleteSelectedEdge: async (): Promise<void> => {
+    if (!state.workspaceId || !state.selectedEdgeId) return;
+    const workspaceId = state.workspaceId;
+    const edgeId = state.selectedEdgeId;
+
+    const nextGraphSnapshot = {
+      ...state.graphSnapshot,
+      edges: state.graphSnapshot.edges.filter((e) => e.id !== edgeId)
+    };
+
+    const deletedEdge = state.graphSnapshot.edges.find((e) => e.id === edgeId);
+    if (deletedEdge) {
+      historyStore.push({ kind: 'removeEdge', edge: deletedEdge });
+    }
+
+    applyGraphSnapshot(nextGraphSnapshot, null);
+    setState({ selectedEdgeId: null, recentAction: 'Deleted connection' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) return;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete edge';
+      setState({ errorMessage });
+    }
+  },
+  selectEdge: (edgeId: string | null): void => {
+    setState({
+      selectedEdgeId: edgeId,
+      selectedNodeId: edgeId ? null : state.selectedNodeId
+    });
+  },
+  setActiveEdgeIds: (edgeIds: string[]): void => {
+    setState({ activeEdgeIds: edgeIds });
   },
   undo: async (): Promise<void> => {
     if (!state.workspaceId || state.loading) {
@@ -1071,6 +1185,20 @@ export const canvasStore = {
           title: entry.oldTitle,
           updatedAtMs: Date.now()
         }));
+        break;
+      }
+      case 'addEdge': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          edges: nextGraphSnapshot.edges.filter((e) => e.id !== entry.edge.id)
+        };
+        break;
+      }
+      case 'removeEdge': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          edges: [...nextGraphSnapshot.edges, entry.edge]
+        };
         break;
       }
     }
@@ -1140,6 +1268,20 @@ export const canvasStore = {
           title: entry.newTitle,
           updatedAtMs: Date.now()
         }));
+        break;
+      }
+      case 'addEdge': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          edges: [...nextGraphSnapshot.edges, entry.edge]
+        };
+        break;
+      }
+      case 'removeEdge': {
+        nextGraphSnapshot = {
+          ...nextGraphSnapshot,
+          edges: nextGraphSnapshot.edges.filter((e) => e.id !== entry.edge.id)
+        };
         break;
       }
     }
