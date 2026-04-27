@@ -43,6 +43,33 @@ const createStdStreams = () => {
   };
 };
 
+const withOpenWeaveEnv = async (
+  overrides: Record<string, string | undefined>,
+  action: () => Promise<void>
+): Promise<void> => {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, process.env[key]);
+    if (typeof value === 'string') {
+      process.env[key] = value;
+    } else {
+      delete process.env[key];
+    }
+  }
+
+  try {
+    await action();
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (typeof value === 'string') {
+        process.env[key] = value;
+      } else {
+        delete process.env[key];
+      }
+    }
+  }
+};
+
 const createService = (): CliWorkspaceNodeServiceStub => ({
   resolveWorkspaceId: vi.fn(async ({ workspaceId }) => workspaceId ?? 'ws-cwd'),
   getWorkspaceInfo: vi.fn(async ({ workspaceId }) => ({
@@ -237,6 +264,119 @@ describe('runCli workspace/node commands', () => {
     expect(exitCode).toBe(1);
     expect(streams.stdout.join('')).toBe('');
     expect(streams.stderr.join('')).toContain('WORKSPACE_NOT_FOUND_FOR_CWD');
+  });
+
+  it('uses injected terminal identity env when workspace or node ids are omitted', async () => {
+    const service = createService();
+
+    await withOpenWeaveEnv(
+      {
+        OPENWEAVE_WORKSPACE_ID: 'ws-terminal',
+        OPENWEAVE_NODE_ID: 'node-terminal-1'
+      },
+      async () => {
+        const infoStreams = createStdStreams();
+        const infoExitCode = await runCli(['workspace', 'info', '--json'], {
+          workspaceNodeService: service as never,
+          stdout: { write: infoStreams.writeStdout },
+          stderr: { write: infoStreams.writeStderr }
+        } as never);
+
+        const getStreams = createStdStreams();
+        const getExitCode = await runCli(['node', 'get', '--json'], {
+          workspaceNodeService: service as never,
+          stdout: { write: getStreams.writeStdout },
+          stderr: { write: getStreams.writeStderr }
+        } as never);
+
+        const readStreams = createStdStreams();
+        const readExitCode = await runCli(['node', 'read', '--mode', 'content', '--json'], {
+          workspaceNodeService: service as never,
+          stdout: { write: readStreams.writeStdout },
+          stderr: { write: readStreams.writeStderr }
+        } as never);
+
+        const neighborsStreams = createStdStreams();
+        const neighborsExitCode = await runCli(['node', 'neighbors', '--json'], {
+          workspaceNodeService: service as never,
+          stdout: { write: neighborsStreams.writeStdout },
+          stderr: { write: neighborsStreams.writeStderr }
+        } as never);
+
+        const actionStreams = createStdStreams();
+        const actionExitCode = await runCli(
+          ['node', 'action', 'send', '--json-input', '{"input":"status\\n"}', '--json'],
+          {
+            workspaceNodeService: service as never,
+            stdout: { write: actionStreams.writeStdout },
+            stderr: { write: actionStreams.writeStderr }
+          } as never
+        );
+
+        expect(infoExitCode).toBe(0);
+        expect(getExitCode).toBe(0);
+        expect(readExitCode).toBe(0);
+        expect(neighborsExitCode).toBe(0);
+        expect(actionExitCode).toBe(0);
+        expect(service.resolveWorkspaceId).toHaveBeenCalledWith({
+          workspaceId: 'ws-terminal',
+          cwd: process.cwd()
+        });
+        expect(service.getNode).toHaveBeenCalledWith({
+          workspaceId: 'ws-terminal',
+          nodeId: 'node-terminal-1'
+        });
+        expect(service.readNode).toHaveBeenCalledWith({
+          workspaceId: 'ws-terminal',
+          nodeId: 'node-terminal-1',
+          mode: 'content'
+        });
+        expect(service.getNodeNeighbors).toHaveBeenCalledWith({
+          workspaceId: 'ws-terminal',
+          nodeId: 'node-terminal-1'
+        });
+        expect(service.runNodeAction).toHaveBeenCalledWith({
+          workspaceId: 'ws-terminal',
+          nodeId: 'node-terminal-1',
+          action: 'send',
+          payload: {
+            input: 'status\n'
+          }
+        });
+      }
+    );
+  });
+
+  it('lets explicit workspace and node args override injected terminal identity env', async () => {
+    const service = createService();
+
+    await withOpenWeaveEnv(
+      {
+        OPENWEAVE_WORKSPACE_ID: 'ws-terminal',
+        OPENWEAVE_NODE_ID: 'node-terminal-1'
+      },
+      async () => {
+        const streams = createStdStreams();
+        const exitCode = await runCli(
+          ['--workspace', 'ws-explicit', 'node', 'action', 'node-note-9', 'write', '--json-input', '{"content":"new"}', '--json'],
+          {
+            workspaceNodeService: service as never,
+            stdout: { write: streams.writeStdout },
+            stderr: { write: streams.writeStderr }
+          } as never
+        );
+
+        expect(exitCode).toBe(0);
+        expect(service.runNodeAction).toHaveBeenCalledWith({
+          workspaceId: 'ws-explicit',
+          nodeId: 'node-note-9',
+          action: 'write',
+          payload: {
+            content: 'new'
+          }
+        });
+      }
+    );
   });
 
   it('does not treat --timeout values as node ids for get/neighbors', async () => {

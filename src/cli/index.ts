@@ -2,6 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  resolveOpenWeaveNodeIdFromEnv,
+  resolveOpenWeaveWorkspaceIdFromEnv
+} from '../shared/openweave-env';
+import {
   createCliComponentService,
   formatComponentInstallText,
   formatComponentListText,
@@ -31,6 +35,7 @@ export interface RunCliDependencies {
   componentService?: CliComponentService;
   workspaceNodeService?: CliWorkspaceNodeService;
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 const writeJson = (stdout: WritableLike, payload: unknown, pretty = false): void => {
@@ -180,6 +185,7 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
   let workspaceNodeService = deps.workspaceNodeService;
   let shouldCloseWorkspaceNodeService = false;
   const cwd = deps.cwd ?? process.cwd();
+  const env = deps.env ?? process.env;
 
   try {
     const global = parseLeadingGlobalOptions(argv);
@@ -196,7 +202,10 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
     if (workspaceFlag.error) {
       return fail(stderr, workspaceFlag.error);
     }
-    const workspaceIdHint = workspaceFlag.present ? workspaceFlag.value : global.workspaceId;
+    const workspaceIdHint =
+      workspaceFlag.present
+        ? workspaceFlag.value
+        : global.workspaceId ?? resolveOpenWeaveWorkspaceIdFromEnv(env);
     const json = global.json || hasFlag(rest, '--json');
     const pretty = global.pretty || hasFlag(rest, '--pretty');
 
@@ -245,7 +254,9 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
       }
 
       if (subcommand === 'get') {
-        const nodeId = findPositionals(rest, ['--workspace', '--timeout'])[0];
+        const nodeId =
+          findPositionals(rest, ['--workspace', '--timeout'])[0] ??
+          resolveOpenWeaveNodeIdFromEnv(env);
         if (!nodeId) {
           return fail(stderr, 'Node id is required');
         }
@@ -259,7 +270,9 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
       }
 
       if (subcommand === 'neighbors') {
-        const nodeId = findPositionals(rest, ['--workspace', '--timeout'])[0];
+        const nodeId =
+          findPositionals(rest, ['--workspace', '--timeout'])[0] ??
+          resolveOpenWeaveNodeIdFromEnv(env);
         if (!nodeId) {
           return fail(stderr, 'Node id is required');
         }
@@ -273,7 +286,9 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
       }
 
       if (subcommand === 'read') {
-        const nodeId = findPositionals(rest, ['--workspace', '--timeout', '--mode'])[0];
+        const nodeId =
+          findPositionals(rest, ['--workspace', '--timeout', '--mode'])[0] ??
+          resolveOpenWeaveNodeIdFromEnv(env);
         if (!nodeId) {
           return fail(stderr, 'Node id is required');
         }
@@ -301,8 +316,21 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
           '--json-input',
           '--input-file'
         ]);
-        const nodeId = positionals[0];
-        const action = positionals[1];
+        const currentNodeId = resolveOpenWeaveNodeIdFromEnv(env);
+        const [firstPositional, secondPositional] = positionals;
+        let nodeId: string | undefined;
+        let action: string | undefined;
+        if (firstPositional && secondPositional) {
+          nodeId = firstPositional;
+          action = secondPositional;
+        } else if (firstPositional && currentNodeId) {
+          nodeId = currentNodeId;
+          action = firstPositional;
+        } else if (currentNodeId) {
+          nodeId = currentNodeId;
+        } else {
+          nodeId = firstPositional;
+        }
         if (!nodeId) {
           return fail(stderr, 'Node id is required');
         }

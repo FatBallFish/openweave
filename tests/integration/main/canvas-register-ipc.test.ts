@@ -79,7 +79,12 @@ describe('registered canvas IPC handlers', () => {
       IPC_CHANNELS.canvasLoad,
       IPC_CHANNELS.canvasSave,
       IPC_CHANNELS.graphLoad,
-      IPC_CHANNELS.graphSave
+      IPC_CHANNELS.graphSave,
+      IPC_CHANNELS.noteFileCreate,
+      IPC_CHANNELS.noteFileRead,
+      IPC_CHANNELS.noteFileWrite,
+      IPC_CHANNELS.noteFileDelete,
+      IPC_CHANNELS.noteFileRename
     ]);
 
     await ipcMain.invoke(IPC_CHANNELS.canvasSave, {

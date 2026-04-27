@@ -1,9 +1,10 @@
 import { useReactFlow } from '@xyflow/react';
 import { useI18n } from '../../i18n/provider';
+import { computeSmartFitViewport } from './canvas-fit-view';
 
 export const CanvasViewportControls = (): JSX.Element => {
   const { t } = useI18n();
-  const { getViewport, setViewport, fitView } = useReactFlow();
+  const { getViewport, setViewport, getNodes } = useReactFlow();
 
   const icon = (path: string) => (
     <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
@@ -31,7 +32,16 @@ export const CanvasViewportControls = (): JSX.Element => {
   };
 
   const handleFitView = () => {
-    void fitView({ duration: 180, padding: 0.3 });
+    const container = document.querySelector('.ow-canvas-shell__flow');
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const nodes = getNodes();
+    const viewport = computeSmartFitViewport(nodes, rect.width, rect.height);
+
+    if (viewport) {
+      setViewport(viewport, { duration: 180 });
+    }
   };
 
   return (

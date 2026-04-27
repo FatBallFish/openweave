@@ -288,6 +288,153 @@ describe('local workspace/node query service', () => {
     }
   });
 
+  it('queues builtin.terminal send actions for later delivery', () => {
+    const actionableService = service as unknown as {
+      runNodeAction: (input: {
+        workspaceId: string;
+        nodeId: string;
+        action: string;
+        payload?: Record<string, unknown>;
+      }) => {
+        nodeId: string;
+        action: string;
+        ok: true;
+        result: Record<string, unknown>;
+      };
+    };
+
+    expect(
+      actionableService.runNodeAction({
+        workspaceId,
+        nodeId: 'node-terminal-1',
+        action: 'send',
+        payload: {
+          input: 'echo hello\\n'
+        }
+      })
+    ).toEqual({
+      nodeId: 'node-terminal-1',
+      action: 'send',
+      ok: true,
+      result: {
+        queued: true,
+        input: 'echo hello\\n'
+      }
+    });
+
+    const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(toWorkspaceDbPath(workspaceId));
+    try {
+      const rows = db
+        .prepare(
+          `SELECT workspace_id, target_node_id, action, input_text, delivered_at_ms
+           FROM terminal_dispatches
+           ORDER BY created_at_ms ASC`
+        )
+        .all() as Array<{
+        workspace_id: string;
+        target_node_id: string;
+        action: string;
+        input_text: string;
+        delivered_at_ms: number | null;
+      }>;
+
+      expect(rows).toEqual([
+        {
+          workspace_id: workspaceId,
+          target_node_id: 'node-terminal-1',
+          action: 'send',
+          input_text: 'echo hello\\n',
+          delivered_at_ms: null
+        }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('normalizes terminal submit semantics to a PTY enter keypress', () => {
+    const actionableService = service as unknown as {
+      runNodeAction: (input: {
+        workspaceId: string;
+        nodeId: string;
+        action: string;
+        payload?: Record<string, unknown>;
+      }) => {
+        nodeId: string;
+        action: string;
+        ok: true;
+        result: Record<string, unknown>;
+      };
+    };
+
+    expect(
+      actionableService.runNodeAction({
+        workspaceId,
+        nodeId: 'node-terminal-1',
+        action: 'send',
+        payload: {
+          input: 'echo hello\n',
+          submit: true
+        }
+      })
+    ).toEqual({
+      nodeId: 'node-terminal-1',
+      action: 'send',
+      ok: true,
+      result: {
+        queued: true,
+        input: 'echo hello\r',
+        submitted: true
+      }
+    });
+
+    expect(
+      actionableService.runNodeAction({
+        workspaceId,
+        nodeId: 'node-terminal-1',
+        action: 'submit'
+      })
+    ).toEqual({
+      nodeId: 'node-terminal-1',
+      action: 'submit',
+      ok: true,
+      result: {
+        queued: true,
+        input: '\r',
+        submitted: true
+      }
+    });
+
+    const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(toWorkspaceDbPath(workspaceId));
+    try {
+      const rows = db
+        .prepare(
+          `SELECT action, input_text
+           FROM terminal_dispatches
+           ORDER BY created_at_ms ASC`
+        )
+        .all() as Array<{
+        action: string;
+        input_text: string;
+      }>;
+
+      expect(rows).toEqual([
+        {
+          action: 'send',
+          input_text: 'echo hello\r'
+        },
+        {
+          action: 'submit',
+          input_text: '\r'
+        }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('supports builtin.text and builtin.attachment reads and rejects actions', () => {
     const workspaceRepository = createWorkspaceRepository({
       dbFilePath: toWorkspaceDbPath(workspaceId)

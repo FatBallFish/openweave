@@ -24,7 +24,13 @@ const workspaceListPageMock = vi.fn(
 );
 
 const mockCanvasState = {
-  loading: false
+  loading: false,
+  selectedNodeId: null as string | null,
+  graphSnapshot: {
+    schemaVersion: 2,
+    nodes: [],
+    edges: []
+  }
 };
 
 vi.mock('../../../src/renderer/features/workspaces/workspaces.store', () => ({

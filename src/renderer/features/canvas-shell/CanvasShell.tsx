@@ -17,6 +17,7 @@ import { renderBuiltinHost as BuiltinHostRenderer } from '../components/builtin-
 import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { CanvasViewportControls } from './CanvasViewportControls';
+import { computeSmartFitViewport } from './canvas-fit-view';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
@@ -219,19 +220,29 @@ const CanvasViewportController = ({
   fitViewRequestId: number;
   nodesCount: number;
 }): null => {
-  const { fitView } = useReactFlow();
+  const { getNodes, setViewport } = useReactFlow();
   const previousNodesCount = useRef(nodesCount);
+
+  const applySmartFit = useCallback(() => {
+    const container = document.querySelector('.ow-canvas-shell__flow');
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const nodes = getNodes();
+    const viewport = computeSmartFitViewport(nodes, rect.width, rect.height);
+
+    if (viewport) {
+      setViewport(viewport, { duration: 180 });
+    }
+  }, [getNodes, setViewport]);
 
   useEffect(() => {
     if (fitViewRequestId === 0) {
       return;
     }
 
-    void fitView({
-      duration: 180,
-      padding: 0.3
-    });
-  }, [fitView, fitViewRequestId]);
+    applySmartFit();
+  }, [applySmartFit, fitViewRequestId]);
 
   useEffect(() => {
     const shouldFitNewNodes = nodesCount > previousNodesCount.current && nodesCount <= 6;
@@ -242,16 +253,13 @@ const CanvasViewportController = ({
     }
 
     const timeoutHandle = window.setTimeout(() => {
-      void fitView({
-        duration: 180,
-        padding: 0.36
-      });
+      applySmartFit();
     }, 48);
 
     return () => {
       window.clearTimeout(timeoutHandle);
     };
-  }, [fitView, nodesCount]);
+  }, [applySmartFit, nodesCount]);
 
   return null;
 };

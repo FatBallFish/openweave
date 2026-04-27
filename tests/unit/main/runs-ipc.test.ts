@@ -220,4 +220,44 @@ describe('runs IPC handlers', () => {
       { runId: 'run-codex-2', input: 'second' }
     ]);
   });
+
+  it('injects terminal identity env into runtime start requests', async () => {
+    const bridge = createRuntimeBridgeStub();
+    const handlers = createRunsIpcHandlers({
+      assertWorkspaceExists: vi.fn(),
+      resolveWorkspaceRootDir: () => '/tmp/ws-1',
+      runtimeBridge: bridge,
+      randomId: () => 'run-shell-1',
+      now: () => 1000,
+      launchEnv: {
+        PATH: '/usr/bin',
+        OPENWEAVE_CLI: '/opt/openweave/bin/openweave'
+      }
+    });
+
+    await handlers.startRun({} as never, {
+      workspaceId: 'ws-1',
+      nodeId: 'terminal-1',
+      runtime: 'shell',
+      command: 'pwd',
+      workingDir: '/tmp/ws-1/.openweave/roles/terminal-1'
+    });
+
+    expect(bridge.starts).toHaveLength(1);
+    expect(bridge.starts[0]).toMatchObject({
+      runId: 'run-shell-1',
+      runtime: 'shell',
+      command: 'pwd',
+      cwd: '/tmp/ws-1/.openweave/roles/terminal-1',
+      env: {
+        PATH: '/usr/bin',
+        OPENWEAVE_CLI: '/opt/openweave/bin/openweave',
+        OPENWEAVE_WORKSPACE_ID: 'ws-1',
+        OPENWEAVE_NODE_ID: 'terminal-1',
+        OPENWEAVE_TERMINAL_NODE_ID: 'terminal-1',
+        OPENWEAVE_WORKSPACE_ROOT: '/tmp/ws-1',
+        OPENWEAVE_TERMINAL_WORKING_DIR: '/tmp/ws-1/.openweave/roles/terminal-1'
+      }
+    });
+  });
 });

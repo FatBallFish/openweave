@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+ENTRY_PATH=${OPENWEAVE_CLI_ENTRY:-}
+RUNTIME_PATH=${OPENWEAVE_CLI_RUNTIME:-}
+
+if [ -z "$ENTRY_PATH" ] || [ ! -f "$ENTRY_PATH" ]; then
+  for candidate in \
+    "$SCRIPT_DIR/../dist/cli/index.js" \
+    "$SCRIPT_DIR/../app/dist/cli/index.js"
+  do
+    if [ -f "$candidate" ]; then
+      ENTRY_PATH=$candidate
+      break
+    fi
+  done
+fi
+
+if [ -z "$ENTRY_PATH" ] || [ ! -f "$ENTRY_PATH" ]; then
+  echo "openweave CLI entry not found." >&2
+  exit 1
+fi
+
+if [ -n "$RUNTIME_PATH" ] && [ -x "$RUNTIME_PATH" ]; then
+  exec env ELECTRON_RUN_AS_NODE=1 "$RUNTIME_PATH" --disable-warning=ExperimentalWarning "$ENTRY_PATH" "$@"
+fi
+
+if command -v node >/dev/null 2>&1; then
+  exec node --disable-warning=ExperimentalWarning "$ENTRY_PATH" "$@"
+fi
+
+echo "openweave runtime not found. Set OPENWEAVE_CLI_RUNTIME or install Node.js." >&2
+exit 1

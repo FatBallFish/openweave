@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
 import { createWorkspaceRepository, type WorkspaceRepository } from '../db/workspace';
 import {
@@ -250,6 +251,15 @@ export const createLocalWorkspaceNodeQueryService = (
           node,
           saveGraph: (nextGraph) => {
             repository.saveGraphSnapshot(nextGraph);
+          },
+          enqueueTerminalDispatch: (dispatchInput) => {
+            repository.enqueueTerminalDispatch({
+              id: crypto.randomUUID(),
+              workspaceId: dispatchInput.workspaceId,
+              targetNodeId: dispatchInput.targetNodeId,
+              action: dispatchInput.action,
+              inputText: dispatchInput.inputText
+            });
           }
         },
         {

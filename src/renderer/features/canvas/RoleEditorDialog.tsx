@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { JSX } from 'react';
 import { createPortal } from 'react-dom';
 import type { RoleRecord } from '../../../shared/ipc/contracts';
@@ -24,6 +24,13 @@ export const RoleEditorDialog = ({ open, role, onClose, onSave }: RoleEditorDial
   const [description, setDescription] = useState(role?.description ?? '');
   const [icon, setIcon] = useState(role?.icon ?? ICON_OPTIONS[0]);
   const [color, setColor] = useState(role?.color ?? WORKSPACE_COLOR_OPTIONS[5]);
+
+  useEffect(() => {
+    setName(role?.name ?? '');
+    setDescription(role?.description ?? '');
+    setIcon(role?.icon ?? ICON_OPTIONS[0]);
+    setColor(role?.color ?? WORKSPACE_COLOR_OPTIONS[5]);
+  }, [role]);
 
   const isCustomColor = !WORKSPACE_COLOR_OPTIONS.some(
     (c) => c.toUpperCase() === color.toUpperCase()

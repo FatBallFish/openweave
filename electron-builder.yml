@@ -6,6 +6,9 @@ directories:
 files:
   - dist/**/*
   - package.json
+extraResources:
+  - from: bin
+    to: bin
 mac:
   identity: null
   category: public.app-category.developer-tools
