@@ -110,7 +110,8 @@ export const IPC_CHANNELS = {
   noteFileRead: 'note:file-read',
   noteFileWrite: 'note:file-write',
   noteFileDelete: 'note:file-delete',
-  noteFileRename: 'note:file-rename'
+  noteFileRename: 'note:file-rename',
+  graphEdgeHighlight: 'graph:edge-highlight'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
