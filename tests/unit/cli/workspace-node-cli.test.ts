@@ -373,7 +373,8 @@ describe('runCli workspace/node commands', () => {
           action: 'write',
           payload: {
             content: 'new'
-          }
+          },
+          sourceNodeId: 'node-terminal-1'
         });
       }
     );

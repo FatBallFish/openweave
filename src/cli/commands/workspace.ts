@@ -19,12 +19,13 @@ export interface CliWorkspaceNodeService {
   listNodes: (input: { workspaceId: string }) => Promise<GraphNodeListResponse>;
   getNode: (input: { workspaceId: string; nodeId: string }) => Promise<GraphNodeGetResponse>;
   getNodeNeighbors: (input: { workspaceId: string; nodeId: string }) => Promise<GraphNodeNeighborsResponse>;
-  readNode: (input: { workspaceId: string; nodeId: string; mode?: string }) => Promise<GraphNodeReadResponse>;
+  readNode: (input: { workspaceId: string; nodeId: string; mode?: string; sourceNodeId?: string }) => Promise<GraphNodeReadResponse>;
   runNodeAction: (input: {
     workspaceId: string;
     nodeId: string;
     action: string;
     payload?: Record<string, unknown>;
+    sourceNodeId?: string;
   }) => Promise<GraphNodeActionResponse>;
   close?: () => void;
 }

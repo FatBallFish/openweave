@@ -91,6 +91,17 @@ interface TerminalDispatchRow {
   delivered_run_id: string | null;
 }
 
+interface GraphEdgeActivationRow {
+  id: string;
+  workspace_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  edge_id: string;
+  action: string;
+  created_at_ms: number;
+  consumed_at_ms: number | null;
+}
+
 interface AuditLogRow {
   id: string;
   workspace_id: string;
@@ -168,6 +179,20 @@ CREATE INDEX IF NOT EXISTS idx_graph_nodes_updated_at_ms
 
 CREATE INDEX IF NOT EXISTS idx_graph_edges_updated_at_ms
   ON graph_edges (updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS graph_edge_activations (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  source_node_id TEXT NOT NULL,
+  target_node_id TEXT NOT NULL,
+  edge_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  consumed_at_ms INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_graph_edge_activations_workspace_pending
+  ON graph_edge_activations (workspace_id, consumed_at_ms, created_at_ms ASC);
 
 CREATE TABLE IF NOT EXISTS workspace_skill_injections (
   workspace_id TEXT NOT NULL,
@@ -542,6 +567,52 @@ WHERE target_node_id = @target_node_id
   AND delivered_at_ms IS NULL
 ORDER BY created_at_ms ASC
 LIMIT @limit
+`;
+
+const insertGraphEdgeActivationSql = `
+INSERT INTO graph_edge_activations (
+  id,
+  workspace_id,
+  source_node_id,
+  target_node_id,
+  edge_id,
+  action,
+  created_at_ms,
+  consumed_at_ms
+)
+VALUES (
+  @id,
+  @workspace_id,
+  @source_node_id,
+  @target_node_id,
+  @edge_id,
+  @action,
+  @created_at_ms,
+  @consumed_at_ms
+)
+`;
+
+const selectPendingGraphEdgeActivationsSql = `
+SELECT
+  id,
+  workspace_id,
+  source_node_id,
+  target_node_id,
+  edge_id,
+  action,
+  created_at_ms,
+  consumed_at_ms
+FROM graph_edge_activations
+WHERE workspace_id = @workspace_id
+  AND consumed_at_ms IS NULL
+ORDER BY created_at_ms ASC
+LIMIT @limit
+`;
+
+const markGraphEdgeActivationConsumedSql = `
+UPDATE graph_edge_activations
+SET consumed_at_ms = @consumed_at_ms
+WHERE id = @id
 `;
 
 const markTerminalDispatchDeliveredSql = `
@@ -1067,6 +1138,27 @@ export interface TerminalDispatchRecord {
   deliveredRunId: string | null;
 }
 
+export interface GraphEdgeActivationRecord {
+  id: string;
+  workspaceId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  edgeId: string;
+  action: string;
+  createdAtMs: number;
+  consumedAtMs: number | null;
+}
+
+export interface CreateGraphEdgeActivationInput {
+  id: string;
+  workspaceId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  edgeId: string;
+  action: string;
+  createdAtMs?: number;
+}
+
 export interface CreateTerminalDispatchInput {
   id: string;
   workspaceId: string;
@@ -1091,6 +1183,8 @@ export interface WorkspaceRepository {
   listPendingTerminalDispatches: (targetNodeId: string, limit?: number) => TerminalDispatchRecord[];
   markTerminalDispatchDelivered: (dispatchId: string, deliveredRunId: string) => void;
   deleteWorkspaceTerminalDispatches: (workspaceId: string) => void;
+  recordGraphEdgeActivation: (input: CreateGraphEdgeActivationInput) => GraphEdgeActivationRecord;
+  consumeGraphEdgeActivations: (workspaceId: string, limit?: number) => GraphEdgeActivationRecord[];
   deleteWorkspaceAuditLogs: (workspaceId: string) => void;
   appendAuditLog: (input: CreateAuditLogInput) => AuditLogRecord;
   listAuditLogs: (limit?: number) => AuditLogRecord[];
@@ -1163,6 +1257,19 @@ const mapTerminalDispatchRow = (row: TerminalDispatchRow): TerminalDispatchRecor
   };
 };
 
+const mapGraphEdgeActivationRow = (row: GraphEdgeActivationRow): GraphEdgeActivationRecord => {
+  return {
+    id: row.id,
+    workspaceId: workspaceIdSchema.parse(row.workspace_id),
+    sourceNodeId: row.source_node_id,
+    targetNodeId: row.target_node_id,
+    edgeId: row.edge_id,
+    action: row.action,
+    createdAtMs: row.created_at_ms,
+    consumedAtMs: row.consumed_at_ms
+  };
+};
+
 const toAuditLogLimit = (value: number | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 200;
@@ -1187,6 +1294,20 @@ const toTerminalDispatchLimit = (value: number | undefined): number => {
   }
   if (rounded > 1000) {
     return 1000;
+  }
+  return rounded;
+};
+
+const toGraphEdgeActivationLimit = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 100;
+  }
+  const rounded = Math.floor(value);
+  if (rounded < 1) {
+    return 1;
+  }
+  if (rounded > 500) {
+    return 500;
   }
   return rounded;
 };
@@ -1475,6 +1596,45 @@ export const createWorkspaceRepository = (options: WorkspaceRepositoryOptions): 
       db.prepare(deleteTerminalDispatchesByWorkspaceSql).run({
         workspace_id: parsedWorkspaceId
       });
+    },
+    recordGraphEdgeActivation: (input: CreateGraphEdgeActivationInput): GraphEdgeActivationRecord => {
+      const createdAtMs = input.createdAtMs ?? now();
+      const parsedWorkspaceId = workspaceIdSchema.parse(input.workspaceId);
+
+      db.prepare(insertGraphEdgeActivationSql).run({
+        id: input.id,
+        workspace_id: parsedWorkspaceId,
+        source_node_id: input.sourceNodeId,
+        target_node_id: input.targetNodeId,
+        edge_id: input.edgeId,
+        action: input.action,
+        created_at_ms: createdAtMs,
+        consumed_at_ms: null
+      });
+
+      return {
+        id: input.id,
+        workspaceId: parsedWorkspaceId,
+        sourceNodeId: input.sourceNodeId,
+        targetNodeId: input.targetNodeId,
+        edgeId: input.edgeId,
+        action: input.action,
+        createdAtMs,
+        consumedAtMs: null
+      };
+    },
+    consumeGraphEdgeActivations: (workspaceId: string, limit?: number): GraphEdgeActivationRecord[] => {
+      const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
+      const rows = db.prepare(selectPendingGraphEdgeActivationsSql).all({
+        workspace_id: parsedWorkspaceId,
+        limit: toGraphEdgeActivationLimit(limit)
+      }) as unknown as GraphEdgeActivationRow[];
+      const consumedAtMs = now();
+      const markConsumed = db.prepare(markGraphEdgeActivationConsumedSql);
+      for (const row of rows) {
+        markConsumed.run({ id: row.id, consumed_at_ms: consumedAtMs });
+      }
+      return rows.map((row) => mapGraphEdgeActivationRow({ ...row, consumed_at_ms: consumedAtMs }));
     },
     deleteWorkspaceAuditLogs: (workspaceId: string): void => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);

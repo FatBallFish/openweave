@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { settingsStore, type ShortcutActionId } from '../workbench/settings.store';
 
 export type CanvasShortcutAction =
   | 'open-command-palette'
@@ -12,7 +13,8 @@ export type CanvasShortcutAction =
   | 'escape'
   | 'delete-selected'
   | 'undo'
-  | 'redo';
+  | 'redo'
+  | 'toggle-connect-mode';
 
 interface CanvasShortcutLike {
   key: string;
@@ -37,19 +39,15 @@ interface UseCanvasShortcutsOptions {
   onDeleteSelected: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  onToggleConnectMode?: () => void;
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
   if (!target || typeof target !== 'object') {
     return false;
   }
-
-  const candidate = target as {
-    tagName?: string;
-    isContentEditable?: boolean;
-  };
+  const candidate = target as { tagName?: string; isContentEditable?: boolean };
   const tagName = candidate.tagName?.toUpperCase();
-
   return (
     candidate.isContentEditable === true ||
     tagName === 'INPUT' ||
@@ -59,6 +57,21 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   );
 };
 
+const matchesBinding = (
+  event: CanvasShortcutLike,
+  binding: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
+): boolean => {
+  const eventKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  const bindingKey = binding.key.length === 1 ? binding.key.toLowerCase() : binding.key;
+  if (eventKey !== bindingKey) return false;
+  const hasBindingMod = binding.ctrlKey || binding.metaKey;
+  const hasEventMod = event.ctrlKey || event.metaKey;
+  if (hasBindingMod !== hasEventMod) return false;
+  if (event.shiftKey !== binding.shiftKey) return false;
+  if (event.altKey !== binding.altKey) return false;
+  return true;
+};
+
 export const getCanvasShortcutAction = (
   event: CanvasShortcutLike
 ): CanvasShortcutAction | null => {
@@ -66,60 +79,24 @@ export const getCanvasShortcutAction = (
     return null;
   }
 
-  const key = event.key.toLowerCase();
-  const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+  const bindings = settingsStore.getState().shortcutBindings;
 
-  if (hasPrimaryModifier && event.shiftKey && key === 'i') {
-    return 'toggle-inspector';
+  // Delete/Backspace: check the binding first, also handle Backspace as fallback
+  const deleteBinding = bindings['delete-selected'];
+  if (matchesBinding(event, deleteBinding) || (event.key === 'Backspace' && deleteBinding.key === 'Delete')) {
+    return 'delete-selected';
   }
 
-  if (hasPrimaryModifier && key === 'k') {
-    return 'open-command-palette';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && key === '/') {
-    return 'open-quick-add';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && !event.shiftKey) {
-    switch (key) {
-      case '1':
-        return 'add-terminal';
-      case '2':
-        return 'add-note';
-      case '3':
-        return 'add-portal';
-      case '4':
-        return 'add-file-tree';
-      case '5':
-        return 'add-text';
-      case 'escape':
-        return 'escape';
-      default:
-        return null;
-    }
-  }
-
-  if (key === 'escape') {
-    return 'escape';
-  }
-
-  if (!hasPrimaryModifier && !event.altKey && !event.shiftKey) {
-    if (key === 'backspace' || key === 'delete') {
-      return 'delete-selected';
-    }
-  }
-
-  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'z') {
+  // Undo: also check for bare ctrl/meta+z as fallback
+  if (matchesBinding(event, bindings['undo']) || (event.key.toLowerCase() === 'z' && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey)) {
     return 'undo';
   }
 
-  if (hasPrimaryModifier && event.shiftKey && !event.altKey && key === 'z') {
-    return 'redo';
-  }
-
-  if (hasPrimaryModifier && !event.altKey && !event.shiftKey && key === 'y') {
-    return 'redo';
+  for (const [actionId, binding] of Object.entries(bindings)) {
+    if (actionId === 'delete-selected' || actionId === 'undo') continue; // already handled
+    if (matchesBinding(event, binding as typeof bindings[ShortcutActionId])) {
+      return actionId as ShortcutActionId;
+    }
   }
 
   return null;
@@ -138,7 +115,8 @@ export const useCanvasShortcuts = ({
   onEscape,
   onDeleteSelected,
   onUndo,
-  onRedo
+  onRedo,
+  onToggleConnectMode
 }: UseCanvasShortcutsOptions): void => {
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') {
@@ -190,6 +168,9 @@ export const useCanvasShortcuts = ({
         case 'redo':
           onRedo();
           return;
+        case 'toggle-connect-mode':
+          onToggleConnectMode?.();
+          return;
         default:
           return;
       }
@@ -212,6 +193,7 @@ export const useCanvasShortcuts = ({
     onToggleInspector,
     onDeleteSelected,
     onUndo,
-    onRedo
+    onRedo,
+    onToggleConnectMode
   ]);
 };

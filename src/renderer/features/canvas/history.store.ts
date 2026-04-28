@@ -1,13 +1,18 @@
 import { useSyncExternalStore } from 'react';
 import type { GraphNodeRecord } from '../../../shared/ipc/contracts';
+import type { GraphEdgeV2Input } from '../../../shared/ipc/schemas';
 import { settingsStore } from '../workbench/settings.store';
+
+type GraphEdgeRecord = GraphEdgeV2Input;
 
 type HistoryEntry =
   | { kind: 'addNode'; node: GraphNodeRecord }
   | { kind: 'removeNode'; node: GraphNodeRecord }
   | { kind: 'moveNode'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
   | { kind: 'resizeNode'; nodeId: string; from: GraphNodeRecord['bounds']; to: GraphNodeRecord['bounds'] }
-  | { kind: 'renameNode'; nodeId: string; oldTitle: string; newTitle: string };
+  | { kind: 'renameNode'; nodeId: string; oldTitle: string; newTitle: string }
+  | { kind: 'addEdge'; edge: GraphEdgeRecord }
+  | { kind: 'removeEdge'; edge: GraphEdgeRecord };
 
 interface HistoryState {
   stack: HistoryEntry[];

@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/react';
+import { MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM } from './canvas-viewport-limits';
 
 interface Rect {
   left: number;
@@ -88,7 +89,7 @@ export function computeSmartFitViewport(
 
   const zoomX = containerWidth / paddedWidth;
   const zoomY = containerHeight / paddedHeight;
-  const zoom = Math.max(0.4, Math.min(zoomX, zoomY, 1.5));
+  const zoom = Math.max(MIN_CANVAS_ZOOM, Math.min(zoomX, zoomY, Math.min(MAX_CANVAS_ZOOM, 1.5)));
 
   const centerX = (minX + maxX) / 2;
   const centerY = (minY + maxY) / 2;

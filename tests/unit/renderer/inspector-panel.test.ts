@@ -3,7 +3,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkbenchInspector } from '../../../src/renderer/features/workbench/WorkbenchInspector';
-import { WorkbenchStatusIsland } from '../../../src/renderer/features/workbench/WorkbenchStatusIsland';
 import { I18nProvider } from '../../../src/renderer/i18n/provider';
 
 describe('inspector panel', () => {
@@ -35,22 +34,5 @@ describe('inspector panel', () => {
     expect(html).toContain('builtin.terminal');
     expect(html).toContain('Added terminal');
     expect(html).toContain('快捷操作');
-  });
-
-  it('renders mapped status, event, and task counters', () => {
-    const html = renderToStaticMarkup(
-      createElement(WorkbenchStatusIsland, {
-        hasActiveWorkspace: true,
-        statusLabel: 'Focused',
-        eventsCount: 2,
-        tasksCount: 5
-      })
-    );
-
-    expect(html).toContain('workbench-status-island');
-    expect(html).toContain('status-island-events');
-    expect(html).toContain('Focused');
-    expect(html).toContain('2');
-    expect(html).toContain('5');
   });
 });

@@ -86,6 +86,7 @@ export const IPC_CHANNELS = {
   canvasSave: 'canvas:save',
   graphLoad: 'graph:load-v2',
   graphSave: 'graph:save-v2',
+  graphEdgeActivationsConsume: 'graph:edge-activations:consume',
   runStart: 'run:start',
   runGet: 'run:get',
   runList: 'run:list',
@@ -110,7 +111,8 @@ export const IPC_CHANNELS = {
   noteFileRead: 'note:file-read',
   noteFileWrite: 'note:file-write',
   noteFileDelete: 'note:file-delete',
-  noteFileRename: 'note:file-rename'
+  noteFileRename: 'note:file-rename',
+  graphEdgeHighlight: 'graph:edge-highlight'
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -460,6 +462,7 @@ export interface CanvasBridgeApi {
 export interface GraphBridgeApiV2 {
   loadGraphSnapshot: (input: GraphLoadV2Input) => Promise<GraphLoadResponseV2>;
   saveGraphSnapshot: (input: GraphSaveV2Input) => Promise<GraphSaveResponseV2>;
+  consumeEdgeActivations: (input: { workspaceId: string }) => Promise<{ edgeIds: string[] }>;
 }
 
 export interface RunsBridgeApi {

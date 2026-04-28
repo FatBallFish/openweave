@@ -30,14 +30,18 @@ export interface NodeScopedInput extends WorkspaceScopedInput {
   nodeId: string;
 }
 
+interface NodeInteractionInput extends NodeScopedInput {
+  sourceNodeId?: string;
+}
+
 export interface LocalWorkspaceNodeQueryService {
   resolveWorkspaceId: (input: ResolveWorkspaceIdInput) => string;
   getWorkspaceInfo: (input: WorkspaceScopedInput) => WorkspaceInfoResponse;
   listNodes: (input: WorkspaceScopedInput) => GraphNodeListResponse;
   getNode: (input: NodeScopedInput) => GraphNodeGetResponse;
   getNodeNeighbors: (input: NodeScopedInput) => GraphNodeNeighborsResponse;
-  readNode: (input: NodeScopedInput & { mode?: string }) => GraphNodeReadResponse;
-  runNodeAction: (input: NodeScopedInput & { action: string; payload?: Record<string, unknown> }) => GraphNodeActionResponse;
+  readNode: (input: NodeInteractionInput & { mode?: string }) => GraphNodeReadResponse;
+  runNodeAction: (input: NodeInteractionInput & { action: string; payload?: Record<string, unknown> }) => GraphNodeActionResponse;
   close: () => void;
 }
 
@@ -132,6 +136,40 @@ export const createLocalWorkspaceNodeQueryService = (
     return { repository, graph, node };
   };
 
+  const recordConnectedNodeActivation = (
+    input: {
+      repository: WorkspaceRepository;
+      graph: ReturnType<WorkspaceRepository['loadGraphSnapshot']>;
+      workspaceId: string;
+      sourceNodeId?: string;
+      targetNodeId: string;
+      action: string;
+    }
+  ): void => {
+    const sourceNodeId = input.sourceNodeId?.trim();
+    if (!sourceNodeId || sourceNodeId === input.targetNodeId) {
+      return;
+    }
+
+    const edge = input.graph.edges.find(
+      (candidate) =>
+        (candidate.source === sourceNodeId && candidate.target === input.targetNodeId) ||
+        (candidate.source === input.targetNodeId && candidate.target === sourceNodeId)
+    );
+    if (!edge) {
+      return;
+    }
+
+    input.repository.recordGraphEdgeActivation({
+      id: crypto.randomUUID(),
+      workspaceId: input.workspaceId,
+      sourceNodeId,
+      targetNodeId: input.targetNodeId,
+      edgeId: edge.id,
+      action: input.action
+    });
+  };
+
   return {
     resolveWorkspaceId: (input: ResolveWorkspaceIdInput): string => {
       if (input.workspaceId) {
@@ -192,29 +230,36 @@ export const createLocalWorkspaceNodeQueryService = (
       const downstream: GraphNodeNeighborsResponse['downstream'] = [];
 
       for (const edge of graph.edges) {
-        if (edge.target === input.nodeId) {
-          const sourceNode = nodeMap.get(edge.source);
-          if (!sourceNode) {
-            continue;
-          }
-          upstream.push({
-            edgeId: edge.id,
-            nodeId: sourceNode.id,
-            componentType: sourceNode.componentType,
-            title: sourceNode.title
-          });
-        }
+        let neighborNodeId: string | null = null;
+        let neighborTitle = '';
+        let neighborComponentType = '';
+
         if (edge.source === input.nodeId) {
           const targetNode = nodeMap.get(edge.target);
-          if (!targetNode) {
-            continue;
+          if (targetNode) {
+            neighborNodeId = targetNode.id;
+            neighborTitle = targetNode.title;
+            neighborComponentType = targetNode.componentType;
+            downstream.push({
+              edgeId: edge.id,
+              nodeId: neighborNodeId,
+              componentType: neighborComponentType,
+              title: neighborTitle
+            });
           }
-          downstream.push({
-            edgeId: edge.id,
-            nodeId: targetNode.id,
-            componentType: targetNode.componentType,
-            title: targetNode.title
-          });
+        } else if (edge.target === input.nodeId) {
+          const sourceNode = nodeMap.get(edge.source);
+          if (sourceNode) {
+            neighborNodeId = sourceNode.id;
+            neighborTitle = sourceNode.title;
+            neighborComponentType = sourceNode.componentType;
+            upstream.push({
+              edgeId: edge.id,
+              nodeId: neighborNodeId,
+              componentType: neighborComponentType,
+              title: neighborTitle
+            });
+          }
         }
       }
 
@@ -227,7 +272,7 @@ export const createLocalWorkspaceNodeQueryService = (
     readNode: (input): GraphNodeReadResponse => {
       const { repository, graph, node } = resolveNode(input.workspaceId, input.nodeId);
       const workspace = getWorkspaceOrThrow(input.workspaceId);
-      return componentActionDispatcher.read(
+      const response = componentActionDispatcher.read(
         {
           workspaceId: input.workspaceId,
           workspaceRootDir: workspace.rootDir,
@@ -239,11 +284,20 @@ export const createLocalWorkspaceNodeQueryService = (
         },
         { mode: input.mode }
       );
+      recordConnectedNodeActivation({
+        repository,
+        graph,
+        workspaceId: input.workspaceId,
+        sourceNodeId: input.sourceNodeId,
+        targetNodeId: input.nodeId,
+        action: 'read'
+      });
+      return response;
     },
     runNodeAction: (input): GraphNodeActionResponse => {
       const { repository, graph, node } = resolveNode(input.workspaceId, input.nodeId);
       const workspace = getWorkspaceOrThrow(input.workspaceId);
-      return componentActionDispatcher.action(
+      const response = componentActionDispatcher.action(
         {
           workspaceId: input.workspaceId,
           workspaceRootDir: workspace.rootDir,
@@ -267,6 +321,15 @@ export const createLocalWorkspaceNodeQueryService = (
           payload: input.payload
         }
       );
+      recordConnectedNodeActivation({
+        repository,
+        graph,
+        workspaceId: input.workspaceId,
+        sourceNodeId: input.sourceNodeId,
+        targetNodeId: input.nodeId,
+        action: input.action
+      });
+      return response;
     },
     close: (): void => {
       for (const repository of repositories.values()) {

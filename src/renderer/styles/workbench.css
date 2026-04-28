@@ -606,6 +606,109 @@ select {
   pointer-events: none;
 }
 
+.ow-canvas-connect-hit-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border: 1px dashed rgba(var(--ow-accent-rgb), 0.42);
+  background: rgba(var(--ow-accent-rgb), 0.035);
+  cursor: crosshair;
+}
+
+.ow-canvas-connect-hit-mask:hover,
+.ow-canvas-connect-hit-mask:focus-visible {
+  border-color: rgba(var(--ow-accent-rgb), 0.74);
+  background: rgba(var(--ow-accent-rgb), 0.09);
+  outline: none;
+}
+
+.ow-canvas-connect-hit-mask.is-source {
+  border-color: rgba(var(--ow-state-running-rgb), 0.78);
+  background: rgba(var(--ow-state-running-rgb), 0.08);
+}
+
+.ow-canvas-shell-minimap {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 6;
+}
+
+.ow-canvas-shell-minimap--collapsed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.92), rgba(var(--ow-surface-rgb), 0.78)),
+    var(--ow-color-bg-panel);
+  color: var(--ow-color-text-strong);
+  box-shadow: var(--ow-shadow-floating);
+  cursor: pointer;
+}
+
+.ow-canvas-shell-minimap--collapsed:hover {
+  border-color: var(--ow-color-border-strong);
+  background:
+    linear-gradient(180deg, rgba(var(--ow-accent-rgb), 0.12), rgba(var(--ow-surface-rgb), 0.84)),
+    var(--ow-color-bg-panel);
+}
+
+.ow-canvas-shell-minimap--expanded {
+  width: 240px;
+  height: 170px;
+  padding: 10px;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(var(--ow-surface-rgb), 0.94), rgba(var(--ow-surface-rgb), 0.8)),
+    var(--ow-color-bg-panel);
+  box-shadow: var(--ow-shadow-floating);
+}
+
+.ow-canvas-shell-minimap__collapse {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--ow-color-border);
+  border-radius: 7px;
+  background: rgba(var(--ow-surface-rgb), 0.88);
+  color: var(--ow-color-text-soft);
+  cursor: pointer;
+}
+
+.ow-canvas-shell-minimap__collapse:hover {
+  color: var(--ow-color-text-strong);
+  border-color: var(--ow-color-border-strong);
+}
+
+.ow-canvas-shell-minimap .react-flow__minimap {
+  position: static;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.ow-canvas-shell-minimap .react-flow__minimap-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .ow-canvas-shell {
   display: flex;
   flex-direction: column;
@@ -1290,16 +1393,17 @@ select {
   border-color: var(--ow-color-border-strong);
 }
 
-.ow-icon-button--active,
-.ow-icon-button--active:hover {
-  background: rgba(var(--ow-accent-rgb), 0.24);
-  color: var(--ow-color-text-strong);
-  box-shadow: inset 0 0 0 1px rgba(var(--ow-accent-rgb), 0.3);
-}
-
 .ow-icon-button--primary {
   border-color: rgba(var(--ow-accent-rgb), 0.32);
   background: rgba(var(--ow-accent-rgb), 0.12);
+}
+
+.ow-icon-button--active,
+.ow-icon-button--active:hover {
+  background: rgba(var(--ow-accent-rgb), 0.4);
+  color: var(--ow-color-accent);
+  border-color: var(--ow-color-accent);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--ow-accent-rgb), 0.5), 0 0 12px rgba(var(--ow-accent-rgb), 0.2);
 }
 
 .ow-icon-button:disabled {
@@ -4785,7 +4889,6 @@ select:focus-visible {
   border-style: dashed !important;
   border-width: 1px !important;
 }
-}
 
 /* xterm container */
 .ow-terminal-node__xterm,
@@ -5887,4 +5990,91 @@ select:focus-visible {
 
 .ow-note-toolbar__dropdown-item:hover {
   background: rgba(var(--ow-accent-rgb), 0.12);
+}
+
+/* ---- Connect Mode ---- */
+
+.ow-connect-overlay {
+  pointer-events: none;
+}
+
+.ow-canvas-shell__flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--ow-color-accent) !important;
+  stroke-width: 2.5 !important;
+}
+
+/* ---- Connect Edge Animation ---- */
+
+@keyframes edgeFlow {
+  from { stroke-dashoffset: 28; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* ---- Shortcuts Tab ---- */
+
+.ow-shortcuts-tab__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ow-color-border);
+}
+
+.ow-shortcuts-tab__label {
+  font-size: 13px;
+  color: var(--ow-color-text-default);
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.ow-shortcuts-tab__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ow-shortcuts-tab__modifier {
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--ow-color-border);
+  background: var(--ow-color-bg-panel);
+  color: var(--ow-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--ow-transition-fast);
+  font-family: inherit;
+}
+
+.ow-shortcuts-tab__modifier.is-active {
+  background: var(--ow-color-accent-soft);
+  border-color: var(--ow-color-accent);
+  color: var(--ow-color-accent);
+}
+
+.ow-shortcuts-tab__key-input {
+  width: 80px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ow-color-border);
+  background: var(--ow-color-bg-panel-sunken);
+  color: var(--ow-color-text-default);
+  font-family: var(--ow-font-mono);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.ow-shortcuts-tab__key-input:focus {
+  outline: none;
+  border-color: var(--ow-color-accent);
+  box-shadow: 0 0 0 3px rgba(var(--ow-accent-rgb), 0.12);
+}
+
+.ow-settings-dialog__hint {
+  font-size: 12px;
+  color: var(--ow-color-text-muted);
+  margin: 0 0 8px;
 }

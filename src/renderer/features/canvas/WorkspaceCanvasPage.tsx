@@ -17,6 +17,15 @@ interface WorkspaceCanvasPageProps {
   placementMode?: { type: string } | null;
   onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onPlacementCancel?: () => void;
+  connectModeActive?: boolean;
+  connectSourceNodeId?: string | null;
+  activeEdgeIds?: string[];
+  selectedEdgeId?: string | null;
+  onToggleConnectMode?: () => void;
+  onSelectConnectSource?: (nodeId: string) => void;
+  onCompleteConnection?: (sourceId: string, targetId: string) => void;
+  onSelectEdge?: (edgeId: string | null) => void;
+  onDeleteSelectedEdge?: () => void;
 }
 
 export const WorkspaceCanvasPage = ({
@@ -30,7 +39,16 @@ export const WorkspaceCanvasPage = ({
   onAddTerminal,
   placementMode,
   onPlacementComplete,
-  onPlacementCancel
+  onPlacementCancel,
+  connectModeActive,
+  connectSourceNodeId,
+  activeEdgeIds,
+  selectedEdgeId,
+  onToggleConnectMode,
+  onSelectConnectSource,
+  onCompleteConnection,
+  onSelectEdge,
+  onDeleteSelectedEdge
 }: WorkspaceCanvasPageProps): JSX.Element => {
   const { t } = useI18n();
   const [activeRun, setActiveRun] = useState<{ workspaceId: string; runId: string } | null>(null);
@@ -93,6 +111,14 @@ export const WorkspaceCanvasPage = ({
           placementMode={placementMode}
           onPlacementComplete={onPlacementComplete}
           onPlacementCancel={onPlacementCancel}
+          connectModeActive={connectModeActive}
+          connectSourceNodeId={connectSourceNodeId}
+          activeEdgeIds={activeEdgeIds}
+          selectedEdgeId={selectedEdgeId}
+          onSelectConnectSource={onSelectConnectSource}
+          onCompleteConnection={onCompleteConnection}
+          onSelectEdge={onSelectEdge}
+          onDeleteSelectedEdge={onDeleteSelectedEdge}
         />
       )}
 

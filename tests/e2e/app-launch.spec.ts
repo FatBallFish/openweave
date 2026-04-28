@@ -20,7 +20,7 @@ test('opens the Electron workbench shell', async () => {
     await expect(page.getByTestId('workbench-left-rail')).toBeVisible();
     await expect(page.getByTestId('workbench-context-panel')).toBeVisible();
     await expect(page.getByTestId('workbench-inspector')).toBeVisible();
-    await expect(page.getByTestId('workbench-status-island')).toBeVisible();
+    await expect(page.getByTestId('workbench-status-island')).toHaveCount(0);
 
     await page.getByTestId('workbench-inspector-toggle').click();
     await expect(page.getByTestId('workbench-inspector-collapsed')).toBeVisible();

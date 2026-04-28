@@ -37,10 +37,12 @@ describe('preload bridge', () => {
     expect(bridge.ipcChannels.componentUninstall).toBe(IPC_CHANNELS.componentUninstall);
     expect(bridge.ipcChannels.graphLoad).toBe(IPC_CHANNELS.graphLoad);
     expect(bridge.ipcChannels.graphSave).toBe(IPC_CHANNELS.graphSave);
+    expect(bridge.ipcChannels.graphEdgeActivationsConsume).toBe(IPC_CHANNELS.graphEdgeActivationsConsume);
     expect(bridge.ipcChannels.runInput).toBe(IPC_CHANNELS.runInput);
     expect(bridge.ipcChannels.runStop).toBe(IPC_CHANNELS.runStop);
     expect(typeof bridge.graph.loadGraphSnapshot).toBe('function');
     expect(typeof bridge.graph.saveGraphSnapshot).toBe('function');
+    expect(typeof bridge.graph.consumeEdgeActivations).toBe('function');
     expect(typeof bridge.runs.inputRun).toBe('function');
     expect(typeof bridge.runs.stopRun).toBe('function');
 
@@ -77,6 +79,7 @@ describe('preload bridge', () => {
 
     await bridge.graph.loadGraphSnapshot(graphLoadPayload);
     await bridge.graph.saveGraphSnapshot(graphSavePayload);
+    await bridge.graph.consumeEdgeActivations({ workspaceId: 'ws-1' });
     await bridge.components.listComponents(listPayload);
     await bridge.components.installComponent(installPayload);
     await bridge.components.uninstallComponent(uninstallPayload);
@@ -96,11 +99,12 @@ describe('preload bridge', () => {
 
     expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.graphLoad, graphLoadPayload);
     expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.graphSave, graphSavePayload);
-    expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.componentList, listPayload);
-    expect(invoke).toHaveBeenNthCalledWith(4, IPC_CHANNELS.componentInstall, installPayload);
-    expect(invoke).toHaveBeenNthCalledWith(5, IPC_CHANNELS.componentUninstall, uninstallPayload);
-    expect(invoke).toHaveBeenNthCalledWith(6, IPC_CHANNELS.runInput, inputPayload);
-    expect(invoke).toHaveBeenNthCalledWith(7, IPC_CHANNELS.runStop, stopPayload);
+    expect(invoke).toHaveBeenNthCalledWith(3, IPC_CHANNELS.graphEdgeActivationsConsume, { workspaceId: 'ws-1' });
+    expect(invoke).toHaveBeenNthCalledWith(4, IPC_CHANNELS.componentList, listPayload);
+    expect(invoke).toHaveBeenNthCalledWith(5, IPC_CHANNELS.componentInstall, installPayload);
+    expect(invoke).toHaveBeenNthCalledWith(6, IPC_CHANNELS.componentUninstall, uninstallPayload);
+    expect(invoke).toHaveBeenNthCalledWith(7, IPC_CHANNELS.runInput, inputPayload);
+    expect(invoke).toHaveBeenNthCalledWith(8, IPC_CHANNELS.runStop, stopPayload);
     expect(send).toHaveBeenNthCalledWith(1, IPC_CHANNELS.runStreamSubscribe, { runId: 'run-1' });
     expect(send).toHaveBeenNthCalledWith(2, IPC_CHANNELS.runStreamUnsubscribe, { runId: 'run-1' });
     expect(streamCallback).toHaveBeenCalledWith(streamPayload);

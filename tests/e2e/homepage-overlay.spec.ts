@@ -85,7 +85,7 @@ test('keeps the canvas fullscreen behind floating chrome and shows newly added n
       const canvasCluster = document.querySelector('[data-testid="workbench-topbar-canvas-cluster"]') as HTMLElement | null;
       const metaStrip = document.querySelector('[data-testid="workbench-topbar-meta-strip"]') as HTMLElement | null;
       const inspector = document.querySelector('[data-testid="workbench-inspector"]') as HTMLElement | null;
-      const statusIsland = document.querySelector('[data-testid="workbench-status-island"]') as HTMLElement | null;
+      const minimap = document.querySelector('[data-testid="canvas-shell-minimap"]') as HTMLElement | null;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
@@ -97,7 +97,7 @@ test('keeps the canvas fullscreen behind floating chrome and shows newly added n
         canvasCluster: canvasCluster?.getBoundingClientRect().toJSON() ?? null,
         metaStrip: metaStrip?.getBoundingClientRect().toJSON() ?? null,
         inspector: inspector?.getBoundingClientRect().toJSON() ?? null,
-        statusIsland: statusIsland?.getBoundingClientRect().toJSON() ?? null,
+        minimap: minimap?.getBoundingClientRect().toJSON() ?? null,
         viewportWidth,
         viewportHeight
       };
@@ -120,9 +120,13 @@ test('keeps the canvas fullscreen behind floating chrome and shows newly added n
     expect((layout.metaStrip?.right ?? 0) >= layout.viewportWidth - 28).toBe(true);
     expect((layout.inspector?.right ?? 0) >= layout.viewportWidth - 28).toBe(true);
     expect((layout.inspector?.top ?? 0) > (layout.metaStrip?.bottom ?? 0)).toBe(true);
-    expect((layout.statusIsland?.height ?? 999) < 72).toBe(true);
+    expect((layout.minimap?.height ?? 999) <= 48).toBe(true);
 
     await expect(page.locator('.react-flow__controls')).toHaveCount(0);
+    await expect(page.locator('.react-flow__minimap')).toHaveCount(0);
+    await page.getByTestId('canvas-shell-minimap').click();
+    await expect(page.locator('.react-flow__minimap')).toHaveCount(1);
+    await page.getByTestId('canvas-shell-minimap-collapse').click();
     await expect(page.locator('.react-flow__minimap')).toHaveCount(0);
 
     await page.getByTestId('workbench-topbar-action-add-note').click();

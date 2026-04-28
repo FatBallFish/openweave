@@ -1,10 +1,26 @@
-import {JSX, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  JSX,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent
+} from 'react';
 import {
   Background,
   BackgroundVariant,
+  Handle,
+  MiniMap,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useOnViewportChange,
   useEdgesState,
   useNodesState,
   NodeResizer,
@@ -18,12 +34,33 @@ import { canvasStore } from '../canvas/canvas.store';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import { CanvasViewportControls } from './CanvasViewportControls';
 import { computeSmartFitViewport } from './canvas-fit-view';
+import { ConnectModeOverlay } from './ConnectModeOverlay';
+import { ConnectEdge } from './edge-types/ConnectEdge';
+import './edge-types/connect-edge.css';
+import { getBuiltinComponentManifest } from '../../../shared/components/builtin-manifests';
+import { MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM } from './canvas-viewport-limits';
 
 const DEFAULT_CANVAS_VIEWPORT = {
   x: 0,
   y: 0,
   zoom: 1
 } as const;
+
+interface ConnectModeContextValue {
+  active: boolean;
+  sourceNodeId: string | null;
+  onSelectSource: ((nodeId: string) => void) | undefined;
+  onCompleteConnection: ((sourceId: string, targetId: string) => void) | undefined;
+  graphSnapshot: GraphSnapshotV2Input;
+}
+
+const ConnectModeContext = createContext<ConnectModeContextValue>({
+  active: false,
+  sourceNodeId: null,
+  onSelectSource: undefined,
+  onCompleteConnection: undefined,
+  graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] }
+});
 
 interface CanvasShellNodeData {
   workspaceId: string;
@@ -42,6 +79,8 @@ type CanvasShellModel = {
   edges: Edge[];
 };
 
+type ConnectorSide = 'left' | 'right' | 'top' | 'bottom';
+
 export interface ProjectGraphToCanvasShellInput {
   workspaceId: string;
   workspaceRootDir: string;
@@ -49,6 +88,8 @@ export interface ProjectGraphToCanvasShellInput {
   onOpenRun: (runId: string) => void;
   onCreateBranchWorkspace: () => void;
   onResizeNode?: (nodeId: string, bounds: { x: number; y: number; width: number; height: number }) => void;
+  activeEdgeIds?: string[];
+  selectedEdgeId?: string | null;
 }
 
 export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
@@ -66,10 +107,51 @@ export interface CanvasShellProps extends ProjectGraphToCanvasShellInput {
   placementMode?: { type: string } | null;
   onPlacementComplete?: (type: string, bounds: { x: number; y: number; width: number; height: number }) => void;
   onPlacementCancel?: () => void;
+  connectModeActive?: boolean;
+  connectSourceNodeId?: string | null;
+  activeEdgeIds?: string[];
+  selectedEdgeId?: string | null;
+  onSelectConnectSource?: (nodeId: string) => void;
+  onCompleteConnection?: (sourceId: string, targetId: string) => void;
+  onSelectEdge?: (edgeId: string | null) => void;
+  onDeleteSelectedEdge?: () => void;
 }
 
 // @ts-ignore
-const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JSX.Element => {
+const BuiltinHostFlowNode = ({ data, selected, id }: NodeProps<CanvasShellNode>): JSX.Element => {
+  const connectMode = useContext(ConnectModeContext);
+  const targetNode = connectMode.graphSnapshot.nodes.find((n) => n.id === id);
+  const manifest = targetNode ? getBuiltinComponentManifest(targetNode.componentType) : null;
+  const connectable = manifest?.node.connectable !== false;
+
+  const handleConnectOverlayClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!connectMode.active || !connectable) return;
+    if (!connectMode.sourceNodeId) {
+      connectMode.onSelectSource?.(id);
+    } else if (id !== connectMode.sourceNodeId) {
+      connectMode.onCompleteConnection?.(connectMode.sourceNodeId, id);
+    }
+  }, [connectMode, connectable, id]);
+
+  const handleConnectOverlayKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!connectMode.active || !connectable) return;
+    if (!connectMode.sourceNodeId) {
+      connectMode.onSelectSource?.(id);
+    } else if (id !== connectMode.sourceNodeId) {
+      connectMode.onCompleteConnection?.(connectMode.sourceNodeId, id);
+    }
+  }, [connectMode, connectable, id]);
+
+  const stopConnectOverlayPointer = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
   return (
     <div
       data-testid={`canvas-shell-node-${data.node.id}`}
@@ -77,7 +159,8 @@ const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JS
         width: '100%',
         height: '100%',
         minWidth: 0,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        position: 'relative'
       }}
     >
       <NodeResizer
@@ -102,6 +185,38 @@ const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JS
         onOpenRun={data.onOpenRun}
         onCreateBranchWorkspace={data.onCreateBranchWorkspace}
       />
+      {connectionHandleSides.map((side) => (
+        <Handle
+          id={`source-${side}`}
+          isConnectable={false}
+          key={`source-${side}`}
+          position={connectorSidePositions[side]}
+          style={hiddenHandleStyle}
+          type="source"
+        />
+      ))}
+      {connectionHandleSides.map((side) => (
+        <Handle
+          id={`target-${side}`}
+          isConnectable={false}
+          key={`target-${side}`}
+          position={connectorSidePositions[side]}
+          style={hiddenHandleStyle}
+          type="target"
+        />
+      ))}
+      {connectMode.active && connectable ? (
+        <div
+          aria-label={`Connect ${data.node.title}`}
+          className={`ow-canvas-connect-hit-mask${connectMode.sourceNodeId === id ? ' is-source' : ''}`}
+          data-testid={`canvas-connect-hit-mask-${data.node.id}`}
+          onClick={handleConnectOverlayClick}
+          onKeyDown={handleConnectOverlayKeyDown}
+          onPointerDown={stopConnectOverlayPointer}
+          role="button"
+          tabIndex={0}
+        />
+      ) : null}
     </div>
   );
 };
@@ -109,6 +224,117 @@ const BuiltinHostFlowNode = ({ data, selected }: NodeProps<CanvasShellNode>): JS
 const nodeTypes = {
   builtinHost: BuiltinHostFlowNode
 };
+
+const edgeTypes = {
+  connectEdge: ConnectEdge
+};
+
+const hiddenHandleStyle = {
+  width: 1,
+  height: 1,
+  minWidth: 1,
+  minHeight: 1,
+  border: 'none',
+  background: 'transparent',
+  opacity: 0,
+  pointerEvents: 'none'
+} as const;
+
+const connectionHandleSides: ConnectorSide[] = ['left', 'right', 'top', 'bottom'];
+
+const connectorSidePositions: Record<ConnectorSide, Position> = {
+  left: Position.Left,
+  right: Position.Right,
+  top: Position.Top,
+  bottom: Position.Bottom
+};
+
+const oppositeConnectorSide: Record<ConnectorSide, ConnectorSide> = {
+  left: 'right',
+  right: 'left',
+  top: 'bottom',
+  bottom: 'top'
+};
+
+const getBoundsCenter = (bounds: GraphSnapshotV2Input['nodes'][number]['bounds']): { x: number; y: number } => ({
+  x: bounds.x + bounds.width / 2,
+  y: bounds.y + bounds.height / 2
+});
+
+const chooseConnectorRoute = (
+  sourceNode: GraphSnapshotV2Input['nodes'][number] | undefined,
+  targetNode: GraphSnapshotV2Input['nodes'][number] | undefined
+): { sourceSide: ConnectorSide; targetSide: ConnectorSide; sourcePosition: Position; targetPosition: Position } => {
+  if (!sourceNode || !targetNode) {
+    return {
+      sourceSide: 'right',
+      targetSide: 'left',
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left
+    };
+  }
+
+  const sourceCenter = getBoundsCenter(sourceNode.bounds);
+  const targetCenter = getBoundsCenter(targetNode.bounds);
+  const deltaX = targetCenter.x - sourceCenter.x;
+  const deltaY = targetCenter.y - sourceCenter.y;
+  const sourceSide: ConnectorSide = Math.abs(deltaX) >= Math.abs(deltaY)
+    ? deltaX >= 0 ? 'right' : 'left'
+    : deltaY >= 0 ? 'bottom' : 'top';
+  const targetSide = oppositeConnectorSide[sourceSide];
+
+  return {
+    sourceSide,
+    targetSide,
+    sourcePosition: connectorSidePositions[sourceSide],
+    targetPosition: connectorSidePositions[targetSide]
+  };
+};
+
+const getHandlePoint = (
+  bounds: GraphSnapshotV2Input['nodes'][number]['bounds'],
+  side: ConnectorSide
+): { x: number; y: number } => {
+  switch (side) {
+    case 'left':
+      return { x: 0, y: bounds.height / 2 };
+    case 'right':
+      return { x: bounds.width, y: bounds.height / 2 };
+    case 'top':
+      return { x: bounds.width / 2, y: 0 };
+    case 'bottom':
+      return { x: bounds.width / 2, y: bounds.height };
+    default:
+      return { x: bounds.width, y: bounds.height / 2 };
+  }
+};
+
+const createConnectionHandles = (
+  bounds: GraphSnapshotV2Input['nodes'][number]['bounds']
+): NonNullable<CanvasShellNode['handles']> =>
+  connectionHandleSides.flatMap((side) => {
+    const point = getHandlePoint(bounds, side);
+    return [
+      {
+        id: `source-${side}`,
+        type: 'source' as const,
+        position: connectorSidePositions[side],
+        x: point.x,
+        y: point.y,
+        width: 1,
+        height: 1
+      },
+      {
+        id: `target-${side}`,
+        type: 'target' as const,
+        position: connectorSidePositions[side],
+        x: point.x,
+        y: point.y,
+        width: 1,
+        height: 1
+      }
+    ];
+  });
 
 const classifyWheelEvent = (event: WheelEvent): 'pan' | 'zoom' => {
   // Pinch gesture (macOS Safari/Chrome sends ctrlKey + wheel)
@@ -164,7 +390,7 @@ const WheelHandler = (): null => {
         const mouseX = wheelEvent.clientX - rect.left;
         const mouseY = wheelEvent.clientY - rect.top;
         const zoomFactor = wheelEvent.deltaY > 0 ? 0.92 : 1.08;
-        const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.4), 2);
+        const newZoom = Math.min(Math.max(zoom * zoomFactor, MIN_CANVAS_ZOOM), MAX_CANVAS_ZOOM);
 
         const worldX = (mouseX - x) / zoom;
         const worldY = (mouseY - y) / zoom;
@@ -289,6 +515,114 @@ const ViewportPersistence = ({ workspaceId }: { workspaceId: string }): null => 
   return null;
 };
 
+const CanvasViewportBridge = (): null => {
+  const { getViewport } = useReactFlow();
+
+  const publishViewport = useCallback(() => {
+    const container = document.querySelector('.ow-canvas-shell__flow');
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    canvasStore.setCanvasViewport({
+      ...getViewport(),
+      width: rect.width,
+      height: rect.height
+    });
+  }, [getViewport]);
+
+  useOnViewportChange({
+    onChange: publishViewport,
+    onEnd: publishViewport
+  });
+
+  useEffect(() => {
+    publishViewport();
+    const container = document.querySelector('.ow-canvas-shell__flow');
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => publishViewport());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [publishViewport]);
+
+  return null;
+};
+
+const CanvasMiniMap = (): JSX.Element => {
+  const [expanded, setExpanded] = useState(false);
+  const { getViewport, setViewport } = useReactFlow();
+
+  const handleJump = useCallback(
+    (_event: MouseEvent, position: { x: number; y: number }) => {
+      const container = document.querySelector('.ow-canvas-shell__flow');
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const { zoom } = getViewport();
+      setViewport(
+        {
+          x: rect.width / 2 - position.x * zoom,
+          y: rect.height / 2 - position.y * zoom,
+          zoom
+        },
+        { duration: 180 }
+      );
+    },
+    [getViewport, setViewport]
+  );
+
+  if (!expanded) {
+    return (
+      <button
+        aria-label="展开画布预览"
+        className="ow-canvas-shell-minimap ow-canvas-shell-minimap--collapsed"
+        data-testid="canvas-shell-minimap"
+        onClick={() => setExpanded(true)}
+        title="展开画布预览"
+        type="button"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M4 6h16M4 12h16M4 18h16M7 4v16M17 4v16" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <div className="ow-canvas-shell-minimap ow-canvas-shell-minimap--expanded" data-testid="canvas-shell-minimap">
+      <button
+        aria-label="收起画布预览"
+        className="ow-canvas-shell-minimap__collapse"
+        data-testid="canvas-shell-minimap-collapse"
+        onClick={() => setExpanded(false)}
+        title="收起画布预览"
+        type="button"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+          <path d="M8 8h8v8H8z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+        </svg>
+      </button>
+      <MiniMap
+        ariaLabel="画布预览"
+        bgColor="rgba(var(--ow-surface-rgb), 0.82)"
+        className="ow-canvas-shell-minimap__map"
+        maskColor="rgba(var(--ow-accent-rgb), 0.14)"
+        maskStrokeColor="rgba(var(--ow-accent-rgb), 0.72)"
+        maskStrokeWidth={2}
+        nodeBorderRadius={4}
+        nodeColor="rgba(var(--ow-accent-rgb), 0.18)"
+        nodeStrokeColor="rgba(var(--ow-accent-rgb), 0.52)"
+        nodeStrokeWidth={1.5}
+        onClick={handleJump}
+        pannable={true}
+        zoomable={true}
+      />
+    </div>
+  );
+};
+
 const PlacementOverlay = ({
   placementMode,
   onPlacementComplete,
@@ -403,6 +737,8 @@ const PlacementOverlay = ({
 export const projectGraphToCanvasShell = (
   input: ProjectGraphToCanvasShellInput
 ): CanvasShellModel => {
+  const graphNodeById = new Map(input.graphSnapshot.nodes.map((node) => [node.id, node]));
+
   return {
     nodes: input.graphSnapshot.nodes.map((node) => ({
       id: node.id,
@@ -423,19 +759,30 @@ export const projectGraphToCanvasShell = (
         width: node.bounds.width,
         height: node.bounds.height
       },
+      handles: createConnectionHandles(node.bounds),
       draggable: true,
       selectable: true
     })),
-    edges: input.graphSnapshot.edges.map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: edge.sourceHandle ?? undefined,
-      targetHandle: edge.targetHandle ?? undefined,
-      label: edge.label ?? undefined,
-      data: edge.meta,
-      type: 'smoothstep'
-    }))
+    edges: input.graphSnapshot.edges.map((edge) => {
+      const route = chooseConnectorRoute(graphNodeById.get(edge.source), graphNodeById.get(edge.target));
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: `source-${route.sourceSide}`,
+        targetHandle: `target-${route.targetSide}`,
+        label: edge.label ?? undefined,
+        type: 'connectEdge',
+        data: {
+          ...(edge.meta ?? {}),
+          route,
+          isActive: input.activeEdgeIds?.includes(edge.id) ?? false
+        },
+        selected: input.selectedEdgeId === edge.id,
+        selectable: true,
+        deletable: true
+      };
+    })
   };
 };
 
@@ -458,7 +805,15 @@ export const CanvasShell = ({
   onAddText,
   placementMode,
   onPlacementComplete,
-  onPlacementCancel
+  onPlacementCancel,
+  connectModeActive,
+  connectSourceNodeId,
+  activeEdgeIds,
+  selectedEdgeId,
+  onSelectConnectSource,
+  onCompleteConnection,
+  onSelectEdge,
+  onDeleteSelectedEdge
 }: CanvasShellProps): JSX.Element => {
   const model = useMemo(
     () =>
@@ -468,9 +823,11 @@ export const CanvasShell = ({
         graphSnapshot,
         onOpenRun,
         onCreateBranchWorkspace,
-        onResizeNode
+        onResizeNode,
+        activeEdgeIds,
+        selectedEdgeId
       }),
-    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode]
+    [graphSnapshot, onCreateBranchWorkspace, onOpenRun, workspaceId, workspaceRootDir, onResizeNode, activeEdgeIds, selectedEdgeId]
   );
   // @ts-ignore
   const [nodes, setNodes, onNodesChange] = useNodesState(model.nodes);
@@ -513,66 +870,104 @@ export const CanvasShell = ({
     [onNodesChange]
   );
 
+  const connectModeContextValue = useMemo(
+    () => ({
+      active: connectModeActive ?? false,
+      sourceNodeId: connectSourceNodeId ?? null,
+      onSelectSource: onSelectConnectSource,
+      onCompleteConnection,
+      graphSnapshot
+    }),
+    [connectModeActive, connectSourceNodeId, onSelectConnectSource, onCompleteConnection, graphSnapshot]
+  );
+
   return (
     <section className="ow-canvas-shell" data-testid="canvas-shell">
-      <ReactFlowProvider>
-        <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
-          <ReactFlow
-            defaultViewport={DEFAULT_CANVAS_VIEWPORT}
-            edges={edges}
-            elementsSelectable={true}
-            minZoom={0.4}
-            nodeTypes={nodeTypes}
-            nodes={nodes}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={(_event, node) => {
-              onSelectNode(node.id);
-            }}
-            onNodeDragStop={(_event, node) => {
-              onMoveNode(node.id, {
-                x: node.position.x,
-                y: node.position.y
-              });
-            }}
-            onNodesChange={handleNodesChange}
-            onPaneClick={() => {
-              onSelectNode(null);
-            }}
-            panOnDrag={true}
-            proOptions={{ hideAttribution: true }}
-            selectionOnDrag={false}
-            zoomOnDoubleClick={false}
-            zoomOnPinch={false}
-            zoomOnScroll={false}
-          >
-            <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
-            <ViewportPersistence workspaceId={workspaceId} />
-            <WheelHandler />
-            <Background gap={32} variant={BackgroundVariant.Lines} />
-            {placementMode ? (
-              <PlacementOverlay
-                placementMode={placementMode}
-                onPlacementComplete={onPlacementComplete}
-                onPlacementCancel={onPlacementCancel}
+      <ConnectModeContext.Provider value={connectModeContextValue}>
+        <ReactFlowProvider>
+          <div className="ow-canvas-shell__flow" data-testid="canvas-shell-flow">
+            <ReactFlow
+              defaultViewport={DEFAULT_CANVAS_VIEWPORT}
+              edges={edges}
+              edgeTypes={edgeTypes}
+              elementsSelectable={true}
+              minZoom={MIN_CANVAS_ZOOM}
+              maxZoom={MAX_CANVAS_ZOOM}
+              nodeTypes={nodeTypes}
+              nodes={nodes}
+              onEdgesChange={onEdgesChange}
+              onEdgeClick={(_event, edge) => {
+                onSelectEdge?.(edge.id);
+                onSelectNode(null);
+              }}
+              onEdgesDelete={(edges) => {
+                if (edges.length > 0) {
+                  onSelectEdge?.(edges[0].id);
+                  onDeleteSelectedEdge?.();
+                }
+              }}
+              nodesDraggable={!connectModeActive}
+              onNodeClick={(_event, node) => {
+                if (connectModeActive) {
+                  // Connect mode is handled by the node hit mask so embedded hosts cannot swallow clicks.
+                  return;
+                }
+                onSelectNode(node.id);
+              }}
+              onNodeDragStop={(_event, node) => {
+                onMoveNode(node.id, {
+                  x: node.position.x,
+                  y: node.position.y
+                });
+              }}
+              onNodesChange={handleNodesChange}
+              onPaneClick={() => {
+                onSelectNode(null);
+              }}
+              panOnDrag={true}
+              proOptions={{ hideAttribution: true }}
+              selectionOnDrag={true}
+              zoomOnDoubleClick={false}
+              zoomOnPinch={false}
+              zoomOnScroll={false}
+            >
+              <CanvasViewportController fitViewRequestId={fitViewRequestId} nodesCount={nodes.length} />
+              <ViewportPersistence workspaceId={workspaceId} />
+              <CanvasViewportBridge />
+              <WheelHandler />
+              <Background gap={32} variant={BackgroundVariant.Lines} />
+              {placementMode ? (
+                <PlacementOverlay
+                  placementMode={placementMode}
+                  onPlacementComplete={onPlacementComplete}
+                  onPlacementCancel={onPlacementCancel}
+                />
+              ) : null}
+              {connectModeActive ? (
+                <ConnectModeOverlay
+                  sourceNodeId={connectSourceNodeId ?? null}
+                  graphNodes={graphSnapshot.nodes}
+                />
+              ) : null}
+              <CanvasMiniMap />
+            </ReactFlow>
+
+            {isEmpty ? (
+              <CanvasEmptyState
+                actions={[
+                  { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
+                  { label: 'Note', hotkey: '2', onClick: onAddNote },
+                  { label: 'Portal', hotkey: '3', onClick: onAddPortal },
+                  { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
+                  { label: 'Text', hotkey: '5', onClick: onAddText }
+                ]}
+                onClose={() => setEmptyStateDismissed(true)}
               />
             ) : null}
-          </ReactFlow>
-
-          {isEmpty ? (
-            <CanvasEmptyState
-              actions={[
-                { label: 'Terminal', hotkey: '1', onClick: onAddTerminal },
-                { label: 'Note', hotkey: '2', onClick: onAddNote },
-                { label: 'Portal', hotkey: '3', onClick: onAddPortal },
-                { label: 'File tree', hotkey: '4', onClick: onAddFileTree },
-                { label: 'Text', hotkey: '5', onClick: onAddText }
-              ]}
-              onClose={() => setEmptyStateDismissed(true)}
-            />
-          ) : null}
-          <CanvasViewportControls />
-        </div>
-      </ReactFlowProvider>
+            <CanvasViewportControls />
+          </div>
+        </ReactFlowProvider>
+      </ConnectModeContext.Provider>
     </section>
   );
 };
