@@ -299,7 +299,8 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
         const response = await workspaceNodeService.readNode({
           workspaceId,
           nodeId,
-          mode: modeFlag.value
+          mode: modeFlag.value,
+          sourceNodeId: resolveOpenWeaveNodeIdFromEnv(env) !== nodeId ? resolveOpenWeaveNodeIdFromEnv(env) : undefined
         });
         if (json) {
           writeJson(stdout, response, pretty);
@@ -362,7 +363,8 @@ export const runCli = async (argv: string[], deps: RunCliDependencies = {}): Pro
           workspaceId,
           nodeId,
           action,
-          payload
+          payload,
+          sourceNodeId: currentNodeId !== nodeId ? currentNodeId : undefined
         });
         if (json) {
           writeJson(stdout, response, pretty);

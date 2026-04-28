@@ -56,6 +56,20 @@ CREATE INDEX IF NOT EXISTS idx_graph_nodes_updated_at_ms
 CREATE INDEX IF NOT EXISTS idx_graph_edges_updated_at_ms
   ON graph_edges (updated_at_ms DESC);
 
+CREATE TABLE IF NOT EXISTS graph_edge_activations (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  source_node_id TEXT NOT NULL,
+  target_node_id TEXT NOT NULL,
+  edge_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  consumed_at_ms INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_graph_edge_activations_workspace_pending
+  ON graph_edge_activations (workspace_id, consumed_at_ms, created_at_ms ASC);
+
 CREATE TABLE IF NOT EXISTS workspace_skill_injections (
   workspace_id TEXT NOT NULL,
   runtime_kind TEXT NOT NULL,

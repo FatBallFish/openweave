@@ -288,6 +288,41 @@ describe('local workspace/node query service', () => {
     }
   });
 
+  it('records connected edge activation when a terminal-scoped command reads another node', () => {
+    expect(
+      service?.readNode({
+        workspaceId,
+        nodeId: 'node-note-1',
+        sourceNodeId: 'node-terminal-1'
+      })
+    ).toEqual({
+      nodeId: 'node-note-1',
+      action: 'read',
+      result: {
+        content: '# hi'
+      }
+    });
+
+    const workspaceRepository = createWorkspaceRepository({
+      dbFilePath: toWorkspaceDbPath(workspaceId)
+    });
+    try {
+      const activations = workspaceRepository.consumeGraphEdgeActivations(workspaceId);
+      expect(activations).toEqual([
+        expect.objectContaining({
+          workspaceId,
+          sourceNodeId: 'node-terminal-1',
+          targetNodeId: 'node-note-1',
+          edgeId: 'edge-1',
+          action: 'read'
+        })
+      ]);
+      expect(workspaceRepository.consumeGraphEdgeActivations(workspaceId)).toEqual([]);
+    } finally {
+      workspaceRepository.close();
+    }
+  });
+
   it('queues builtin.terminal send actions for later delivery', () => {
     const actionableService = service as unknown as {
       runNodeAction: (input: {

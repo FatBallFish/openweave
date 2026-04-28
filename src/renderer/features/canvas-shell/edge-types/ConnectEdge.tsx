@@ -1,4 +1,4 @@
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react';
 
 interface ConnectEdgeData {
   isActive?: boolean;
@@ -19,14 +19,14 @@ export const ConnectEdge = ({
   selected,
   data
 }: ConnectEdgeProps): JSX.Element => {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 12
+    curvature: 0.28
   });
 
   const isActive = data?.isActive ?? false;
@@ -37,8 +37,8 @@ export const ConnectEdge = ({
       ? 'var(--ow-color-accent)'
       : '#8398af';
 
-  const strokeWidth = selected ? 2.5 : 1.5;
-  const dashArray = '6 4';
+  const strokeWidth = selected ? 3 : 2.2;
+  const dashArray = '7 5';
 
   return (
     <>
@@ -90,7 +90,7 @@ export const ConnectEdge = ({
         d={edgePath}
         fill="none"
         stroke={isActive ? 'var(--ow-state-running)' : 'transparent'}
-        strokeWidth={isActive ? 3 : 0}
+        strokeWidth={isActive ? 3.4 : 0}
         strokeDasharray={isActive ? '8 6' : '0'}
         strokeLinecap="round"
         style={{

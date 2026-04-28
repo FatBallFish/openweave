@@ -17,6 +17,7 @@ interface CanvasState {
   workspaceId: string | null;
   graphSnapshot: GraphSnapshotV2Input;
   nodes: CanvasNodeInput[];
+  canvasViewport: CanvasViewport | null;
   selectedNodeId: string | null;
   connectModeActive: boolean;
   connectSourceNodeId: string | null;
@@ -37,6 +38,7 @@ const initialState: CanvasState = {
   workspaceId: null,
   graphSnapshot: emptyGraphSnapshot(),
   nodes: [],
+  canvasViewport: null,
   selectedNodeId: null,
   connectModeActive: false,
   connectSourceNodeId: null,
@@ -50,15 +52,24 @@ const initialState: CanvasState = {
 type StateListener = () => void;
 type GraphNodeRecord = GraphSnapshotV2Input['nodes'][number];
 type GraphEdgeRecord = GraphEdgeV2Input;
+type CanvasViewport = {
+  x: number;
+  y: number;
+  zoom: number;
+  width: number;
+  height: number;
+};
 const supportedRuntimes: RunRuntimeInput[] = ['shell', 'codex', 'claude', 'opencode'];
 const starterSlotColumns = 4;
 const starterSlotRows = 4;
 const starterSlotOrigin = { x: 96, y: 96 };
 const starterSlotGap = { x: 56, y: 56 };
+const viewportPlacementMargin = 72;
 
 let state: CanvasState = initialState;
 const listeners = new Set<StateListener>();
 let latestLoadRequestId = 0;
+let latestRefreshRequestId = 0;
 let latestSaveRequestId = 0;
 
 const setState = (nextState: Partial<CanvasState>): void => {
@@ -119,11 +130,96 @@ const rectanglesOverlap = (
   );
 };
 
+const getVisibleViewportBounds = (
+  viewport: CanvasViewport
+): { left: number; top: number; width: number; height: number; centerX: number; centerY: number } => {
+  const width = viewport.width / viewport.zoom;
+  const height = viewport.height / viewport.zoom;
+  const left = -viewport.x / viewport.zoom;
+  const top = -viewport.y / viewport.zoom;
+  return {
+    left,
+    top,
+    width,
+    height,
+    centerX: left + width / 2,
+    centerY: top + height / 2
+  };
+};
+
+const clampToVisibleViewport = (
+  bounds: GraphNodeRecord['bounds'],
+  viewport: CanvasViewport
+): GraphNodeRecord['bounds'] => {
+  const visible = getVisibleViewportBounds(viewport);
+  const margin = Math.min(viewportPlacementMargin, visible.width * 0.12, visible.height * 0.12);
+  const minX = visible.left + margin;
+  const minY = visible.top + margin;
+  const maxX = visible.left + visible.width - bounds.width - margin;
+  const maxY = visible.top + visible.height - bounds.height - margin;
+
+  return {
+    ...bounds,
+    x: maxX >= minX ? Math.min(Math.max(bounds.x, minX), maxX) : visible.centerX - bounds.width / 2,
+    y: maxY >= minY ? Math.min(Math.max(bounds.y, minY), maxY) : visible.centerY - bounds.height / 2
+  };
+};
+
+const getViewportStarterBounds = (
+  existingNodes: GraphNodeRecord[],
+  width: number,
+  height: number,
+  viewport: CanvasViewport
+): GraphNodeRecord['bounds'] => {
+  const visible = getVisibleViewportBounds(viewport);
+  const slotGap = {
+    x: Math.max(starterSlotGap.x, Math.round(48 / viewport.zoom)),
+    y: Math.max(starterSlotGap.y, Math.round(48 / viewport.zoom))
+  };
+  const origin = {
+    x: visible.centerX - width / 2,
+    y: visible.centerY - height / 2
+  };
+  const offsets = [
+    { x: 0, y: 0 },
+    { x: width + slotGap.x, y: 0 },
+    { x: -(width + slotGap.x), y: 0 },
+    { x: 0, y: height + slotGap.y },
+    { x: 0, y: -(height + slotGap.y) },
+    { x: width + slotGap.x, y: height + slotGap.y },
+    { x: -(width + slotGap.x), y: height + slotGap.y },
+    { x: width + slotGap.x, y: -(height + slotGap.y) },
+    { x: -(width + slotGap.x), y: -(height + slotGap.y) }
+  ];
+
+  for (const offset of offsets) {
+    const bounds = clampToVisibleViewport(
+      {
+        x: origin.x + offset.x,
+        y: origin.y + offset.y,
+        width,
+        height
+      },
+      viewport
+    );
+    const hasOverlap = existingNodes.some((node) => rectanglesOverlap(bounds, node.bounds));
+    if (!hasOverlap) {
+      return bounds;
+    }
+  }
+
+  return clampToVisibleViewport({ x: origin.x, y: origin.y, width, height }, viewport);
+};
+
 const getStarterBounds = (
   existingNodes: GraphNodeRecord[],
   width: number,
   height: number
 ): GraphNodeRecord['bounds'] => {
+  if (state.canvasViewport) {
+    return getViewportStarterBounds(existingNodes, width, height, state.canvasViewport);
+  }
+
   for (let row = 0; row < starterSlotRows; row += 1) {
     for (let column = 0; column < starterSlotColumns; column += 1) {
       const bounds = {
@@ -346,7 +442,11 @@ const applyGraphSnapshot = (
   setState({
     graphSnapshot,
     nodes: toLegacyCanvasNodes(graphSnapshot),
-    selectedNodeId: selectedNodeStillExists ? selectedNodeId : null
+    selectedNodeId: selectedNodeStillExists ? selectedNodeId : null,
+    selectedEdgeId:
+      state.selectedEdgeId && graphSnapshot.edges.some((edge) => edge.id === state.selectedEdgeId)
+        ? state.selectedEdgeId
+        : null
   });
 };
 
@@ -421,6 +521,18 @@ export const canvasStore = {
       listeners.delete(listener);
     };
   },
+  setCanvasViewport: (viewport: CanvasViewport): void => {
+    if (
+      Number.isFinite(viewport.x) &&
+      Number.isFinite(viewport.y) &&
+      Number.isFinite(viewport.zoom) &&
+      viewport.zoom > 0 &&
+      viewport.width > 0 &&
+      viewport.height > 0
+    ) {
+      setState({ canvasViewport: viewport });
+    }
+  },
   toggleConnectMode: (): void => {
     setState({
       connectModeActive: !state.connectModeActive,
@@ -446,6 +558,7 @@ export const canvasStore = {
       workspaceId,
       graphSnapshot: emptyGraphSnapshot(),
       nodes: [],
+      canvasViewport: null,
       selectedNodeId: null,
       recentAction: null,
       errorMessage: null
@@ -473,6 +586,27 @@ export const canvasStore = {
         selectedNodeId: null,
         errorMessage
       });
+    }
+  },
+  refreshGraphSnapshot: async (workspaceId: string): Promise<void> => {
+    if (state.workspaceId !== workspaceId) {
+      return;
+    }
+
+    const requestId = ++latestRefreshRequestId;
+    try {
+      const result = await getBridge().loadGraphSnapshot({ workspaceId });
+      if (requestId !== latestRefreshRequestId || state.workspaceId !== workspaceId) {
+        return;
+      }
+      applyGraphSnapshot(result.graphSnapshot);
+      setState({ errorMessage: null });
+    } catch (error) {
+      if (requestId !== latestRefreshRequestId || state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to refresh canvas';
+      setState({ errorMessage });
     }
   },
   selectNode: (nodeId: string | null): void => {
@@ -1059,14 +1193,20 @@ export const canvasStore = {
   },
   addEdge: async (source: string, target: string): Promise<void> => {
     if (!state.workspaceId || state.loading) return;
-    if (source === target) return;
+    if (source === target) {
+      setState({ connectModeActive: false, connectSourceNodeId: null });
+      return;
+    }
 
     const workspaceId = state.workspaceId;
     // Check for duplicate (bidirectional: source->target or target->source)
     const alreadyExists = state.graphSnapshot.edges.some(
       (e) => (e.source === source && e.target === target) || (e.source === target && e.target === source)
     );
-    if (alreadyExists) return;
+    if (alreadyExists) {
+      setState({ recentAction: 'Connection already exists', connectModeActive: false, connectSourceNodeId: null });
+      return;
+    }
 
     const now = Date.now();
     const edgeId = `edge-${crypto.randomUUID()}`;
@@ -1130,7 +1270,14 @@ export const canvasStore = {
     });
   },
   setActiveEdgeIds: (edgeIds: string[]): void => {
-    setState({ activeEdgeIds: edgeIds });
+    const activeEdgeIds = new Set(edgeIds);
+    setState({
+      activeEdgeIds: edgeIds,
+      selectedEdgeId:
+        state.selectedEdgeId && activeEdgeIds.has(state.selectedEdgeId)
+          ? null
+          : state.selectedEdgeId
+    });
   },
   undo: async (): Promise<void> => {
     if (!state.workspaceId || state.loading) {

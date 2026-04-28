@@ -17,6 +17,9 @@ const createEmptyGraphSnapshot = () => ({
   edges: []
 });
 
+const ACTIVE_EDGE_DISPLAY_MS = 1800;
+const ACTIVE_EDGE_POLL_MS = 500;
+
 export const App = (): JSX.Element => {
   const { t } = useI18n();
   const workspaces = useWorkspacesStore((storeState) => storeState.workspaces);
@@ -56,6 +59,55 @@ export const App = (): JSX.Element => {
     window.addEventListener('openweave:open-settings', handle);
     return () => window.removeEventListener('openweave:open-settings', handle);
   }, []);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+    const shell = (window as Window & { openweaveShell?: { graph?: { consumeEdgeActivations?: (input: { workspaceId: string }) => Promise<{ edgeIds: string[] }> } } }).openweaveShell;
+    if (!shell?.graph?.consumeEdgeActivations) {
+      return;
+    }
+
+    let disposed = false;
+    let clearTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async (): Promise<void> => {
+      try {
+        const response = await shell.graph?.consumeEdgeActivations?.({ workspaceId: activeWorkspaceId });
+        if (disposed || !response || response.edgeIds.length === 0) {
+          return;
+        }
+        await canvasStore.refreshGraphSnapshot(activeWorkspaceId);
+        if (disposed) {
+          return;
+        }
+        canvasStore.setActiveEdgeIds(response.edgeIds);
+        if (clearTimer !== null) {
+          clearTimeout(clearTimer);
+        }
+        clearTimer = setTimeout(() => {
+          canvasStore.setActiveEdgeIds([]);
+          clearTimer = null;
+        }, ACTIVE_EDGE_DISPLAY_MS);
+      } catch {
+        // Edge activation is a visual hint; polling failures should not interrupt the canvas.
+      }
+    };
+
+    void poll();
+    const pollTimer = setInterval(() => {
+      void poll();
+    }, ACTIVE_EDGE_POLL_MS);
+
+    return () => {
+      disposed = true;
+      clearInterval(pollTimer);
+      if (clearTimer !== null) {
+        clearTimeout(clearTimer);
+      }
+    };
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     const handleEdit = (event: Event) => {
@@ -100,6 +152,14 @@ export const App = (): JSX.Element => {
   const closeCommandPalette = useCallback(() => {
     setCommandPaletteOpen(false);
   }, []);
+
+  const handleCanvasEscape = useCallback(() => {
+    if (connectModeActive) {
+      canvasStore.exitConnectMode();
+      return;
+    }
+    closeCommandPalette();
+  }, [closeCommandPalette, connectModeActive]);
 
   const openCommandPalette = useCallback(() => {
     setCommandPaletteMode('command');
@@ -307,7 +367,7 @@ export const App = (): JSX.Element => {
     onAddPortal: addPortal,
     onAddFileTree: addFileTree,
     onAddText: addText,
-    onEscape: closeCommandPalette,
+    onEscape: handleCanvasEscape,
     onDeleteSelected: () => {
       if (canvasStore.getState().selectedEdgeId) {
         void canvasStore.deleteSelectedEdge();

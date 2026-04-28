@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { NoteToolbar } from '../canvas/NoteToolbar';
 import { WorkbenchContextPanel } from './WorkbenchContextPanel';
 import { WorkbenchInspector } from './WorkbenchInspector';
-import { WorkbenchStatusIsland } from './WorkbenchStatusIsland';
 import { WorkbenchTopBar } from './WorkbenchTopBar';
 import { useI18n } from '../../i18n/provider';
 
@@ -81,12 +80,6 @@ export const WorkbenchShell = ({
   onToggleConnectMode
 }: WorkbenchShellProps): JSX.Element => {
   const { t } = useI18n();
-  const hasActiveWorkspace = workspaceName !== null;
-  const statusLabel = !hasActiveWorkspace
-    ? t('app.statusIdle')
-    : selectedNode
-      ? t('app.statusFocused')
-      : t('app.statusReady');
 
   return (
     <main className="ow-workbench-shell" data-testid="workbench-shell">
@@ -165,12 +158,6 @@ export const WorkbenchShell = ({
           selectedNode={selectedNode}
           workspaceName={workspaceName}
           workspaceRootDir={workspaceRootDir}
-        />
-        <WorkbenchStatusIsland
-          eventsCount={recentAction ? 1 : 0}
-          hasActiveWorkspace={hasActiveWorkspace}
-          statusLabel={statusLabel}
-          tasksCount={nodeCount}
         />
       </div>
       {commandPalette}

@@ -1,30 +1,26 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
-import { getBuiltinComponentManifest } from '../../../shared/components/builtin-manifests';
 
 interface ConnectModeOverlayProps {
   sourceNodeId: string | null;
-  workspaceId: string;
   graphNodes: Array<{ id: string; componentType: string; bounds: { x: number; y: number; width: number; height: number } }>;
-  onSelectSource: (nodeId: string) => void;
-  onCompleteConnection: (sourceId: string, targetId: string) => void;
 }
 
 export const ConnectModeOverlay = ({
   sourceNodeId,
-  workspaceId,
-  graphNodes,
-  onSelectSource,
-  onCompleteConnection
+  graphNodes
 }: ConnectModeOverlayProps): JSX.Element => {
   const { getViewport } = useReactFlow();
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const sourceBoundsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
-  const getNodeCenter = (bounds: { x: number; y: number; width: number; height: number }) => ({
-    x: bounds.x + bounds.width / 2,
-    y: bounds.y + bounds.height / 2
-  });
+  const getNodeCenter = (bounds: { x: number; y: number; width: number; height: number }) => {
+    const { x, y, zoom } = getViewport();
+    return {
+      x: (bounds.x + bounds.width / 2) * zoom + x,
+      y: (bounds.y + bounds.height / 2) * zoom + y
+    };
+  };
 
   useEffect(() => {
     if (sourceNodeId) {
@@ -44,21 +40,15 @@ export const ConnectModeOverlay = ({
       const container = document.querySelector('.ow-canvas-shell__flow');
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const { x: vpX, y: vpY, zoom } = getViewport();
-      const worldX = (e.clientX - rect.left - vpX) / zoom;
-      const worldY = (e.clientY - rect.top - vpY) / zoom;
-      setMousePos({ x: worldX, y: worldY });
+      setMousePos({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [sourceNodeId, getViewport]);
-
-  const isNodeConnectable = useCallback((componentType: string): boolean => {
-    const manifest = getBuiltinComponentManifest(componentType);
-    if (!manifest) return false;
-    return manifest.node.connectable !== false;
-  }, []);
 
   if (!sourceNodeId || !mousePos || !sourceBoundsRef.current) return null;
 

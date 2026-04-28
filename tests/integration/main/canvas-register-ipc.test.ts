@@ -80,6 +80,8 @@ describe('registered canvas IPC handlers', () => {
       IPC_CHANNELS.canvasSave,
       IPC_CHANNELS.graphLoad,
       IPC_CHANNELS.graphSave,
+      IPC_CHANNELS.graphEdgeHighlight,
+      IPC_CHANNELS.graphEdgeActivationsConsume,
       IPC_CHANNELS.noteFileCreate,
       IPC_CHANNELS.noteFileRead,
       IPC_CHANNELS.noteFileWrite,

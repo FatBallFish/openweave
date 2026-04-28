@@ -31,6 +31,7 @@ export interface CanvasIpcHandlers {
   graphLoad: (_event: IpcMainInvokeEvent, input: GraphLoadV2Input) => Promise<GraphLoadResponseV2>;
   graphSave: (_event: IpcMainInvokeEvent, input: GraphSaveV2Input) => Promise<GraphSaveResponseV2>;
   edgeHighlight: (_event: IpcMainInvokeEvent, input: { workspaceId: string; sourceNodeId: string; edgeIds: string[] }) => Promise<{ edgeIds: string[] }>;
+  consumeEdgeActivations: (_event: IpcMainInvokeEvent, input: { workspaceId: string }) => Promise<{ edgeIds: string[] }>;
 }
 
 export interface CanvasIpcDependencies {
@@ -185,6 +186,11 @@ export const createCanvasIpcHandlers = (
         (e) => e.source === input.sourceNodeId || e.target === input.sourceNodeId
       );
       return { edgeIds: matched.map((e) => e.id) };
+    },
+    consumeEdgeActivations: async (_event, input) => {
+      deps.assertWorkspaceExists(input.workspaceId);
+      const activations = deps.getWorkspaceRepository(input.workspaceId).consumeGraphEdgeActivations(input.workspaceId);
+      return { edgeIds: [...new Set(activations.map((activation) => activation.edgeId))] };
     }
   };
 };
@@ -310,6 +316,8 @@ export const registerCanvasIpcHandlers = (options: RegisterCanvasIpcHandlersOpti
 
   ipcMain.removeHandler(IPC_CHANNELS.graphEdgeHighlight);
   ipcMain.handle(IPC_CHANNELS.graphEdgeHighlight, handlers.edgeHighlight);
+  ipcMain.removeHandler(IPC_CHANNELS.graphEdgeActivationsConsume);
+  ipcMain.handle(IPC_CHANNELS.graphEdgeActivationsConsume, handlers.consumeEdgeActivations);
 
   ipcMain.removeHandler(IPC_CHANNELS.noteFileCreate);
   ipcMain.removeHandler(IPC_CHANNELS.noteFileRead);

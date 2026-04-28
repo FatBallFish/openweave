@@ -149,6 +149,42 @@ describe('canvas store', () => {
     expect(canvasStore.getState().errorMessage).toBe('load failed');
   });
 
+  it('refreshes the active graph snapshot without clearing selection chrome', async () => {
+    const updatedSnapshot = createGraphSnapshot();
+    updatedSnapshot.nodes[0] = {
+      ...updatedSnapshot.nodes[0],
+      state: {
+        content: 'written by terminal'
+      },
+      updatedAtMs: 42
+    };
+    const loadGraphSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce({ graphSnapshot: createGraphSnapshot() })
+      .mockResolvedValueOnce({ graphSnapshot: updatedSnapshot });
+    setBridge({
+      loadGraphSnapshot,
+      saveGraphSnapshot: vi.fn()
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+    canvasStore.selectNode('node-note-1');
+
+    await (canvasStore as unknown as {
+      refreshGraphSnapshot: (workspaceId: string) => Promise<void>;
+    }).refreshGraphSnapshot('ws-1');
+
+    expect(canvasStore.getState().loading).toBe(false);
+    expect(canvasStore.getState().selectedNodeId).toBe('node-note-1');
+    expect(canvasStore.getState().graphSnapshot.nodes[0]?.state).toEqual({
+      content: 'written by terminal'
+    });
+    expect(canvasStore.getState().nodes.find((node) => node.id === 'node-note-1')).toMatchObject({
+      contentMd: 'written by terminal'
+    });
+  });
+
   it('adds and updates supported builtin nodes by saving graph snapshots with preserved metadata', async () => {
     const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
       graphSnapshot: input.graphSnapshot
@@ -262,6 +298,30 @@ describe('canvas store', () => {
         terminalNode?.bounds
       )
     ).toBe(false);
+  });
+
+  it('places shortcut-created nodes near the current visible viewport', async () => {
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),
+      saveGraphSnapshot: vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+        graphSnapshot: input.graphSnapshot
+      }))
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    (canvasStore as unknown as {
+      setCanvasViewport: (viewport: { x: number; y: number; zoom: number; width: number; height: number }) => void;
+    }).setCanvasViewport({ x: -1800, y: -1200, zoom: 0.5, width: 1200, height: 800 });
+
+    await canvasStore.addNoteNode();
+    const noteNode = canvasStore.getState().graphSnapshot.nodes[0];
+
+    expect(noteNode?.bounds.x).toBeGreaterThanOrEqual(4560);
+    expect(noteNode?.bounds.x).toBeLessThanOrEqual(4720);
+    expect(noteNode?.bounds.y).toBeGreaterThanOrEqual(3000);
+    expect(noteNode?.bounds.y).toBeLessThanOrEqual(3160);
   });
 
   it('selects the latest created node and keeps repeated creations visible', async () => {
@@ -495,6 +555,78 @@ describe('canvas store', () => {
     expect(canvasStore.getState().graphSnapshot.nodes[0]?.id).toBe('node-b');
     expect(canvasStore.getState().graphSnapshot.edges).toHaveLength(0);
     expect(saveGraphSnapshot).toHaveBeenCalled();
+  });
+
+  it('exits connect mode without saving when connecting nodes that already have an edge', async () => {
+    const saveGraphSnapshot = vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+      graphSnapshot: input.graphSnapshot
+    }));
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({
+        graphSnapshot: {
+          ...createGraphSnapshot(),
+          edges: [
+            {
+              id: 'edge-existing',
+              source: 'node-note-1',
+              target: 'node-terminal-1',
+              sourceHandle: null,
+              targetHandle: null,
+              label: null,
+              meta: {},
+              createdAtMs: 5,
+              updatedAtMs: 6
+            }
+          ]
+        }
+      }),
+      saveGraphSnapshot
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+    canvasStore.toggleConnectMode();
+    canvasStore.setConnectSourceNode('node-note-1');
+
+    await canvasStore.addEdge('node-note-1', 'node-terminal-1');
+
+    expect(canvasStore.getState().graphSnapshot.edges).toHaveLength(1);
+    expect(canvasStore.getState().connectModeActive).toBe(false);
+    expect(canvasStore.getState().connectSourceNodeId).toBeNull();
+    expect(saveGraphSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('does not leave an edge selected when it is activated programmatically', async () => {
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({
+        graphSnapshot: {
+          ...createGraphSnapshot(),
+          edges: [
+            {
+              id: 'edge-existing',
+              source: 'node-note-1',
+              target: 'node-terminal-1',
+              sourceHandle: null,
+              targetHandle: null,
+              label: null,
+              meta: {},
+              createdAtMs: 5,
+              updatedAtMs: 6
+            }
+          ]
+        }
+      }),
+      saveGraphSnapshot: vi.fn()
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+    canvasStore.selectEdge('edge-existing');
+
+    canvasStore.setActiveEdgeIds(['edge-existing']);
+    canvasStore.setActiveEdgeIds([]);
+
+    expect(canvasStore.getState().selectedEdgeId).toBeNull();
   });
 
   it('deleteSelectedNode deletes the currently selected node', async () => {

@@ -98,7 +98,9 @@ const shellBridge: OpenWeaveShellBridge = {
   },
   graph: {
     loadGraphSnapshot: (input: GraphLoadV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphLoad, input),
-    saveGraphSnapshot: (input: GraphSaveV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphSave, input)
+    saveGraphSnapshot: (input: GraphSaveV2Input) => ipcRenderer.invoke(IPC_CHANNELS.graphSave, input),
+    consumeEdgeActivations: (input: { workspaceId: string }) =>
+      ipcRenderer.invoke(IPC_CHANNELS.graphEdgeActivationsConsume, input)
   },
   runs: {
     startRun: (input: RunStartInput) => ipcRenderer.invoke(IPC_CHANNELS.runStart, input),

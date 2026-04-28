@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../src/renderer/i18n/provider';
 
@@ -26,12 +27,28 @@ const workspaceListPageMock = vi.fn(
 const mockCanvasState = {
   loading: false,
   selectedNodeId: null as string | null,
+  recentAction: null as string | null,
+  connectModeActive: false,
+  connectSourceNodeId: null as string | null,
+  activeEdgeIds: [] as string[],
+  selectedEdgeId: null as string | null,
   graphSnapshot: {
     schemaVersion: 2,
     nodes: [],
     edges: []
   }
 };
+
+const mockCanvasStore = vi.hoisted(() => ({
+  addTerminalNode: vi.fn(),
+  addNoteNode: vi.fn(),
+  addPortalNode: vi.fn(),
+  addFileTreeNode: vi.fn(),
+  addTextNode: vi.fn(),
+  exitConnectMode: vi.fn(),
+  refreshGraphSnapshot: vi.fn(),
+  setActiveEdgeIds: vi.fn()
+}));
 
 vi.mock('../../../src/renderer/features/workspaces/workspaces.store', () => ({
   useWorkspacesStore: <T,>(selector: (storeState: typeof mockWorkspacesState) => T): T =>
@@ -44,13 +61,7 @@ vi.mock('../../../src/renderer/features/workspaces/WorkspaceListPage', () => ({
 
 vi.mock('../../../src/renderer/features/canvas/canvas.store', () => ({
   useCanvasStore: <T,>(selector: (storeState: typeof mockCanvasState) => T): T => selector(mockCanvasState),
-  canvasStore: {
-    addTerminalNode: vi.fn(),
-    addNoteNode: vi.fn(),
-    addPortalNode: vi.fn(),
-    addFileTreeNode: vi.fn(),
-    addTextNode: vi.fn()
-  }
+  canvasStore: mockCanvasStore
 }));
 
 vi.mock('../../../src/renderer/features/canvas/WorkspaceCanvasPage', () => ({
@@ -67,7 +78,12 @@ const readRendererFile = (relativePath: string): string => {
 describe('app shell', () => {
   beforeEach(() => {
     workspaceListPageMock.mockClear();
+    Object.values(mockCanvasStore).forEach((mock) => mock.mockClear());
     mockCanvasState.loading = false;
+    mockCanvasState.connectModeActive = false;
+    mockCanvasState.connectSourceNodeId = null;
+    mockCanvasState.activeEdgeIds = [];
+    mockCanvasState.selectedEdgeId = null;
   });
 
   it('renders the workbench shell root instead of the demo document shell', () => {
@@ -105,6 +121,97 @@ describe('app shell', () => {
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('data-testid="workbench-stage"');
     expect(html).not.toContain('data-testid="workbench-stage-empty"');
+  });
+
+  it('routes Escape to exit connect mode before closing other canvas chrome', async () => {
+    mockWorkspacesState.workspaces = [
+      {
+        id: 'ws-1',
+        name: 'Alpha Workspace',
+        rootDir: '/tmp/alpha',
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        lastOpenedAtMs: null
+      }
+    ];
+    mockWorkspacesState.activeWorkspaceId = 'ws-1';
+    mockCanvasState.connectModeActive = true;
+    mockCanvasState.connectSourceNodeId = 'node-note-1';
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
+      })
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(I18nProvider, null, createElement(App)));
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(mockCanvasStore.exitConnectMode).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('refreshes the graph when terminal activity activates an edge', async () => {
+    mockWorkspacesState.workspaces = [
+      {
+        id: 'ws-1',
+        name: 'Alpha Workspace',
+        rootDir: '/tmp/alpha',
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        lastOpenedAtMs: null
+      }
+    ];
+    mockWorkspacesState.activeWorkspaceId = 'ws-1';
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
+      })
+    });
+    Object.defineProperty(window, 'openweaveShell', {
+      configurable: true,
+      value: {
+        graph: {
+          consumeEdgeActivations: vi.fn().mockResolvedValueOnce({ edgeIds: ['edge-1'] })
+        }
+      }
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(I18nProvider, null, createElement(App)));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockCanvasStore.refreshGraphSnapshot).toHaveBeenCalledWith('ws-1');
+    expect(mockCanvasStore.setActiveEdgeIds).toHaveBeenCalledWith(['edge-1']);
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
   });
 
   it('renders the topbar in English when the locale is switched to en-US', () => {

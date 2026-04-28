@@ -36,7 +36,7 @@ describe('workbench shell layout', () => {
     expect(html).toContain('data-testid="workbench-topbar"');
     expect(html).toContain('data-testid="workbench-topbar-create-cluster"');
     expect(html).toContain('data-testid="workbench-inspector"');
-    expect(html).toContain('data-testid="workbench-status-island"');
+    expect(html).not.toContain('data-testid="workbench-status-island"');
     expect(html).not.toContain('ow-workbench-layout');
   });
 

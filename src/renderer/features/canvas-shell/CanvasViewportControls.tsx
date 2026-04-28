@@ -1,6 +1,7 @@
 import { useReactFlow } from '@xyflow/react';
 import { useI18n } from '../../i18n/provider';
 import { computeSmartFitViewport } from './canvas-fit-view';
+import { MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM } from './canvas-viewport-limits';
 
 export const CanvasViewportControls = (): JSX.Element => {
   const { t } = useI18n();
@@ -21,13 +22,13 @@ export const CanvasViewportControls = (): JSX.Element => {
 
   const handleZoomIn = () => {
     const { x, y, zoom } = getViewport();
-    const newZoom = Math.min(zoom * 1.15, 2);
+    const newZoom = Math.min(zoom * 1.15, MAX_CANVAS_ZOOM);
     setViewport({ x, y, zoom: newZoom }, { duration: 0 });
   };
 
   const handleZoomOut = () => {
     const { x, y, zoom } = getViewport();
-    const newZoom = Math.max(zoom * 0.85, 0.4);
+    const newZoom = Math.max(zoom * 0.85, MIN_CANVAS_ZOOM);
     setViewport({ x, y, zoom: newZoom }, { duration: 0 });
   };
 
