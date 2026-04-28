@@ -17,3 +17,4 @@ playwright-report/
 release/
 deploy/target/
 .idea/
+.superpowers/
