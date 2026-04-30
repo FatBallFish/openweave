@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { BrowserWindow, WebContentsView } from 'electron';
@@ -9,6 +8,21 @@ interface ManagedPortalEntry {
   hostWindow: BrowserWindow;
   view: WebContentsView;
   loadedUrl: string | null;
+  ownsHostWindow: boolean;
+  bounds: PortalViewBounds;
+  pendingLoad: {
+    url: string;
+    promise: Promise<void>;
+  } | null;
+}
+
+export interface PortalViewBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visible: boolean;
+  scale: number;
 }
 
 const FALLBACK_PNG_BUFFER = Buffer.from(
@@ -18,15 +32,16 @@ const FALLBACK_PNG_BUFFER = Buffer.from(
 const PORTAL_CAPTURE_WIDTH = 1280;
 const PORTAL_CAPTURE_HEIGHT = 800;
 const PORTAL_CAPTURE_SETTLE_MS = 250;
+const PORTAL_ABORT_REDIRECT_SETTLE_MS = 50;
+const PORTAL_ERROR_PAGE_MARKER = 'openweave-portal-error-page';
 
 const sanitizeSegment = (value: string): string => {
   const normalized = value.replace(/[^a-zA-Z0-9_-]/g, '-');
   return normalized.length > 0 ? normalized : 'portal';
 };
 
-export const toPortalPartitionId = (portalId: string): string => {
-  const hash = createHash('sha256').update(portalId).digest('hex');
-  return `openweave-portal-${hash}`;
+export const toPortalPartitionId = (_portalId: string): string => {
+  return 'persist:openweave-portal';
 };
 
 const isAllowedPortalUrl = (value: string): boolean => {
@@ -38,9 +53,93 @@ const isAllowedPortalUrl = (value: string): boolean => {
   }
 };
 
+const isInternalPortalErrorPageUrl = (value: string): boolean => {
+  return value.startsWith('data:text/html') && value.includes(PORTAL_ERROR_PAGE_MARKER);
+};
+
+const isAbortedNavigationError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('ERR_ABORTED') || message.includes('(-3)');
+};
+
+const escapeHtml = (value: string): string => {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const createPortalErrorPageUrl = (targetUrl: string, error: unknown): string => {
+  const message = error instanceof Error ? error.message : 'The page could not be loaded.';
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="${PORTAL_ERROR_PAGE_MARKER}" content="true" />
+    <title>Portal page unavailable</title>
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f7f8fb;
+        color: #1f2937;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 48px;
+        box-sizing: border-box;
+      }
+      main {
+        max-width: 720px;
+        width: 100%;
+        border: 1px solid #d7dce6;
+        border-radius: 12px;
+        background: #fff;
+        padding: 28px;
+        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 22px;
+      }
+      p {
+        margin: 0 0 14px;
+        color: #5b6472;
+        line-height: 1.5;
+      }
+      code {
+        display: block;
+        overflow-wrap: anywhere;
+        border: 1px solid #e3e7ef;
+        border-radius: 8px;
+        background: #f3f5f9;
+        padding: 10px 12px;
+        color: #334155;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Portal page unavailable</h1>
+      <p>The requested page could not be loaded. Check the URL and try again.</p>
+      <code>${escapeHtml(targetUrl)}</code>
+      <p>${escapeHtml(message)}</p>
+    </main>
+  </body>
+</html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+};
+
 const attachPortalNavigationGuards = (
   entry: ManagedPortalEntry,
-  getLastLoadedUrl: () => string | null
+  getLastLoadedUrl: () => string | null,
+  onNewWindow?: (url: string) => void
 ): void => {
   const webContents = entry.view.webContents;
   let blockedNavigationPendingRecovery = false;
@@ -62,7 +161,7 @@ const attachPortalNavigationGuards = (
   const blockDisallowedNavigation = (
     details: Pick<Electron.Event<Electron.WebContentsWillNavigateEventParams>, 'isMainFrame' | 'url' | 'preventDefault'>
   ): void => {
-    if (!details.isMainFrame || isAllowedPortalUrl(details.url)) {
+    if (!details.isMainFrame || isAllowedPortalUrl(details.url) || isInternalPortalErrorPageUrl(details.url)) {
       return;
     }
     blockedNavigationPendingRecovery = true;
@@ -99,7 +198,8 @@ const attachPortalNavigationGuards = (
     if (!isAllowedPortalUrl(details.url)) {
       return { action: 'deny' };
     }
-    return { action: 'allow' };
+    onNewWindow?.(details.url);
+    return { action: 'deny' };
   });
 };
 
@@ -109,12 +209,17 @@ export interface PortalManager {
   readStructure: (portalId: string) => Promise<PortalStructureResult>;
   click: (portalId: string, selector: string) => Promise<void>;
   input: (portalId: string, selector: string, value: string) => Promise<void>;
+  setBounds: (portalId: string, bounds: PortalViewBounds) => void;
   disposePortal: (portalId: string) => void;
   dispose: () => void;
+  onTitleChanged: (callback: (portalId: string, title: string) => void) => void;
+  onUrlChanged: (callback: (portalId: string, url: string) => void) => void;
+  onNewWindow: (callback: (parentPortalId: string, url: string) => void) => void;
 }
 
 export interface PortalManagerOptions {
   artifactsRootDir: string;
+  getHostWindow?: () => BrowserWindow | null;
   now?: () => number;
 }
 
@@ -139,9 +244,36 @@ const executeOnPortal = async <T,>(
   }
 };
 
+const resolveAllowedCurrentUrl = async (
+  entry: ManagedPortalEntry,
+  requestedUrl: string
+): Promise<string | null> => {
+  const previousUrl = entry.loadedUrl;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (entry.view.webContents.isDestroyed()) {
+      return null;
+    }
+    const currentUrl = entry.view.webContents.getURL();
+    if (
+      currentUrl &&
+      isAllowedPortalUrl(currentUrl) &&
+      (previousUrl === null || currentUrl === requestedUrl || currentUrl !== previousUrl)
+    ) {
+      return assertPortalUrlAllowed(currentUrl);
+    }
+    await wait(PORTAL_ABORT_REDIRECT_SETTLE_MS);
+  }
+
+  return null;
+};
+
 export const createPortalManager = (options: PortalManagerOptions): PortalManager => {
   const entries = new Map<string, ManagedPortalEntry>();
   const now = options.now ?? (() => Date.now());
+  let titleChangedCallback: ((portalId: string, title: string) => void) | null = null;
+  let urlChangedCallback: ((portalId: string, url: string) => void) | null = null;
+  let newWindowCallback: ((parentPortalId: string, url: string) => void) | null = null;
 
   const resolveEntry = (portalId: string): ManagedPortalEntry => {
     const existing = entries.get(portalId);
@@ -149,7 +281,9 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       return existing;
     }
 
-    const hostWindow = new BrowserWindow({
+    const providedHostWindow = options.getHostWindow?.() ?? null;
+    const ownsHostWindow = !providedHostWindow;
+    const hostWindow = providedHostWindow ?? new BrowserWindow({
       width: PORTAL_CAPTURE_WIDTH,
       height: PORTAL_CAPTURE_HEIGHT,
       show: false,
@@ -158,6 +292,9 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
         sandbox: false
       }
     });
+    const initialBounds = ownsHostWindow
+      ? { x: 0, y: 0, width: PORTAL_CAPTURE_WIDTH, height: PORTAL_CAPTURE_HEIGHT, visible: true, scale: 1 }
+      : { x: 0, y: 0, width: 0, height: 0, visible: false, scale: 1 };
     const created: ManagedPortalEntry = {
       hostWindow,
       view: new WebContentsView({
@@ -168,17 +305,36 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
           nodeIntegration: false
         }
       }),
-      loadedUrl: null
+      loadedUrl: null,
+      ownsHostWindow,
+      bounds: initialBounds,
+      pendingLoad: null
     };
     created.view.setBounds({
-      x: 0,
-      y: 0,
-      width: PORTAL_CAPTURE_WIDTH,
-      height: PORTAL_CAPTURE_HEIGHT
+      x: initialBounds.x,
+      y: initialBounds.y,
+      width: initialBounds.visible ? initialBounds.width : 0,
+      height: initialBounds.visible ? initialBounds.height : 0
     });
     created.hostWindow.contentView.addChildView(created.view);
     created.view.webContents.setAudioMuted(true);
-    attachPortalNavigationGuards(created, () => created.loadedUrl);
+    created.view.webContents.setZoomFactor(1);
+    attachPortalNavigationGuards(created, () => created.loadedUrl, (url) => {
+      newWindowCallback?.(portalId, url);
+    });
+    created.view.webContents.on('page-title-updated', (_event, title) => {
+      titleChangedCallback?.(portalId, title);
+    });
+    const handleUrlChanged = (_event: Electron.Event, url: string): void => {
+      if (!isAllowedPortalUrl(url)) {
+        return;
+      }
+      const normalizedUrl = assertPortalUrlAllowed(url);
+      created.loadedUrl = normalizedUrl;
+      urlChangedCallback?.(portalId, normalizedUrl);
+    };
+    created.view.webContents.on('did-navigate', handleUrlChanged);
+    created.view.webContents.on('did-navigate-in-page', handleUrlChanged);
     entries.set(portalId, created);
     return created;
   };
@@ -211,7 +367,7 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       // Keep disposal best-effort.
     }
     try {
-      if (!entry.hostWindow.isDestroyed()) {
+      if (entry.ownsHostWindow && !entry.hostWindow.isDestroyed()) {
         entry.hostWindow.destroy();
       }
     } catch {
@@ -221,12 +377,14 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
   };
 
   const captureFromAttachedHostWindow = async (entry: ManagedPortalEntry): Promise<Buffer> => {
-    entry.view.setBounds({
-      x: 0,
-      y: 0,
-      width: PORTAL_CAPTURE_WIDTH,
-      height: PORTAL_CAPTURE_HEIGHT
-    });
+    if (entry.bounds.width === 0 || entry.bounds.height === 0) {
+      entry.view.setBounds({
+        x: 0,
+        y: 0,
+        width: PORTAL_CAPTURE_WIDTH,
+        height: PORTAL_CAPTURE_HEIGHT
+      });
+    }
     await wait(PORTAL_CAPTURE_SETTLE_MS);
     const image = await entry.view.webContents.capturePage();
     const buffer = image.toPNG();
@@ -236,14 +394,47 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
   return {
     loadUrl: async (portalId: string, url: string): Promise<void> => {
       const entry = resolveEntry(portalId);
-      try {
-        await entry.view.webContents.loadURL(url);
-        entry.loadedUrl = url;
-      } catch (error) {
-        // loadURL failed; remove transient runtime state for this portal ID.
-        disposePortalEntry(portalId);
-        throw error;
+      if (entry.loadedUrl === url && !entry.pendingLoad) {
+        return;
       }
+      if (entry.pendingLoad?.url === url) {
+        return entry.pendingLoad.promise;
+      }
+
+      let loadPromise!: Promise<void>;
+      loadPromise = (async () => {
+        try {
+          await entry.view.webContents.loadURL(url);
+          entry.loadedUrl = url;
+        } catch (error) {
+          if (entry.pendingLoad?.promise !== loadPromise) {
+            throw error;
+          }
+          if (!isAbortedNavigationError(error)) {
+            await entry.view.webContents.loadURL(createPortalErrorPageUrl(url, error));
+            entry.loadedUrl = url;
+            return;
+          }
+          const redirectedUrl = await resolveAllowedCurrentUrl(entry, url);
+          if (redirectedUrl) {
+            entry.loadedUrl = redirectedUrl;
+            urlChangedCallback?.(portalId, redirectedUrl);
+            return;
+          }
+          if (entry.loadedUrl && isAllowedPortalUrl(entry.loadedUrl)) {
+            return;
+          }
+          // loadURL failed; remove transient runtime state for this portal ID.
+          disposePortalEntry(portalId);
+          throw error;
+        } finally {
+          if (entry.pendingLoad?.promise === loadPromise) {
+            entry.pendingLoad = null;
+          }
+        }
+      })();
+      entry.pendingLoad = { url, promise: loadPromise };
+      return loadPromise;
     },
     capture: async (
       portalId: string,
@@ -367,6 +558,25 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
         true
       );
     },
+    setBounds: (portalId: string, bounds: PortalViewBounds): void => {
+      const entry = resolveEntry(portalId);
+      const roundedBounds = {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.max(0, Math.round(bounds.width)),
+        height: Math.max(0, Math.round(bounds.height)),
+        visible: bounds.visible,
+        scale: Math.min(Math.max(bounds.scale, 0.1), 5)
+      };
+      entry.bounds = roundedBounds;
+      entry.view.webContents.setZoomFactor(roundedBounds.scale);
+      entry.view.setBounds({
+        x: roundedBounds.x,
+        y: roundedBounds.y,
+        width: roundedBounds.visible ? roundedBounds.width : 0,
+        height: roundedBounds.visible ? roundedBounds.height : 0
+      });
+    },
     disposePortal: (portalId: string): void => {
       disposePortalEntry(portalId);
     },
@@ -374,6 +584,15 @@ export const createPortalManager = (options: PortalManagerOptions): PortalManage
       for (const portalId of [...entries.keys()]) {
         disposePortalEntry(portalId);
       }
+    },
+    onTitleChanged: (callback: (portalId: string, title: string) => void): void => {
+      titleChangedCallback = callback;
+    },
+    onUrlChanged: (callback: (portalId: string, url: string) => void): void => {
+      urlChangedCallback = callback;
+    },
+    onNewWindow: (callback: (parentPortalId: string, url: string) => void): void => {
+      newWindowCallback = callback;
     }
   };
 };

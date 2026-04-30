@@ -38,6 +38,7 @@ if (configuredUserDataDir) {
 
 const CRASH_RECOVERY_MARKER_FILE = 'unclean-shutdown.marker';
 let crashRecoveryMarkerPath: string | null = null;
+let mainWindow: BrowserWindow | null = null;
 
 const initializeCrashRecoveryMarker = (): boolean => {
   const markerPath = path.join(app.getPath('userData'), CRASH_RECOVERY_MARKER_FILE);
@@ -231,15 +232,23 @@ void app.whenReady().then(() => {
   });
   registerPortalIpcHandlers({
     dbFilePath: registryDbFilePath,
-    artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal')
+    artifactsRootDir: path.join(app.getPath('userData'), 'artifacts', 'portal'),
+    getHostWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+    sendToRenderer: (channel: string, ...args: unknown[]) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(channel, ...args);
+        }
+      }
+    }
   });
   registerRolesIpcHandlers({ registry: createRegistryRepository({ dbFilePath: registryDbFilePath }) });
   installBuiltinSkills();
-  createMainWindow();
+  mainWindow = createMainWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      mainWindow = createMainWindow();
     }
   });
 });

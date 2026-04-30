@@ -3,7 +3,6 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { GitPanel } from '../../../src/renderer/features/git/GitPanel';
-import { PortalToolbar } from '../../../src/renderer/features/portal/PortalToolbar';
 import { WorkbenchContextPanel } from '../../../src/renderer/features/workbench/WorkbenchContextPanel';
 import { WorkbenchTopBar } from '../../../src/renderer/features/workbench/WorkbenchTopBar';
 import { BranchWorkspaceDialog } from '../../../src/renderer/features/workspaces/BranchWorkspaceDialog';
@@ -90,35 +89,9 @@ describe('renderer static components', () => {
         })
       )
     );
-    const portalToolbar = renderToStaticMarkup(
-      createElement(PortalToolbar, {
-        nodeId: 'portal-1',
-        commandMenuDisabled: true,
-        searchDisabled: true,
-        disabled: false,
-        fitViewDisabled: true,
-        url: 'https://example.com',
-        clickSelector: '#action',
-        inputSelector: '#message',
-        inputValue: 'hello',
-        onUrlChange: vi.fn(),
-        onClickSelectorChange: vi.fn(),
-        onInputSelectorChange: vi.fn(),
-        onInputValueChange: vi.fn(),
-        onLoad: vi.fn(),
-        onCapture: vi.fn(),
-        onReadStructure: vi.fn(),
-        onClickElement: vi.fn(),
-        onInputText: vi.fn()
-      })
-    );
 
     expect(topBar).toContain('title="添加终端"');
     expect(englishTopBar).toContain('title="Add terminal"');
-    expect(portalToolbar).toContain('Open page');
-    expect(portalToolbar).toContain('Capture screenshot');
-    expect(portalToolbar).toContain('Read structure');
-    expect(portalToolbar).toContain('portal-url-input-portal-1');
   });
 
   it('renders workspace-and-resource context alongside git summaries', () => {

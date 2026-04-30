@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { IpcMainInvokeEvent } from 'electron';
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import {
   IPC_CHANNELS,
   type PortalCaptureResponse,
   type PortalClickResponse,
+  type PortalBoundsResponse,
   type PortalInputResponse,
   type PortalLoadResponse,
   type PortalStructureResponse
@@ -12,18 +13,21 @@ import {
 import {
   portalCaptureSchema,
   portalClickSchema,
+  portalBoundsSchema,
   portalInputSchema,
   workspaceIdSchema,
   portalLoadSchema,
   portalStructureSchema,
   type PortalCaptureInput,
   type PortalClickInput,
+  type PortalBoundsInput,
   type PortalInputInput,
   type PortalLoadInput,
   type PortalStructureInput
 } from '../../shared/ipc/schemas';
 import { assertPortalUrlAllowed } from '../../shared/portal/types';
 import { createRegistryRepository, type RegistryRepository } from '../db/registry';
+import { startPortalActionFileServer } from '../bridge/portal-action-file-bridge';
 import { createPortalManager, type PortalManager } from '../portal/portal-manager';
 import {
   createPortalSessionService,
@@ -51,6 +55,7 @@ export interface PortalIpcHandlers {
     input: PortalClickInput
   ) => Promise<PortalClickResponse>;
   inputPortalText: (_event: IpcMainInvokeEvent, input: PortalInputInput) => Promise<PortalInputResponse>;
+  setPortalBounds: (_event: IpcMainInvokeEvent, input: PortalBoundsInput) => Promise<PortalBoundsResponse>;
   disposeWorkspaceState: (workspaceId: string) => void;
 }
 
@@ -120,6 +125,12 @@ export const createPortalIpcHandlers = (deps: PortalIpcDependencies): PortalIpcH
       await deps.portalManager.input(parsed.portalId, parsed.selector, parsed.value);
       return { ok: true };
     },
+    setPortalBounds: async (_event: IpcMainInvokeEvent, input: PortalBoundsInput) => {
+      const parsed = portalBoundsSchema.parse(input);
+      deps.assertWorkspaceExists(parsed.workspaceId);
+      deps.portalManager.setBounds(toPortalSessionId(parsed.workspaceId, parsed.nodeId), parsed.bounds);
+      return { ok: true };
+    },
     disposeWorkspaceState: (workspaceId: string): void => {
       const parsedWorkspaceId = workspaceIdSchema.parse(workspaceId);
       const sessions = deps.sessionService.listWorkspaceSessions(parsedWorkspaceId);
@@ -140,9 +151,11 @@ const resolveIpcMain = (): PortalIpcMain => {
 interface RegisteredPortalContext {
   dbFilePath: string;
   artifactsRootDir: string;
+  portalActionRequestsDir: string;
   registry: RegistryRepository;
   sessionService: PortalSessionService;
   portalManager: PortalManager;
+  stopPortalActionServer: (() => void) | null;
 }
 
 let registeredPortalContext: RegisteredPortalContext | null = null;
@@ -150,20 +163,27 @@ let registeredPortalContext: RegisteredPortalContext | null = null;
 export interface RegisterPortalIpcHandlersOptions {
   dbFilePath: string;
   artifactsRootDir?: string;
+  portalActionRequestsDir?: string;
   ipcMain?: PortalIpcMain;
+  getHostWindow?: () => BrowserWindow | null;
+  sendToRenderer?: (channel: string, ...args: unknown[]) => void;
 }
 
 export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOptions): void => {
   const ipcMain = options.ipcMain ?? resolveIpcMain();
   const artifactsRootDir =
     options.artifactsRootDir ?? path.join(path.dirname(options.dbFilePath), 'artifacts', 'portal');
+  const portalActionRequestsDir =
+    options.portalActionRequestsDir ?? path.join(path.dirname(options.dbFilePath), 'portal-action-requests');
 
   if (
     !registeredPortalContext ||
     registeredPortalContext.dbFilePath !== options.dbFilePath ||
-    registeredPortalContext.artifactsRootDir !== artifactsRootDir
+    registeredPortalContext.artifactsRootDir !== artifactsRootDir ||
+    registeredPortalContext.portalActionRequestsDir !== portalActionRequestsDir
   ) {
     if (registeredPortalContext) {
+      registeredPortalContext.stopPortalActionServer?.();
       registeredPortalContext.registry.close();
       registeredPortalContext.sessionService.clear();
       registeredPortalContext.portalManager.dispose();
@@ -173,11 +193,14 @@ export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOpti
     registeredPortalContext = {
       dbFilePath: options.dbFilePath,
       artifactsRootDir,
+      portalActionRequestsDir,
       registry,
       sessionService: createPortalSessionService(),
       portalManager: createPortalManager({
-        artifactsRootDir
-      })
+        artifactsRootDir,
+        getHostWindow: options.getHostWindow
+      }),
+      stopPortalActionServer: null
     };
   }
 
@@ -211,12 +234,86 @@ export const registerPortalIpcHandlers = (options: RegisterPortalIpcHandlersOpti
   ipcMain.removeHandler(IPC_CHANNELS.portalReadStructure);
   ipcMain.removeHandler(IPC_CHANNELS.portalClick);
   ipcMain.removeHandler(IPC_CHANNELS.portalInput);
+  ipcMain.removeHandler(IPC_CHANNELS.portalSetBounds);
 
   ipcMain.handle(IPC_CHANNELS.portalLoad, handlers.loadPortal);
   ipcMain.handle(IPC_CHANNELS.portalCapture, handlers.capturePortalScreenshot);
   ipcMain.handle(IPC_CHANNELS.portalReadStructure, handlers.readPortalStructure);
   ipcMain.handle(IPC_CHANNELS.portalClick, handlers.clickPortalElement);
   ipcMain.handle(IPC_CHANNELS.portalInput, handlers.inputPortalText);
+  ipcMain.handle(IPC_CHANNELS.portalSetBounds, handlers.setPortalBounds);
+
+  context.stopPortalActionServer?.();
+  context.stopPortalActionServer = startPortalActionFileServer({
+    requestsDir: context.portalActionRequestsDir,
+    dispatch: async (input) => {
+      const portalId = toPortalSessionId(input.workspaceId, input.targetNodeId);
+      const payload = input.payload ?? {};
+
+      switch (input.action) {
+        case 'navigate': {
+          const url = typeof payload.url === 'string' ? payload.url : '';
+          const response = await handlers.loadPortal({} as IpcMainInvokeEvent, {
+            workspaceId: input.workspaceId,
+            nodeId: input.targetNodeId,
+            url
+          });
+          return {
+            loaded: true,
+            url: response.portal.url
+          };
+        }
+        case 'capture': {
+          const response = await handlers.capturePortalScreenshot({} as IpcMainInvokeEvent, {
+            workspaceId: input.workspaceId,
+            portalId
+          });
+          return response.screenshot;
+        }
+        case 'read-structure': {
+          const response = await handlers.readPortalStructure({} as IpcMainInvokeEvent, {
+            workspaceId: input.workspaceId,
+            portalId
+          });
+          return response.structure;
+        }
+        case 'click': {
+          const selector = typeof payload.selector === 'string' ? payload.selector : '';
+          await handlers.clickPortalElement({} as IpcMainInvokeEvent, {
+            workspaceId: input.workspaceId,
+            portalId,
+            selector
+          });
+          return { clicked: true };
+        }
+        case 'input': {
+          const selector = typeof payload.selector === 'string' ? payload.selector : '';
+          const value = typeof payload.value === 'string' ? payload.value : '';
+          await handlers.inputPortalText({} as IpcMainInvokeEvent, {
+            workspaceId: input.workspaceId,
+            portalId,
+            selector,
+            value
+          });
+          return { applied: true };
+        }
+        default:
+          throw new Error(`NODE_ACTION_NOT_SUPPORTED: ${input.action}`);
+      }
+    }
+  });
+
+  context.portalManager.onTitleChanged((portalId, title) => {
+    options.sendToRenderer?.(IPC_CHANNELS.portalPageTitleChanged, { portalId, title });
+  });
+
+  context.portalManager.onUrlChanged((portalId, url) => {
+    options.sendToRenderer?.(IPC_CHANNELS.portalUrlChanged, { portalId, url });
+  });
+
+  context.portalManager.onNewWindow((parentPortalId, url) => {
+    options.sendToRenderer?.(IPC_CHANNELS.portalNewWindow, { parentPortalId, url });
+  });
 };
 
 export const disposePortalWorkspaceState = (workspaceId: string): void => {
@@ -244,6 +341,7 @@ export const disposePortalIpcHandlers = (): void => {
   if (!registeredPortalContext) {
     return;
   }
+  registeredPortalContext.stopPortalActionServer?.();
   registeredPortalContext.registry.close();
   registeredPortalContext.sessionService.clear();
   registeredPortalContext.portalManager.dispose();

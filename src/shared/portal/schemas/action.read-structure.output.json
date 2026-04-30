@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["elements"],
+  "properties": {
+    "elements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tag": { "type": "string" },
+          "text": { "type": "string" },
+          "id": { "type": "string" },
+          "role": { "type": "string" }
+        }
+      }
+    }
+  }
+}

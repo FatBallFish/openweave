@@ -24,6 +24,15 @@ export interface PortalStructureResult {
 }
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
+const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//;
+
+const shouldDefaultHttpsProtocol = (value: string): boolean => {
+  return (
+    value.includes('.') ||
+    value.startsWith('localhost') ||
+    /^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:\/|$)/.test(value)
+  );
+};
 
 export const assertPortalUrlAllowed = (inputUrl: string): string => {
   const trimmed = inputUrl.trim();
@@ -31,9 +40,15 @@ export const assertPortalUrlAllowed = (inputUrl: string): string => {
     throw new Error('Portal URL is required');
   }
 
+  const candidateUrl = URL_SCHEME_PATTERN.test(trimmed)
+    ? trimmed
+    : shouldDefaultHttpsProtocol(trimmed)
+      ? `https://${trimmed}`
+      : trimmed;
+
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(trimmed);
+    parsedUrl = new URL(candidateUrl);
   } catch {
     throw new Error('Portal URL is invalid');
   }

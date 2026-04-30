@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["selector"],
+  "properties": {
+    "selector": {
+      "type": "string",
+      "description": "CSS selector of the element to click"
+    }
+  }
+}

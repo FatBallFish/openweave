@@ -300,6 +300,59 @@ describe('canvas store', () => {
     ).toBe(false);
   });
 
+  it('creates portal windows at a web-sized default and avoids occupied canvas space', async () => {
+    const initialGraph: GraphSnapshotV2Input = {
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: 'portal-parent',
+          componentType: 'builtin.portal',
+          componentVersion: '1.0.0',
+          title: 'Parent portal',
+          bounds: { x: 0, y: 0, width: 960, height: 640 },
+          config: { url: 'https://example.com' },
+          state: {},
+          capabilities: ['read', 'navigate', 'capture', 'input'],
+          createdAtMs: 1,
+          updatedAtMs: 1
+        },
+        {
+          id: 'portal-occupied',
+          componentType: 'builtin.portal',
+          componentVersion: '1.0.0',
+          title: 'Occupied portal',
+          bounds: { x: 1010, y: 0, width: 960, height: 640 },
+          config: { url: 'https://example.org' },
+          state: {},
+          capabilities: ['read', 'navigate', 'capture', 'input'],
+          createdAtMs: 2,
+          updatedAtMs: 2
+        }
+      ],
+      edges: []
+    };
+    setBridge({
+      loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: initialGraph }),
+      saveGraphSnapshot: vi.fn().mockImplementation(async (input: { graphSnapshot: GraphSnapshotV2Input }) => ({
+        graphSnapshot: input.graphSnapshot
+      }))
+    });
+
+    const { canvasStore } = await importStore();
+    await canvasStore.loadCanvasState('ws-1');
+
+    await canvasStore.addPortalNodeFromNewWindow('portal-parent', 'https://example.net/video');
+
+    const graphNodes = canvasStore.getState().graphSnapshot.nodes;
+    const newPortal = graphNodes.find((node) => node.id !== 'portal-parent' && node.id !== 'portal-occupied');
+
+    expect(newPortal?.componentType).toBe('builtin.portal');
+    expect(newPortal?.bounds.width).toBeGreaterThanOrEqual(960);
+    expect(newPortal?.bounds.height).toBeGreaterThanOrEqual(640);
+    expect(rectanglesOverlap(newPortal?.bounds, graphNodes[0]?.bounds)).toBe(false);
+    expect(rectanglesOverlap(newPortal?.bounds, graphNodes[1]?.bounds)).toBe(false);
+  });
+
   it('places shortcut-created nodes near the current visible viewport', async () => {
     setBridge({
       loadGraphSnapshot: vi.fn().mockResolvedValue({ graphSnapshot: { schemaVersion: 2, nodes: [], edges: [] } }),

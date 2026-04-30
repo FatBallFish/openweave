@@ -11,6 +11,11 @@ describe('assertPortalUrlAllowed', () => {
     expect(assertPortalUrlAllowed('http://127.0.0.1:3000/test')).toBe('http://127.0.0.1:3000/test');
   });
 
+  it('defaults bare domain portal URLs to https', () => {
+    expect(assertPortalUrlAllowed('www.google.com')).toBe('https://www.google.com/');
+    expect(assertPortalUrlAllowed('baidu.com')).toBe('https://baidu.com/');
+  });
+
   it('rejects missing, malformed, and disallowed URLs', () => {
     expect(() => assertPortalUrlAllowed('   ')).toThrow('Portal URL is required');
     expect(() => assertPortalUrlAllowed('not-a-url')).toThrow('Portal URL is invalid');

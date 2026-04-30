@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS, type OpenWeaveShellBridge, type RunStreamEvent } from '../shared/ipc/contracts';
+import { IPC_CHANNELS, type OpenWeaveShellBridge, type PortalNewWindowEvent, type PortalPageTitleChangedEvent, type PortalUrlChangedEvent, type RunStreamEvent } from '../shared/ipc/contracts';
 
 ipcRenderer.on(IPC_CHANNELS.appOpenSettings, () => {
   window.dispatchEvent(new CustomEvent('openweave:open-settings'));
@@ -20,6 +20,7 @@ import type {
   NoteFileWriteInput,
   PortalCaptureInput,
   PortalClickInput,
+  PortalBoundsInput,
   PortalInputInput,
   PortalLoadInput,
   PortalStructureInput,
@@ -150,7 +151,24 @@ const shellBridge: OpenWeaveShellBridge = {
     clickPortalElement: (input: PortalClickInput) =>
       ipcRenderer.invoke(IPC_CHANNELS.portalClick, input),
     inputPortalText: (input: PortalInputInput) =>
-      ipcRenderer.invoke(IPC_CHANNELS.portalInput, input)
+      ipcRenderer.invoke(IPC_CHANNELS.portalInput, input),
+    setPortalBounds: (input: PortalBoundsInput) =>
+      ipcRenderer.invoke(IPC_CHANNELS.portalSetBounds, input),
+    onPageTitleChanged: (callback: (event: PortalPageTitleChangedEvent) => void) => {
+      const handler = (_event: unknown, data: PortalPageTitleChangedEvent) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.portalPageTitleChanged, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.portalPageTitleChanged, handler);
+    },
+    onUrlChanged: (callback: (event: PortalUrlChangedEvent) => void) => {
+      const handler = (_event: unknown, data: PortalUrlChangedEvent) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.portalUrlChanged, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.portalUrlChanged, handler);
+    },
+    onNewWindow: (callback: (event: PortalNewWindowEvent) => void) => {
+      const handler = (_event: unknown, data: PortalNewWindowEvent) => callback(data);
+      ipcRenderer.on(IPC_CHANNELS.portalNewWindow, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.portalNewWindow, handler);
+    }
   },
   app: {
     openSettings: () => ipcRenderer.invoke(IPC_CHANNELS.appOpenSettings)

@@ -13,6 +13,12 @@ export interface NodeActionContext {
     action: string;
     inputText: string;
   }) => void;
+  portalDispatch?: (input: {
+    workspaceId: string;
+    targetNodeId: string;
+    action: string;
+    payload?: Record<string, unknown>;
+  }) => Promise<unknown>;
 }
 
 export interface ComponentActionAdapter {
@@ -21,7 +27,7 @@ export interface ComponentActionAdapter {
   action?: (
     context: NodeActionContext,
     input: { action: string; payload?: Record<string, unknown> }
-  ) => GraphNodeActionResponse;
+  ) => Promise<GraphNodeActionResponse> | GraphNodeActionResponse;
 }
 
 export interface ComponentActionDispatcher {
@@ -29,7 +35,7 @@ export interface ComponentActionDispatcher {
   action: (
     context: NodeActionContext,
     input: { action: string; payload?: Record<string, unknown> }
-  ) => GraphNodeActionResponse;
+  ) => Promise<GraphNodeActionResponse> | GraphNodeActionResponse;
 }
 
 export interface CreateComponentActionDispatcherOptions {

@@ -225,14 +225,15 @@ describe('component action adapter registry', () => {
     });
   });
 
-  it('exposes builtin.note, builtin.text, builtin.attachment, and builtin.terminal default adapters', () => {
+  it('exposes builtin.note, builtin.text, builtin.attachment, builtin.terminal, and builtin.portal default adapters', () => {
     const adapters = createDefaultComponentActionAdapters();
 
-    expect(adapters).toHaveLength(4);
+    expect(adapters).toHaveLength(5);
     expect(adapters[0]?.supports('builtin.note')).toBe(true);
     expect(adapters[1]?.supports('builtin.text')).toBe(true);
     expect(adapters[2]?.supports('builtin.attachment')).toBe(true);
     expect(adapters[3]?.supports('builtin.terminal')).toBe(true);
+    expect(adapters[4]?.supports('builtin.portal')).toBe(true);
     expect(adapters[0]?.supports('builtin.terminal')).toBe(false);
   });
 

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { OpenWeaveShellBridge } from '../../../../shared/ipc/contracts';
 import type { PortalNodeInput } from '../../../../shared/ipc/schemas';
-import type { PortalStructureElement } from '../../../../shared/portal/types';
-import { PortalToolbar } from '../../portal/PortalToolbar';
+import { useCanvasStore } from '../canvas.store';
 
 interface PortalNodeProps {
   workspaceId: string;
@@ -26,80 +25,16 @@ const toErrorMessage = (error: unknown): string => {
 };
 
 export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JSX.Element => {
+  const containerRef = useRef<HTMLElement | null>(null);
   const [portalId, setPortalId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string>('Idle');
-  const [urlDraft, setUrlDraft] = useState(node.url);
-  const [clickSelector, setClickSelector] = useState('#action-button');
-  const [inputSelector, setInputSelector] = useState('#message-input');
-  const [inputValue, setInputValue] = useState('hello from openweave');
-  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
-  const [structureElements, setStructureElements] = useState<PortalStructureElement[]>([]);
-
-  const loadPortal = async (url: string, persistUrl: boolean): Promise<string> => {
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const response = await getPortalBridge().loadPortal({
-        workspaceId,
-        nodeId: node.id,
-        url
-      });
-      if (persistUrl) {
-        onChange({ url: response.portal.url });
-      }
-      setPortalId(response.portal.id);
-      setActionMessage('Loaded portal URL');
-      return response.portal.id;
-    } catch (error) {
-      const message = toErrorMessage(error);
-      setErrorMessage(message);
-      setActionMessage('Load failed');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const ensurePortalId = async (): Promise<string> => {
-    if (portalId) {
-      return portalId;
-    }
-    return loadPortal(node.url, false);
-  };
-
-  const runPortalAction = async (
-    action: (resolvedPortalId: string) => Promise<void>,
-    successMessage: string,
-    fallbackMessage: string
-  ): Promise<void> => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const resolvedPortalId = await ensurePortalId();
-      await action(resolvedPortalId);
-      setActionMessage(successMessage);
-    } catch (error) {
-      setActionMessage(fallbackMessage);
-      setErrorMessage(toErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setUrlDraft(node.url);
-  }, [node.url]);
+  const connectModeActive = useCanvasStore((storeState) => storeState.connectModeActive);
 
   useEffect(() => {
     let cancelled = false;
     setPortalId(null);
-    setStructureElements([]);
-    setScreenshotPath(null);
     setErrorMessage(null);
-    setActionMessage('Idle');
 
     setLoading(true);
     void getPortalBridge()
@@ -113,14 +48,15 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
           return;
         }
         setPortalId(response.portal.id);
-        setActionMessage('Loaded portal URL');
+        if (response.portal.url !== node.url) {
+          onChange({ url: response.portal.url });
+        }
       })
       .catch((error) => {
         if (cancelled) {
           return;
         }
         setErrorMessage(toErrorMessage(error));
-        setActionMessage('Load failed');
       })
       .finally(() => {
         if (cancelled) {
@@ -132,111 +68,94 @@ export const PortalNode = ({ workspaceId, node, onChange }: PortalNodeProps): JS
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, node.id]);
+  }, [workspaceId, node.id, node.url, onChange]);
+
+  useEffect(() => {
+    let animationFrameId: number | null = null;
+    let lastPayload = '';
+    let disposed = false;
+    const syncBounds = (): void => {
+      if (disposed) {
+        return;
+      }
+      const element = containerRef.current;
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        const viewportVisible =
+          rect.width > 1 &&
+          rect.height > 1 &&
+          rect.bottom > 0 &&
+          rect.right > 0 &&
+          rect.left < window.innerWidth &&
+          rect.top < window.innerHeight;
+        const scaleX = element.offsetWidth > 0 ? rect.width / element.offsetWidth : 1;
+        const scaleY = element.offsetHeight > 0 ? rect.height / element.offsetHeight : scaleX;
+        const scale = Number.isFinite(scaleX) && scaleX > 0
+          ? scaleX
+          : Number.isFinite(scaleY) && scaleY > 0
+            ? scaleY
+            : 1;
+        const bounds = {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.max(0, Math.round(rect.width)),
+          height: Math.max(0, Math.round(rect.height)),
+          visible: viewportVisible && !connectModeActive,
+          scale: Math.round(scale * 1000) / 1000
+        };
+        const payload = JSON.stringify(bounds);
+        if (payload !== lastPayload) {
+          lastPayload = payload;
+          void getPortalBridge().setPortalBounds({
+            workspaceId,
+            nodeId: node.id,
+            bounds
+          });
+        }
+      }
+      animationFrameId = window.requestAnimationFrame(syncBounds);
+    };
+    syncBounds();
+    return () => {
+      disposed = true;
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      void getPortalBridge().setPortalBounds({
+        workspaceId,
+        nodeId: node.id,
+        bounds: {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          visible: false,
+          scale: 1
+        }
+      });
+    };
+  }, [workspaceId, node.id, connectModeActive]);
 
   return (
-    <section className="ow-portal-node" data-testid={`portal-node-${node.id}`}>
-      <p className="ow-portal-node__session" data-testid={`portal-session-${node.id}`}>
-        Session: {portalId ?? 'pending'}
-      </p>
-
-      <PortalToolbar
-        clickSelector={clickSelector}
-        disabled={loading}
-        inputSelector={inputSelector}
-        inputValue={inputValue}
-        nodeId={node.id}
-        onCapture={() =>
-          void runPortalAction(
-            async (resolvedPortalId) => {
-              const response = await getPortalBridge().capturePortalScreenshot({
-                workspaceId,
-                portalId: resolvedPortalId
-              });
-              setScreenshotPath(response.screenshot.path);
-            },
-            'Captured screenshot',
-            'Capture failed'
-          )
-        }
-        onClickElement={() =>
-          void runPortalAction(
-            async (resolvedPortalId) => {
-              await getPortalBridge().clickPortalElement({
-                workspaceId,
-                portalId: resolvedPortalId,
-                selector: clickSelector
-              });
-            },
-            'Clicked element',
-            'Click failed'
-          )
-        }
-        onClickSelectorChange={setClickSelector}
-        onInputSelectorChange={setInputSelector}
-        onInputText={() =>
-          void runPortalAction(
-            async (resolvedPortalId) => {
-              await getPortalBridge().inputPortalText({
-                workspaceId,
-                portalId: resolvedPortalId,
-                selector: inputSelector,
-                value: inputValue
-              });
-            },
-            'Input applied',
-            'Input failed'
-          )
-        }
-        onInputValueChange={setInputValue}
-        onLoad={() => {
-          const nextUrl = urlDraft.trim();
-          void loadPortal(nextUrl, true);
-        }}
-        onReadStructure={() =>
-          void runPortalAction(
-            async (resolvedPortalId) => {
-              const response = await getPortalBridge().readPortalStructure({
-                workspaceId,
-                portalId: resolvedPortalId
-              });
-              setStructureElements(response.structure.elements);
-            },
-            'Read structure',
-            'Read structure failed'
-          )
-        }
-        onUrlChange={setUrlDraft}
-        url={urlDraft}
-      />
-
-      {errorMessage ? (
+    <section className="ow-portal-node" data-testid={`portal-node-${node.id}`} ref={containerRef}>
+      <div aria-hidden="true" className="ow-portal-node__live-placeholder" data-testid={`portal-live-surface-${node.id}`} />
+      {connectModeActive ? (
+        <div
+          aria-hidden="true"
+          className="ow-portal-node__connect-blocker"
+          data-testid={`portal-connect-blocker-${node.id}`}
+        />
+      ) : null}
+      {loading && (
+        <div className="ow-portal-node__status" data-testid={`portal-loading-${node.id}`}>
+          Loading...
+        </div>
+      )}
+      {errorMessage && (
         <p className="ow-portal-node__error" data-testid={`portal-error-${node.id}`}>
           {errorMessage}
         </p>
-      ) : null}
-
-      <div className="ow-portal-node__viewport">
-        <div className="ow-portal-node__viewport-header">
-          <strong>Managed viewport</strong>
-          <span>{loading ? 'Loading' : 'Live'}</span>
-        </div>
-
-        <p data-testid={`portal-action-status-${node.id}`}>Status: {actionMessage}</p>
-        <p data-testid={`portal-screenshot-path-${node.id}`}>Screenshot: {screenshotPath ?? 'none'}</p>
-
-        <ul className="ow-portal-node__structure" data-testid={`portal-structure-list-${node.id}`}>
-          {structureElements.length === 0 ? (
-            <li>(no structure)</li>
-          ) : (
-            structureElements.map((element, index) => (
-              <li data-testid={`portal-structure-item-${node.id}-${index}`} key={`${element.tag}-${index}`}>
-                {element.tag}: {element.text || '(empty)'}
-              </li>
-            ))
-          )}
-        </ul>
-      </div>
+      )}
     </section>
   );
 };

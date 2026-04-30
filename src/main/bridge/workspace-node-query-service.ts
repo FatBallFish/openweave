@@ -7,6 +7,7 @@ import {
   type ComponentActionDispatcher
 } from '../components/component-action-dispatcher';
 import { createDefaultComponentActionDispatcher } from '../components/component-action-adapter-registry';
+import { getBuiltinComponentManifest } from '../../shared/components/builtin-manifests';
 import type {
   GraphNodeActionResponse,
   GraphNodeGetResponse,
@@ -41,7 +42,7 @@ export interface LocalWorkspaceNodeQueryService {
   getNode: (input: NodeScopedInput) => GraphNodeGetResponse;
   getNodeNeighbors: (input: NodeScopedInput) => GraphNodeNeighborsResponse;
   readNode: (input: NodeInteractionInput & { mode?: string }) => GraphNodeReadResponse;
-  runNodeAction: (input: NodeInteractionInput & { action: string; payload?: Record<string, unknown> }) => GraphNodeActionResponse;
+  runNodeAction: (input: NodeInteractionInput & { action: string; payload?: Record<string, unknown> }) => Promise<GraphNodeActionResponse> | GraphNodeActionResponse;
   close: () => void;
 }
 
@@ -49,6 +50,12 @@ export interface CreateLocalWorkspaceNodeQueryServiceOptions {
   registryDbFilePath: string;
   workspaceDbDir: string;
   componentActionDispatcher?: ComponentActionDispatcher;
+  portalDispatch?: (input: {
+    workspaceId: string;
+    targetNodeId: string;
+    action: string;
+    payload?: Record<string, unknown>;
+  }) => Promise<unknown>;
 }
 
 const toWorkspaceDbFileName = (workspaceId: string): string => {
@@ -100,6 +107,16 @@ export const createLocalWorkspaceNodeQueryService = (
     return registry.getWorkspace(workspaceId);
   };
 
+  const resolveNodeCapabilities = (
+    node: ReturnType<WorkspaceRepository['loadGraphSnapshot']>['nodes'][number]
+  ): GraphNodeRecord['capabilities'] => {
+    const manifest = getBuiltinComponentManifest(node.componentType);
+    if (!manifest) {
+      return node.capabilities;
+    }
+    return Array.from(new Set([...node.capabilities, ...manifest.capabilities]));
+  };
+
   const toNodeRecord = (node: ReturnType<WorkspaceRepository['loadGraphSnapshot']>['nodes'][number]): GraphNodeRecord => {
     return {
       id: node.id,
@@ -114,7 +131,7 @@ export const createLocalWorkspaceNodeQueryService = (
       },
       config: node.config,
       state: node.state,
-      capabilities: node.capabilities
+      capabilities: resolveNodeCapabilities(node)
     };
   };
 
@@ -210,7 +227,7 @@ export const createLocalWorkspaceNodeQueryService = (
           title: node.title,
           componentType: node.componentType,
           componentVersion: node.componentVersion,
-          capabilities: node.capabilities
+          capabilities: resolveNodeCapabilities(node)
         }))
       };
     },
@@ -294,7 +311,7 @@ export const createLocalWorkspaceNodeQueryService = (
       });
       return response;
     },
-    runNodeAction: (input): GraphNodeActionResponse => {
+    runNodeAction: (input): Promise<GraphNodeActionResponse> | GraphNodeActionResponse => {
       const { repository, graph, node } = resolveNode(input.workspaceId, input.nodeId);
       const workspace = getWorkspaceOrThrow(input.workspaceId);
       const response = componentActionDispatcher.action(
@@ -314,21 +331,34 @@ export const createLocalWorkspaceNodeQueryService = (
               action: dispatchInput.action,
               inputText: dispatchInput.inputText
             });
-          }
+          },
+          portalDispatch: options.portalDispatch
         },
         {
           action: input.action,
           payload: input.payload
         }
       );
-      recordConnectedNodeActivation({
-        repository,
-        graph,
-        workspaceId: input.workspaceId,
-        sourceNodeId: input.sourceNodeId,
-        targetNodeId: input.nodeId,
-        action: input.action
-      });
+
+      const recordActivation = (): void => {
+        recordConnectedNodeActivation({
+          repository,
+          graph,
+          workspaceId: input.workspaceId,
+          sourceNodeId: input.sourceNodeId,
+          targetNodeId: input.nodeId,
+          action: input.action
+        });
+      };
+
+      if (response instanceof Promise) {
+        return response.then((result) => {
+          recordActivation();
+          return result;
+        });
+      }
+
+      recordActivation();
       return response;
     },
     close: (): void => {

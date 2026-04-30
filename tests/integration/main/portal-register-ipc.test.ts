@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '../../../src/shared/ipc/contracts';
 import { createRegistryRepository } from '../../../src/main/db/registry';
+import { createPortalActionFileClient } from '../../../src/main/bridge/portal-action-file-bridge';
 
 type StubPortalManager = {
   loadUrl: (portalId: string, url: string) => Promise<void>;
@@ -11,8 +12,12 @@ type StubPortalManager = {
   readStructure: (portalId: string) => Promise<{ elements: Array<{ tag: string; text: string }> }>;
   click: (portalId: string, selector: string) => Promise<void>;
   input: (portalId: string, selector: string, value: string) => Promise<void>;
+  setBounds: (portalId: string, bounds: { x: number; y: number; width: number; height: number; visible: boolean }) => void;
   disposePortal: (portalId: string) => void;
   dispose: () => void;
+  onTitleChanged: (callback: (portalId: string, title: string) => void) => void;
+  onUrlChanged: (callback: (portalId: string, url: string) => void) => void;
+  onNewWindow: (callback: (parentPortalId: string, url: string) => void) => void;
   disposePortalIds: string[];
   disposed: boolean;
   artifactsRootDir: string;
@@ -79,12 +84,16 @@ describe('registered portal IPC handlers', () => {
             },
             async click() {},
             async input() {},
+            setBounds() {},
             disposePortal(portalId: string) {
               manager.disposePortalIds.push(portalId);
             },
             dispose() {
               manager.disposed = true;
-            }
+            },
+            onTitleChanged() {},
+            onUrlChanged() {},
+            onNewWindow() {}
           };
           managers.push(manager);
           return manager;
@@ -122,7 +131,8 @@ describe('registered portal IPC handlers', () => {
       IPC_CHANNELS.portalCapture,
       IPC_CHANNELS.portalReadStructure,
       IPC_CHANNELS.portalClick,
-      IPC_CHANNELS.portalInput
+      IPC_CHANNELS.portalInput,
+      IPC_CHANNELS.portalSetBounds
     ]);
 
     const loaded = await ipcMain.invoke(IPC_CHANNELS.portalLoad, {
@@ -131,6 +141,23 @@ describe('registered portal IPC handlers', () => {
       url: 'https://example.com'
     });
     const portalId = loaded.portal.id;
+
+    const fileBridgeClient = createPortalActionFileClient({
+      requestsDir: path.join(firstDir, 'portal-action-requests'),
+      pollIntervalMs: 5,
+      timeoutMs: 1000
+    });
+    await expect(
+      fileBridgeClient.dispatch({
+        workspaceId: workspace.id,
+        targetNodeId: 'portal-1',
+        action: 'capture',
+        payload: {}
+      })
+    ).resolves.toEqual({
+      path: path.join(firstArtifactsRoot, workspace.id, 'portal-1', `${portalId}.png`),
+      takenAtMs: 123
+    });
 
     const capture = await ipcMain.invoke(IPC_CHANNELS.portalCapture, {
       workspaceId: workspace.id,
