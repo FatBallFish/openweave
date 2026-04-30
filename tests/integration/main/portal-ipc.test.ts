@@ -48,6 +48,14 @@ class StubPortalManager implements PortalManager {
 
   public async input(_portalId: string, _selector: string, _value: string): Promise<void> {}
 
+  public setBounds(): void {}
+
+  public onTitleChanged(): void {}
+
+  public onUrlChanged(): void {}
+
+  public onNewWindow(): void {}
+
   public disposePortal(portalId: string): void {
     this.disposedPortalIds.push(portalId);
     this.loaded.delete(portalId);

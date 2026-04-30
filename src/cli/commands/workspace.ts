@@ -4,6 +4,7 @@ import {
   createLocalWorkspaceNodeQueryService,
   type LocalWorkspaceNodeQueryService
 } from '../../main/bridge/workspace-node-query-service';
+import { createPortalActionFileClient } from '../../main/bridge/portal-action-file-bridge';
 import type {
   GraphNodeActionResponse,
   GraphNodeGetResponse,
@@ -37,6 +38,7 @@ export interface CliWorkspaceNodeServiceOptions {
 interface WorkspaceNodeRuntimeOptions {
   registryDbFilePath: string;
   workspaceDbDir: string;
+  portalActionRequestsDir: string;
 }
 
 export interface ResolveCliWorkspaceNodeRuntimeOptionsInput {
@@ -76,7 +78,10 @@ export const resolveCliWorkspaceNodeRuntimeOptions = (
 
   return {
     registryDbFilePath: path.resolve(input.env.OPENWEAVE_REGISTRY_DB_PATH ?? path.join(userDataDir, 'registry.db')),
-    workspaceDbDir: path.resolve(input.env.OPENWEAVE_WORKSPACE_DB_DIR ?? path.join(userDataDir, 'workspaces'))
+    workspaceDbDir: path.resolve(input.env.OPENWEAVE_WORKSPACE_DB_DIR ?? path.join(userDataDir, 'workspaces')),
+    portalActionRequestsDir: path.resolve(
+      input.env.OPENWEAVE_PORTAL_ACTION_REQUESTS_DIR ?? path.join(userDataDir, 'portal-action-requests')
+    )
   };
 };
 
@@ -88,7 +93,11 @@ export const createCliWorkspaceNodeService = (
   });
   const service: LocalWorkspaceNodeQueryService = createLocalWorkspaceNodeQueryService({
     registryDbFilePath: runtimeOptions.registryDbFilePath,
-    workspaceDbDir: runtimeOptions.workspaceDbDir
+    workspaceDbDir: runtimeOptions.workspaceDbDir,
+    portalDispatch: createPortalActionFileClient({
+      requestsDir: runtimeOptions.portalActionRequestsDir,
+      timeoutMs: Number.parseInt(options.env?.OPENWEAVE_PORTAL_ACTION_TIMEOUT_MS ?? '', 10) || undefined
+    }).dispatch
   });
 
   return {

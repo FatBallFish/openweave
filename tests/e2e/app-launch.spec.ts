@@ -17,13 +17,13 @@ test('opens the Electron workbench shell', async () => {
     const page = await app.firstWindow();
     await expect(page.getByTestId('workbench-shell')).toBeVisible();
     await expect(page.getByTestId('workbench-topbar')).toBeVisible();
-    await expect(page.getByTestId('workbench-left-rail')).toBeVisible();
+    await expect(page.getByTestId('workbench-overlay-stage')).toBeVisible();
+    await expect(page.getByTestId('workbench-stage')).toBeVisible();
     await expect(page.getByTestId('workbench-context-panel')).toBeVisible();
     await expect(page.getByTestId('workbench-inspector')).toBeVisible();
-    await expect(page.getByTestId('workbench-status-island')).toHaveCount(0);
 
     await page.getByTestId('workbench-inspector-toggle').click();
-    await expect(page.getByTestId('workbench-inspector-collapsed')).toBeVisible();
+    await expect(page.getByTestId('workbench-inspector-expand-trigger')).toBeVisible();
 
     const bridge = await page.evaluate(() => {
       const shell = (window as Window & { openweaveShell?: unknown }).openweaveShell as

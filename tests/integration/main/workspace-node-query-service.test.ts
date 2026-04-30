@@ -197,6 +197,56 @@ describe('local workspace/node query service', () => {
     });
   });
 
+  it('reports current builtin portal capabilities for nodes created before action support expanded', () => {
+    const workspaceRepository = createWorkspaceRepository({
+      dbFilePath: toWorkspaceDbPath(workspaceId)
+    });
+    workspaceRepository.saveGraphSnapshot({
+      schemaVersion: 2,
+      nodes: [
+        {
+          id: 'portal-1',
+          componentType: 'builtin.portal',
+          componentVersion: '1.0.0',
+          title: 'Portal',
+          bounds: {
+            x: 0,
+            y: 0,
+            width: 420,
+            height: 320
+          },
+          config: {
+            url: 'https://example.com'
+          },
+          state: {},
+          capabilities: ['navigate', 'input'],
+          createdAtMs: 1,
+          updatedAtMs: 2
+        }
+      ],
+      edges: []
+    });
+    workspaceRepository.close();
+
+    expect(service?.listNodes({ workspaceId })).toEqual({
+      nodes: [
+        {
+          id: 'portal-1',
+          title: 'Portal',
+          componentType: 'builtin.portal',
+          componentVersion: '1.0.0',
+          capabilities: ['navigate', 'input', 'read', 'capture']
+        }
+      ]
+    });
+    expect(service?.getNode({ workspaceId, nodeId: 'portal-1' }).node.capabilities).toEqual([
+      'navigate',
+      'input',
+      'read',
+      'capture'
+    ]);
+  });
+
   it('returns coded errors for unmatched cwd and missing nodes', () => {
     const missingWorkspaceDir = path.join(tempDir, 'outside');
     fs.mkdirSync(missingWorkspaceDir, { recursive: true });

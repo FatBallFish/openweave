@@ -469,6 +469,19 @@ export const portalInputSchema = z.object({
   value: z.string()
 });
 
+export const portalBoundsSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  nodeId: z.string().trim().min(1),
+  bounds: z.object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().nonnegative(),
+    height: z.number().finite().nonnegative(),
+    visible: z.boolean(),
+    scale: z.number().finite().positive()
+  })
+});
+
 export type WorkspaceCreateInput = z.infer<typeof workspaceCreateSchema>;
 export type WorkspaceOpenInput = z.infer<typeof workspaceOpenSchema>;
 export type WorkspaceDeleteInput = z.infer<typeof workspaceDeleteSchema>;
@@ -522,6 +535,7 @@ export type PortalCaptureInput = z.infer<typeof portalCaptureSchema>;
 export type PortalStructureInput = z.infer<typeof portalStructureSchema>;
 export type PortalClickInput = z.infer<typeof portalClickSchema>;
 export type PortalInputInput = z.infer<typeof portalInputSchema>;
+export type PortalBoundsInput = z.infer<typeof portalBoundsSchema>;
 
 export const OpenSettingsSchema = z.object({});
 export type OpenSettingsInput = z.infer<typeof OpenSettingsSchema>;

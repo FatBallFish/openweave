@@ -153,10 +153,11 @@ describe('builtin hosts', () => {
     expect(fileTreeHtml).toContain('file-tree-root-node-file-tree-1');
     expect(fileTreeHtml).toContain('/tmp/ws-1');
     expect(portalHtml).toContain('builtin-node-frame-node-portal-1');
-    expect(portalHtml).toContain('Open page');
-    expect(portalHtml).toContain('Read structure');
-    expect(portalHtml).toContain('portal-url-input-node-portal-1');
-    expect(portalHtml).toContain('Capture screenshot');
+    expect(portalHtml).toContain('ow-portal-host__header');
+    expect(portalHtml).toContain('portal-back-node-portal-1');
+    expect(portalHtml).toContain('portal-forward-node-portal-1');
+    expect(portalHtml).toContain('portal-refresh-node-portal-1');
+    expect(portalHtml).toContain('portal-url-node-portal-1');
   });
 
   it('renders bounded text and attachment hosts from graph node data', () => {

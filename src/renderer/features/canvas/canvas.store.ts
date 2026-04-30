@@ -65,6 +65,7 @@ const starterSlotRows = 4;
 const starterSlotOrigin = { x: 96, y: 96 };
 const starterSlotGap = { x: 56, y: 56 };
 const viewportPlacementMargin = 72;
+const maxPlacementSearchRings = 12;
 
 let state: CanvasState = initialState;
 const listeners = new Set<StateListener>();
@@ -169,59 +170,93 @@ const getViewportStarterBounds = (
   existingNodes: GraphNodeRecord[],
   width: number,
   height: number,
-  viewport: CanvasViewport
+  viewport: CanvasViewport,
+  preferredOrigin?: { x: number; y: number }
 ): GraphNodeRecord['bounds'] => {
   const visible = getVisibleViewportBounds(viewport);
   const slotGap = {
     x: Math.max(starterSlotGap.x, Math.round(48 / viewport.zoom)),
     y: Math.max(starterSlotGap.y, Math.round(48 / viewport.zoom))
   };
-  const origin = {
+  const origin = preferredOrigin ?? {
     x: visible.centerX - width / 2,
     y: visible.centerY - height / 2
   };
-  const offsets = [
-    { x: 0, y: 0 },
-    { x: width + slotGap.x, y: 0 },
-    { x: -(width + slotGap.x), y: 0 },
-    { x: 0, y: height + slotGap.y },
-    { x: 0, y: -(height + slotGap.y) },
-    { x: width + slotGap.x, y: height + slotGap.y },
-    { x: -(width + slotGap.x), y: height + slotGap.y },
-    { x: width + slotGap.x, y: -(height + slotGap.y) },
-    { x: -(width + slotGap.x), y: -(height + slotGap.y) }
-  ];
 
-  for (const offset of offsets) {
-    const bounds = clampToVisibleViewport(
-      {
-        x: origin.x + offset.x,
-        y: origin.y + offset.y,
-        width,
-        height
-      },
-      viewport
-    );
-    const hasOverlap = existingNodes.some((node) => rectanglesOverlap(bounds, node.bounds));
-    if (!hasOverlap) {
-      return bounds;
+  for (let ring = 0; ring <= maxPlacementSearchRings; ring += 1) {
+    const offsets: Array<{ x: number; y: number }> = [];
+    for (let row = -ring; row <= ring; row += 1) {
+      for (let column = -ring; column <= ring; column += 1) {
+        if (Math.max(Math.abs(row), Math.abs(column)) !== ring) {
+          continue;
+        }
+        offsets.push({
+          x: column * (width + slotGap.x),
+          y: row * (height + slotGap.y)
+        });
+      }
+    }
+    offsets.sort((left, right) => Math.hypot(left.x, left.y) - Math.hypot(right.x, right.y));
+
+    for (const offset of offsets) {
+      const bounds = clampToVisibleViewport(
+        {
+          x: origin.x + offset.x,
+          y: origin.y + offset.y,
+          width,
+          height
+        },
+        viewport
+      );
+      const hasOverlap = existingNodes.some((node) => rectanglesOverlap(bounds, node.bounds));
+      if (!hasOverlap) {
+        return bounds;
+      }
     }
   }
 
-  return clampToVisibleViewport({ x: origin.x, y: origin.y, width, height }, viewport);
+  return getGridStarterBounds(existingNodes, width, height, origin);
 };
 
-const getStarterBounds = (
+const getGridStarterBounds = (
   existingNodes: GraphNodeRecord[],
   width: number,
-  height: number
+  height: number,
+  preferredOrigin?: { x: number; y: number }
 ): GraphNodeRecord['bounds'] => {
-  if (state.canvasViewport) {
-    return getViewportStarterBounds(existingNodes, width, height, state.canvasViewport);
+  if (preferredOrigin) {
+    for (let ring = 0; ring <= maxPlacementSearchRings; ring += 1) {
+      const offsets: Array<{ x: number; y: number }> = [];
+      for (let row = -ring; row <= ring; row += 1) {
+        for (let column = -ring; column <= ring; column += 1) {
+          if (Math.max(Math.abs(row), Math.abs(column)) !== ring) {
+            continue;
+          }
+          offsets.push({
+            x: column * (width + starterSlotGap.x),
+            y: row * (height + starterSlotGap.y)
+          });
+        }
+      }
+      offsets.sort((left, right) => Math.hypot(left.x, left.y) - Math.hypot(right.x, right.y));
+
+      for (const offset of offsets) {
+        const bounds = {
+          x: preferredOrigin.x + offset.x,
+          y: preferredOrigin.y + offset.y,
+          width,
+          height
+        };
+        const hasOverlap = existingNodes.some((node) => rectanglesOverlap(bounds, node.bounds));
+        if (!hasOverlap) {
+          return bounds;
+        }
+      }
+    }
   }
 
-  for (let row = 0; row < starterSlotRows; row += 1) {
-    for (let column = 0; column < starterSlotColumns; column += 1) {
+  for (let row = 0; row < starterSlotRows + maxPlacementSearchRings; row += 1) {
+    for (let column = 0; column < starterSlotColumns + maxPlacementSearchRings; column += 1) {
       const bounds = {
         x: starterSlotOrigin.x + column * (width + starterSlotGap.x),
         y: starterSlotOrigin.y + row * (height + starterSlotGap.y),
@@ -235,15 +270,29 @@ const getStarterBounds = (
     }
   }
 
-  const index = existingNodes.length;
+  const rightEdge = existingNodes.reduce(
+    (max, node) => Math.max(max, node.bounds.x + node.bounds.width),
+    starterSlotOrigin.x
+  );
   return {
-    x: starterSlotOrigin.x + (index % starterSlotColumns) * (width + starterSlotGap.x),
-    y:
-      starterSlotOrigin.y +
-      (Math.floor(index / starterSlotColumns) + 1) * (height + starterSlotGap.y),
+    x: rightEdge + starterSlotGap.x,
+    y: starterSlotOrigin.y,
     width,
     height
   };
+};
+
+const getStarterBounds = (
+  existingNodes: GraphNodeRecord[],
+  width: number,
+  height: number,
+  preferredOrigin?: { x: number; y: number }
+): GraphNodeRecord['bounds'] => {
+  if (state.canvasViewport) {
+    return getViewportStarterBounds(existingNodes, width, height, state.canvasViewport, preferredOrigin);
+  }
+
+  return getGridStarterBounds(existingNodes, width, height, preferredOrigin);
 };
 
 const toLegacyCanvasNode = (node: GraphNodeRecord): CanvasNodeInput | null => {
@@ -709,6 +758,73 @@ export const canvasStore = {
     };
     applyGraphSnapshot(nextGraphSnapshot, newNode.id);
     setState({ errorMessage: null, recentAction: 'Added portal' });
+    try {
+      await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
+    } catch (error) {
+      if (state.workspaceId !== workspaceId) {
+        return;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save portal node';
+      setState({ errorMessage });
+    }
+  },
+  addPortalNodeFromNewWindow: async (parentNodeId: string, url: string): Promise<void> => {
+    if (!state.workspaceId || state.loading) {
+      return;
+    }
+
+    const workspaceId = state.workspaceId;
+    const parentNode = state.graphSnapshot.nodes.find((n) => n.id === parentNodeId);
+    const manifest = getRequiredBuiltinManifest('builtin.portal');
+    const now = Date.now();
+    const bounds = getStarterBounds(
+      state.graphSnapshot.nodes,
+      manifest.node.defaultSize.width,
+      manifest.node.defaultSize.height,
+      parentNode
+        ? {
+            x: parentNode.bounds.x + parentNode.bounds.width + starterSlotGap.x,
+            y: parentNode.bounds.y
+          }
+        : undefined
+    );
+    const newNode: GraphSnapshotV2Input['nodes'][number] = {
+      id: createNodeId('portal'),
+      componentType: 'builtin.portal',
+      componentVersion: manifest.version,
+      title: manifest.node.defaultTitle,
+      bounds,
+      config: {
+        ...(manifest.schema.config ?? {}),
+        url
+      },
+      state: { ...(manifest.schema.state ?? {}) },
+      capabilities: [...manifest.capabilities],
+      createdAtMs: now,
+      updatedAtMs: now
+    };
+
+    const newEdge: GraphEdgeV2Input = {
+      id: globalThis.crypto.randomUUID(),
+      source: parentNodeId,
+      target: newNode.id,
+      sourceHandle: null,
+      targetHandle: null,
+      label: 'opened',
+      meta: {},
+      createdAtMs: now,
+      updatedAtMs: now
+    };
+
+    historyStore.push({ kind: 'addNode', node: newNode });
+    historyStore.push({ kind: 'addEdge', edge: newEdge });
+    const nextGraphSnapshot: GraphSnapshotV2Input = {
+      ...state.graphSnapshot,
+      nodes: [...state.graphSnapshot.nodes, newNode],
+      edges: [...state.graphSnapshot.edges, newEdge]
+    };
+    applyGraphSnapshot(nextGraphSnapshot, newNode.id);
+    setState({ errorMessage: null, recentAction: 'Opened new portal' });
     try {
       await persistGraphSnapshot(workspaceId, nextGraphSnapshot, newNode.id);
     } catch (error) {

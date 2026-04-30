@@ -1720,42 +1720,31 @@ select {
 .ow-file-tree-node,
 .ow-file-tree-node__actions,
 .ow-file-tree-node__action-buttons,
-.ow-git-panel__header,
-.ow-portal-toolbar__actions,
-.ow-portal-node__viewport-header {
+.ow-git-panel__header {
   display: flex;
 }
 
 .ow-file-tree-node,
-.ow-portal-node,
-.ow-git-panel,
-.ow-portal-toolbar,
-.ow-portal-toolbar__grid,
-.ow-portal-node__viewport {
+.ow-git-panel {
   display: grid;
   gap: 10px;
 }
 
 .ow-file-tree-node__root-card,
-.ow-portal-node__session,
-.ow-git-panel,
-.ow-portal-node__viewport {
+.ow-git-panel {
   border: 1px solid var(--ow-color-border);
   border-radius: 14px;
   background: rgba(var(--ow-surface-rgb), 0.7);
 }
 
 .ow-file-tree-node__root-card,
-.ow-portal-node__session,
-.ow-portal-node__viewport,
 .ow-git-panel {
   padding: 12px;
 }
 
 .ow-file-tree-node__label,
 .ow-git-panel__header span,
-.ow-file-tree-node__actions span,
-.ow-portal-node__viewport-header span {
+.ow-file-tree-node__actions span {
   color: var(--ow-color-text-soft);
   font-size: 12px;
 }
@@ -1763,23 +1752,17 @@ select {
 .ow-file-tree-node__root-card p,
 .ow-file-tree-node__loading,
 .ow-file-tree-node__error,
-.ow-git-panel p,
-.ow-portal-node__viewport p,
-.ow-portal-node__error {
+.ow-git-panel p {
   margin: 0;
 }
 
 .ow-file-tree-node__root-card p,
-.ow-portal-node__session,
-.ow-portal-node__viewport strong,
 .ow-git-panel__header strong {
   color: var(--ow-color-text-strong);
 }
 
 .ow-file-tree-node__actions,
-.ow-git-panel__header,
-.ow-portal-toolbar__actions,
-.ow-portal-node__viewport-header {
+.ow-git-panel__header {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -1787,8 +1770,7 @@ select {
 }
 
 .ow-file-tree-node__actions button,
-.ow-git-panel button,
-.ow-portal-toolbar button {
+.ow-git-panel button {
   min-height: 34px;
   border: 1px solid var(--ow-color-border);
   border-radius: 12px;
@@ -1800,80 +1782,41 @@ select {
 }
 
 .ow-file-tree-node button,
-.ow-git-panel button,
-.ow-portal-toolbar button,
-.ow-portal-toolbar input {
+.ow-git-panel button {
   position: relative;
   z-index: 1;
   pointer-events: auto;
 }
 
 .ow-file-tree-node__actions button,
-.ow-git-panel button,
-.ow-portal-toolbar__actions button:first-child {
+.ow-git-panel button {
   background: rgba(var(--ow-accent-rgb), 0.12);
   border-color: rgba(var(--ow-accent-rgb), 0.26);
 }
 
 .ow-file-tree-node__list,
-.ow-git-panel__summary,
-.ow-portal-node__structure {
+.ow-git-panel__summary {
   margin: 0;
   padding-left: 18px;
   color: var(--ow-color-text-default);
 }
 
 .ow-file-tree-node__list li,
-.ow-git-panel__summary li,
-.ow-portal-node__structure li {
+.ow-git-panel__summary li {
   margin: 0 0 6px;
 }
 
 .ow-git-panel__readonly,
 .ow-file-tree-node__loading,
-.ow-file-tree-node__error,
-.ow-portal-node__error {
+.ow-file-tree-node__error {
   color: var(--ow-color-text-soft);
   font-size: 12px;
 }
 
-.ow-file-tree-node__error,
-.ow-portal-node__error {
+.ow-file-tree-node__error {
   color: var(--ow-state-failed);
 }
 
-.ow-portal-toolbar__field {
-  display: grid;
-  gap: 6px;
-  color: var(--ow-color-text-soft);
-  font-size: 12px;
-}
-
-.ow-portal-toolbar__field input {
-  min-height: 38px;
-  border: 1px solid var(--ow-color-border);
-  border-radius: 12px;
-  background: rgba(var(--ow-surface-rgb), 0.9);
-  color: var(--ow-color-text-strong);
-  padding: 0 12px;
-  font: inherit;
-}
-
-.ow-portal-toolbar__grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
-}
-
-.ow-portal-node__session,
-.ow-portal-node__viewport p {
-  font-size: 12px;
-}
-
-@media (max-width: 960px) {
-  .ow-portal-toolbar__grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 
 ::selection {
   background: rgba(var(--ow-accent-rgb), 0.18);
@@ -2802,8 +2745,7 @@ select:focus-visible {
 .ow-text-host__content,
 .ow-terminal-node__runtime select,
 .ow-terminal-node__command input,
-.ow-terminal-session-pane__input-field input,
-.ow-portal-toolbar__field input {
+.ow-terminal-session-pane__input-field input {
   min-height: 40px;
   border-radius: 14px;
   background:
@@ -2821,8 +2763,7 @@ select:focus-visible {
 .ow-run-drawer__header button,
 .ow-terminal-session-pane__actions button,
 .ow-file-tree-node__actions button,
-.ow-git-panel button,
-.ow-portal-toolbar button {
+.ow-git-panel button {
   min-height: 40px;
   border-radius: 14px;
   background:
@@ -2836,8 +2777,7 @@ select:focus-visible {
 .ow-run-drawer__header button:hover:not(:disabled),
 .ow-terminal-session-pane__actions button:hover:not(:disabled),
 .ow-file-tree-node__actions button:hover:not(:disabled),
-.ow-git-panel button:hover:not(:disabled),
-.ow-portal-toolbar button:hover:not(:disabled) {
+.ow-git-panel button:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--ow-color-border-strong);
 }
@@ -2854,8 +2794,6 @@ select:focus-visible {
 
 .ow-terminal-node__run-item,
 .ow-file-tree-node__root-card,
-.ow-portal-node__session,
-.ow-portal-node__viewport,
 .ow-git-panel,
 .ow-run-drawer {
   border-radius: 16px;
@@ -2871,8 +2809,7 @@ select:focus-visible {
 }
 
 .ow-file-tree-node__list,
-.ow-git-panel__summary,
-.ow-portal-node__structure {
+.ow-git-panel__summary {
   line-height: 1.6;
 }
 
@@ -5390,6 +5327,225 @@ select:focus-visible {
   color: var(--ow-state-failed);
   background: rgba(var(--ow-state-failed-rgb, 232, 17, 35), 0.08);
   border-bottom: 1px solid rgba(var(--ow-state-failed-rgb, 232, 17, 35), 0.15);
+}
+
+/* Portal browser-style host */
+.ow-portal-host {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--ow-color-bg-panel);
+  box-shadow: var(--ow-shadow-panel);
+}
+
+.ow-portal-host::before {
+  display: none;
+}
+
+.ow-portal-host__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #ececec, #d9d9d9);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px 12px 0 0;
+  user-select: none;
+}
+
+.ow-portal-host__traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ow-portal-host__light {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+}
+
+.ow-portal-host__light--close {
+  background: #ff5f56;
+  border: 1px solid #e0443e;
+}
+
+.ow-portal-host__light--minimize {
+  background: #ffbd2e;
+  border: 1px solid #dea123;
+}
+
+.ow-portal-host__light--maximize {
+  background: #27c93f;
+  border: 1px solid #1aab29;
+}
+
+.ow-portal-host__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.ow-portal-host__spacer {
+  width: 52px;
+}
+
+.ow-portal-host__controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #f6f6f6, #e8e8e8);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.ow-portal-host__nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.ow-portal-host__nav-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.ow-portal-host__nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ow-portal-host__url-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  padding: 0 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.ow-portal-host__url-input:focus {
+  border-color: rgba(var(--ow-accent-rgb), 0.5);
+  box-shadow: 0 0 0 2px rgba(var(--ow-accent-rgb), 0.12);
+}
+
+.ow-portal-host__body {
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
+  position: relative;
+}
+
+.ow-portal-host__body .ow-portal-node {
+  height: 100%;
+}
+
+.ow-portal-node {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #f7f8fb;
+}
+
+.ow-portal-node__live-placeholder {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    #f7f8fb;
+  background-size: 24px 24px;
+}
+
+.ow-portal-node__connect-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px dashed rgba(var(--ow-accent-rgb), 0.42);
+  background: rgba(var(--ow-accent-rgb), 0.08);
+  pointer-events: none;
+}
+
+.ow-portal-node__status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  color: var(--ow-color-text-soft);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.ow-portal-node__error {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  border-radius: 8px;
+  background: rgba(254, 242, 242, 0.96);
+  font-size: 12px;
+  color: var(--ow-state-failed);
+}
+
+/* Dark theme adjustments for portal host */
+[data-theme='dark'] .ow-portal-host__header {
+  background: linear-gradient(180deg, #3a3a3a, #2d2d2d);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='dark'] .ow-portal-host__title {
+  color: #d4d4d4;
+}
+
+[data-theme='dark'] .ow-portal-host__controls {
+  background: linear-gradient(180deg, #333, #2a2a2a);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme='dark'] .ow-portal-host__nav-btn {
+  color: #aaa;
+}
+
+[data-theme='dark'] .ow-portal-host__nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .ow-portal-host__url-input {
+  background: #1e1e1e;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #d4d4d4;
 }
 
 /* macOS Terminal-style host */

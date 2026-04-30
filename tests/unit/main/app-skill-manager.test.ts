@@ -22,14 +22,15 @@ describe('app-skill-manager', () => {
 
   it('installs builtin skills to user directory', () => {
     installBuiltinSkills(tempSkillsDir);
-    expect(fs.existsSync(path.join(tempSkillsDir, 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tempSkillsDir, 'openweave', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tempSkillsDir, 'openweave-portal', 'SKILL.md'))).toBe(true);
   });
 
   it('installs the current workspace CLI command reference instead of the legacy command list', () => {
     installBuiltinSkills(tempSkillsDir);
 
-    const englishSkill = fs.readFileSync(path.join(tempSkillsDir, 'SKILL.md'), 'utf8');
-    const chineseSkill = fs.readFileSync(path.join(tempSkillsDir, 'SKILL.zh-CN.md'), 'utf8');
+    const englishSkill = fs.readFileSync(path.join(tempSkillsDir, 'openweave', 'SKILL.md'), 'utf8');
+    const chineseSkill = fs.readFileSync(path.join(tempSkillsDir, 'openweave', 'SKILL.zh-CN.md'), 'utf8');
 
     expect(englishSkill).toContain('openweave workspace info');
     expect(englishSkill).toContain('openweave node list');
@@ -73,6 +74,7 @@ describe('app-skill-manager', () => {
   it('uninstalls builtin skills from user directory', () => {
     installBuiltinSkills(tempSkillsDir);
     uninstallBuiltinSkills(tempSkillsDir);
-    expect(fs.existsSync(tempSkillsDir)).toBe(false);
+    expect(fs.existsSync(path.join(tempSkillsDir, 'openweave'))).toBe(false);
+    expect(fs.existsSync(path.join(tempSkillsDir, 'openweave-portal'))).toBe(false);
   });
 });

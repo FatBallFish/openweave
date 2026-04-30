@@ -130,8 +130,8 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
     node: {
       defaultTitle: 'Portal',
       defaultSize: {
-        width: 420,
-        height: 320
+        width: 960,
+        height: 640
       },
       connectable: true
     },
@@ -141,8 +141,44 @@ export const builtinComponentManifests: ComponentManifestV1[] = [
       },
       state: {}
     },
-    capabilities: ['navigate', 'capture', 'input'],
-    actions: [],
+    capabilities: ['read', 'navigate', 'capture', 'input'],
+    actions: [
+      {
+        name: 'navigate',
+        description: 'Load a URL in the portal',
+        inputSchema: 'schemas/action.navigate.input.json',
+        outputSchema: 'schemas/action.navigate.output.json',
+        idempotent: false
+      },
+      {
+        name: 'capture',
+        description: 'Capture a screenshot of the current page',
+        inputSchema: 'schemas/action.capture.input.json',
+        outputSchema: 'schemas/action.capture.output.json',
+        idempotent: false
+      },
+      {
+        name: 'read-structure',
+        description: 'Read the DOM structure of the current page',
+        inputSchema: 'schemas/action.read-structure.input.json',
+        outputSchema: 'schemas/action.read-structure.output.json',
+        idempotent: false
+      },
+      {
+        name: 'click',
+        description: 'Click an element by CSS selector',
+        inputSchema: 'schemas/action.click.input.json',
+        outputSchema: 'schemas/action.click.output.json',
+        idempotent: false
+      },
+      {
+        name: 'input',
+        description: 'Input text into an element by CSS selector',
+        inputSchema: 'schemas/action.input.input.json',
+        outputSchema: 'schemas/action.input.output.json',
+        idempotent: false
+      }
+    ],
     permissions: {
       fs: 'none',
       network: 'outbound',

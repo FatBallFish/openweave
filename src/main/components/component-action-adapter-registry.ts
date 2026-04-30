@@ -1,5 +1,6 @@
 import { createBuiltinAttachmentActionAdapter } from './action-adapters/builtin-attachment-action-adapter';
 import { createBuiltinNoteActionAdapter } from './action-adapters/builtin-note-action-adapter';
+import { createBuiltinPortalActionAdapter } from './action-adapters/builtin-portal-action-adapter';
 import { createBuiltinTerminalActionAdapter } from './action-adapters/builtin-terminal-action-adapter';
 import { createBuiltinTextActionAdapter } from './action-adapters/builtin-text-action-adapter';
 import {
@@ -94,6 +95,11 @@ export const createDefaultComponentActionAdapterRegistry = (): ComponentActionAd
     componentType: 'builtin.terminal',
     source: 'builtin',
     adapter: createBuiltinTerminalActionAdapter()
+  });
+  registry.register({
+    componentType: 'builtin.portal',
+    source: 'builtin',
+    adapter: createBuiltinPortalActionAdapter()
   });
   return registry;
 };

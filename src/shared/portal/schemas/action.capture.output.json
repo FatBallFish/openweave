@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["path"],
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Filesystem path to the captured screenshot"
+    },
+    "takenAtMs": {
+      "type": "number"
+    }
+  }
+}

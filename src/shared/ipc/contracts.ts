@@ -17,6 +17,7 @@ import type {
   NodeReadInput,
   PortalCaptureInput,
   PortalClickInput,
+  PortalBoundsInput,
   PortalInputInput,
   PortalLoadInput,
   PortalStructureInput,
@@ -98,6 +99,10 @@ export const IPC_CHANNELS = {
   portalReadStructure: 'portal:read-structure',
   portalClick: 'portal:click',
   portalInput: 'portal:input',
+  portalSetBounds: 'portal:set-bounds',
+  portalPageTitleChanged: 'portal:page-title-changed',
+  portalUrlChanged: 'portal:url-changed',
+  portalNewWindow: 'portal:new-window',
   appOpenSettings: 'app:open-settings',
   runStream: 'run:stream',
   runStreamSubscribe: 'run:stream:subscribe',
@@ -324,6 +329,10 @@ export interface PortalInputResponse {
   ok: true;
 }
 
+export interface PortalBoundsResponse {
+  ok: true;
+}
+
 export interface ComponentSummaryRecord {
   name: string;
   version: string;
@@ -481,12 +490,31 @@ export interface FilesBridgeApi {
   loadFileTree: (input: FileTreeLoadInput) => Promise<FileTreeLoadResponse>;
 }
 
+export interface PortalPageTitleChangedEvent {
+  portalId: string;
+  title: string;
+}
+
+export interface PortalUrlChangedEvent {
+  portalId: string;
+  url: string;
+}
+
+export interface PortalNewWindowEvent {
+  parentPortalId: string;
+  url: string;
+}
+
 export interface PortalBridgeApi {
   loadPortal: (input: PortalLoadInput) => Promise<PortalLoadResponse>;
   capturePortalScreenshot: (input: PortalCaptureInput) => Promise<PortalCaptureResponse>;
   readPortalStructure: (input: PortalStructureInput) => Promise<PortalStructureResponse>;
   clickPortalElement: (input: PortalClickInput) => Promise<PortalClickResponse>;
   inputPortalText: (input: PortalInputInput) => Promise<PortalInputResponse>;
+  setPortalBounds: (input: PortalBoundsInput) => Promise<PortalBoundsResponse>;
+  onPageTitleChanged: (callback: (event: PortalPageTitleChangedEvent) => void) => () => void;
+  onUrlChanged: (callback: (event: PortalUrlChangedEvent) => void) => () => void;
+  onNewWindow: (callback: (event: PortalNewWindowEvent) => void) => () => void;
 }
 
 export interface AgentWorkspaceBridgeApi {
